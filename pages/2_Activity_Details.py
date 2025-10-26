@@ -462,7 +462,7 @@ else:
             # Hide the "Activity Id" and "Lap Id" columns completely
             "Activity Id": None,
             "Lap Id": None,
-            "Distance (miles)": st.column_config.NumberColumn(format=".2f"),
+            "Distance (miles)": st.column_config.NumberColumn(format="%.2f"),
         }
 
         # 2. Apply the configuration to the data editor

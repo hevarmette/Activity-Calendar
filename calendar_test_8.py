@@ -112,12 +112,9 @@ from db import get_connection
 # return fake_details
 
 
-conn = get_connection()
-
-
 # --- 2. DATA RETRIEVAL (Same as before) ---
 @st.cache_data
-def retrieve_monthly_data(_conn, year, month):
+def retrieve_monthly_data(_conn):  # , year, month):
     """Fetches activity data for a given month and year from the database."""
     if _conn is None:
         return pd.DataFrame()
@@ -482,72 +479,112 @@ def show_activity_dialog(activity_title, activity_id, activity_sport):
                 st.switch_page("pages/2_Activity_Details.py")
 
 
-st.set_page_config(page_title="Activity Calendar", layout="wide")
+# --- Callbacks ---
+def year_cb():
+    """Called when there is a change in Year selectbox."""
+    ss["selected_year"] = ss["yeark"]
 
-# --- Sidebar for Navigation ---
-with st.sidebar:
-    st.header("Navigation")
-    today = datetime.now()
-    # Note: Using 2025 as the default year for demonstration
-    selected_year = st.selectbox("Year", range(today.year - 5, today.year + 2), index=5)
-    selected_month = st.selectbox(
-        "Month",
-        range(1, 13),
-        index=today.month - 1,
-        format_func=lambda x: datetime(2000, x, 1).strftime("%B"),
-    )
 
-# --- Fetch and Format Data ---
-# Call the fake data generator instead of the database function
-# activities_df = generate_fake_activity_data(selected_year, selected_month)
-if "activities_df" not in ss:
-    ss.activities_df = retrieve_monthly_data(conn, selected_year, selected_month)
+def month_cb():
+    """Called when there is a change in Month selectbox."""
+    ss["selected_month"] = ss["monthk"]
 
-calendar_events = []
-if not ss.activities_df.empty:
-    for index, row in ss.activities_df.iterrows():
-        sport = row["sport"]
-        color_map = {"running": "#FF4B4B", "swimming": "#1F77B4", "cycling": "#2CA02C"}
 
-        calendar_events.append(
-            {
-                "title": row["activity_name"],
-                "color": color_map.get(sport, "#7F7F7F"),
-                "start": row["activity_date"].isoformat(),
-                "end": row["activity_date"].isoformat(),
-                "extendedProps": {"activity_id": row["activity_id"], "sport": sport},
-            }
+if __name__ == "__main__":
+    st.set_page_config(page_title="Activity Calendar", layout="wide")
+
+    conn = get_connection()
+    # --- Sidebar for Navigation ---
+    with st.sidebar:
+        st.header("Navigation")
+        today = datetime.now()
+
+        # --- Initialize defaults if not in session ---
+        if "selected_year" not in ss:
+            ss["selected_year"] = today.year
+
+        if "selected_month" not in ss:
+            ss["selected_month"] = today.month
+
+        # --- Year Selectbox ---
+        year_options = list(range(today.year - 5, today.year + 2))
+        st.selectbox(
+            "Year",
+            options=year_options,
+            index=year_options.index(ss["selected_year"]),
+            key="yeark",  # key for widget value
+            on_change=year_cb,  # update persistent session var
         )
 
-# --- Calendar Configuration ---
-calendar_options = {
-    "headerToolbar": {
-        "left": "today prev,next",
-        "center": "title",
-        "right": "dayGridMonth,timeGridWeek,timeGridDay",
-    },
-    "initialView": "dayGridMonth",
-    "initialDate": f"{selected_year}-{selected_month:02d}-01",
-    "height": "700px",
-}
+        # --- Month Selectbox ---
+        month_options = list(range(1, 13))
+        st.selectbox(
+            "Month",
+            options=month_options,
+            index=month_options.index(ss["selected_month"]),
+            key="monthk",  # key for widget value
+            on_change=month_cb,
+            format_func=lambda x: datetime(2000, x, 1).strftime("%B"),
+        )
 
-# --- Render Calendar and Capture Callback State ---
-state = calendar(
-    events=calendar_events,
-    options=calendar_options,
-    key=f"cal-{selected_year}-{selected_month}",
-)
+    # --- Fetch and Format Data ---
+    # Call the fake data generator instead of the database function
+    # activities_df = generate_fake_activity_data(selected_year, selected_month)
+    if "activities_df" not in ss:
+        ss.activities_df = retrieve_monthly_data(conn)
 
-st.divider()
+    calendar_events = []
+    if not ss.activities_df.empty:
+        for index, row in ss.activities_df.iterrows():
+            sport = row["sport"]
+            color_map = {
+                "running": "#FF4B4B",
+                "swimming": "#1F77B4",
+                "cycling": "#2CA02C",
+            }
 
-# --- 4. HANDLE CLICKS and DISPLAY DIALOG ---
-if state and state.get("callback") == "eventClick":
-    clicked_event = state["eventClick"]["event"]
+            calendar_events.append(
+                {
+                    "title": row["activity_name"],
+                    "color": color_map.get(sport, "#7F7F7F"),
+                    "start": row["activity_date"].isoformat(),
+                    "end": row["activity_date"].isoformat(),
+                    "extendedProps": {
+                        "activity_id": row["activity_id"],
+                        "sport": sport,
+                    },
+                }
+            )
 
-    activity_title = clicked_event.get("title", "N/A")
-    extended_props = clicked_event.get("extendedProps", {})
-    activity_id = extended_props.get("activity_id", "N/A")
-    activity_sport = extended_props.get("sport", "N/A")
+    # --- Calendar Configuration ---
+    calendar_options = {
+        "headerToolbar": {
+            "left": "today prev,next",
+            "center": "title",
+            "right": "dayGridMonth,timeGridWeek,timeGridDay",
+        },
+        "initialView": "dayGridMonth",
+        "initialDate": f"{ss.selected_year}-{ss.selected_month:02d}-01",
+        "height": "700px",
+    }
 
-    # Call the decorated function to open the dialog
-    show_activity_dialog(activity_title, activity_id, activity_sport)
+    # --- Render Calendar and Capture Callback State ---
+    state = calendar(
+        events=calendar_events,
+        options=calendar_options,
+        key=f"cal-{ss.selected_year}-{ss.selected_month}",
+    )
+
+    st.divider()
+
+    # --- 4. HANDLE CLICKS and DISPLAY DIALOG ---
+    if state and state.get("callback") == "eventClick":
+        clicked_event = state["eventClick"]["event"]
+
+        activity_title = clicked_event.get("title", "N/A")
+        extended_props = clicked_event.get("extendedProps", {})
+        activity_id = extended_props.get("activity_id", "N/A")
+        activity_sport = extended_props.get("sport", "N/A")
+
+        # Call the decorated function to open the dialog
+        show_activity_dialog(activity_title, activity_id, activity_sport)
