@@ -310,59 +310,6 @@ def create_activity_map(points_df):
     return route_map
 
 
-# @st.dialog("Activity Details", width='medium')
-# def show_activity_dialog(activity_title, activity_id, activity_sport):
-#     """
-#     Displays activity details and map.
-#     It fetches details, stores them in session state, and then displays them.
-#     """
-#     st.header(activity_title)
-#     st.markdown(f"**Sport:** {activity_sport.capitalize()} | **Activity ID:** `{activity_id}`")
-
-#     # --- Store details in Session State ---
-#     # We use the fake data function here. Swap with fetch_activity_details(conn, activity_id) for real data.
-#     # activity_data = generate_fake_activity_details(activity_id)
-#     activity_data = fetch_activity_details(conn, activity_id)
-#     if activity_data:
-#         ss.activity_details = activity_data
-#     else:
-#         ss.activity_details = None
-#     # points_df = generate_fake_map_data(activity_id) # Using fake map data
-#     points_df = fetch_activity_points(conn, activity_id)
-#     ss.points_df = points_df
-
-#     # --- Map Section ---
-#     if not points_df.empty:
-#         activity_map = create_activity_map(points_df)
-#         st_folium(activity_map, width=700, height=500)
-#     else:
-#         st.warning("No GPS data found for this activity.")
-#     st.divider()
-
-#     # --- Display details from Session State ---
-#     if ss.activity_details:
-#         st.subheader("📊 Activity Stats")
-#         distance_km = ss.activity_details[0] / 1000
-#         duration_min = ss.activity_details[1] / 60
-#         description = ss.activity_details[2] if ss.activity_details[2] else "No description."
-#         feel = ss.activity_details[3]
-#         effort = ss.activity_details[4]
-
-#         col1, col2 = st.columns(2)
-#         col1.metric("Distance", f"{distance_km:.2f} km")
-#         col2.metric("Duration", f"{duration_min:.1f} min")
-
-#         st.markdown(f"**Description:** *{description}*")
-#         st.markdown(f"**Workout Feel:** {feel}/5 | **Effort:** {effort}/10")
-
-#     if st.button("View Lap Details 📈"):
-#         # Store the selected activity_id in the session state
-#         ss.selected_activity_id = activity_id
-#         ss.selected_activity_sport = activity_sport
-#         # Programmatically switch to the details page
-#         st.switch_page("pages/2_Activity_Details.py")
-
-
 @st.dialog("Activity Summary", width="medium")
 def show_activity_dialog(activity_title, activity_id, activity_sport):
     """Displays improved activity summary dialog."""
@@ -494,6 +441,13 @@ if __name__ == "__main__":
     st.set_page_config(page_title="Activity Calendar", layout="wide")
 
     conn = get_connection()
+
+    # --- Fetch and Format Data ---
+    # Call the fake data generator instead of the database function
+    # activities_df = generate_fake_activity_data(selected_year, selected_month)
+    if "activities_df" not in ss:
+        ss.activities_df = retrieve_monthly_data(conn)
+
     # --- Sidebar for Navigation ---
     with st.sidebar:
         st.header("Navigation")
@@ -507,13 +461,12 @@ if __name__ == "__main__":
             ss["selected_month"] = today.month
 
         # --- Year Selectbox ---
-        year_options = list(range(today.year - 5, today.year + 2))
-        st.selectbox(
+        st.number_input(
             "Year",
-            options=year_options,
-            index=year_options.index(ss["selected_year"]),
-            key="yeark",  # key for widget value
-            on_change=year_cb,  # update persistent session var
+            value=ss["selected_year"],  # defaults to current year if unset
+            step=1,
+            key="yeark",
+            on_change=year_cb,
         )
 
         # --- Month Selectbox ---
@@ -527,34 +480,38 @@ if __name__ == "__main__":
             format_func=lambda x: datetime(2000, x, 1).strftime("%B"),
         )
 
-    # --- Fetch and Format Data ---
-    # Call the fake data generator instead of the database function
-    # activities_df = generate_fake_activity_data(selected_year, selected_month)
-    if "activities_df" not in ss:
-        ss.activities_df = retrieve_monthly_data(conn)
+        st.divider()
+
+        if st.button(
+            "Fetch New Activities", help="This will clear the cache and reload the page"
+        ):
+            retrieve_monthly_data.clear()
+            del ss["activities_df"]
+            st.toast("Fetching new activities")
 
     calendar_events = []
-    if not ss.activities_df.empty:
-        for index, row in ss.activities_df.iterrows():
-            sport = row["sport"]
-            color_map = {
-                "running": "#FF4B4B",
-                "swimming": "#1F77B4",
-                "cycling": "#2CA02C",
-            }
-
-            calendar_events.append(
-                {
-                    "title": row["activity_name"],
-                    "color": color_map.get(sport, "#7F7F7F"),
-                    "start": row["activity_date"].isoformat(),
-                    "end": row["activity_date"].isoformat(),
-                    "extendedProps": {
-                        "activity_id": row["activity_id"],
-                        "sport": sport,
-                    },
+    if "activities_df" in ss:
+        if not ss.activities_df.empty:
+            for index, row in ss.activities_df.iterrows():
+                sport = row["sport"]
+                color_map = {
+                    "running": "#FF4B4B",
+                    "swimming": "#1F77B4",
+                    "cycling": "#2CA02C",
                 }
-            )
+
+                calendar_events.append(
+                    {
+                        "title": row["activity_name"],
+                        "color": color_map.get(sport, "#7F7F7F"),
+                        "start": row["activity_date"].isoformat(),
+                        "end": row["activity_date"].isoformat(),
+                        "extendedProps": {
+                            "activity_id": row["activity_id"],
+                            "sport": sport,
+                        },
+                    }
+                )
 
     # --- Calendar Configuration ---
     calendar_options = {
