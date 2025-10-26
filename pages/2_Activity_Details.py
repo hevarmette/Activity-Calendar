@@ -284,6 +284,20 @@ else:
 
     st.title(f"Lap Data for Activity ID: {activity_id}")
 
+    if "activity_details" in ss:
+        # Getting activity details
+        distance_m = ss.activity_details[0]
+        duration_s = ss.activity_details[1]
+        avg_power = ss.activity_details[2]
+        description = ss.activity_details[3] if ss.activity_details[3] else ""
+        feel = ss.activity_details[4]
+        effort = ss.activity_details[5]
+        local_timestamp = ss.activity_details[6]
+
+        # day of activity
+        # TODO: It looks like the old watch? stored local timestamp at the end of the activity but new watch is beginning of activity. Activities from form are from the start of the activity
+        st.markdown(f"_{local_timestamp.strftime("%B %d, %Y @ %I:%M %p")}_")
+
     title_col, category_col, nav_col = st.columns(
         [0.7, 0.25, 0.05], vertical_alignment="bottom"
     )
@@ -328,14 +342,37 @@ else:
                     ss.points_df = fetch_activity_points(conn, next_id)
                     st.rerun()
 
-    c1, c2 = st.columns([0.7, 0.3])
+    metrics_col, white_space_col = st.columns([0.7, 0.3])
+    map_col, description_col = st.columns([0.7, 0.3])
+
+    if "activity_details" in ss:
+        with metrics_col:
+            miles = distance_m * 0.0006213711922
+            duration_td = timedelta(seconds=int(duration_s))
+            duration_hr = duration_s / 3600
+            pace_sec_per_mile = duration_s / miles if miles > 0 else 0
+            pace_min, pace_sec = divmod(int(pace_sec_per_mile), 60)
+            mph = miles / duration_hr if duration_hr > 0 else 0
+
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Distance", f"{miles:.2f} mi")
+            col2.metric("Duration", str(duration_td))
+            if sport == "cycling":
+                if avg_power:
+                    col3.metric("Power", f"{avg_power} watts")
+                else:
+                    col3.metric("Speed", f"{mph:.2f} mph")
+            else:
+                col3.metric("Pace", f"{pace_min}:{pace_sec:02d} /mi")
+
     # --- Map ---
     if not ss.points_df.empty:
-        with c1:
+        with map_col:
             activity_map = create_activity_map(ss.points_df)
             st_folium(activity_map, use_container_width=True)
 
-    with c2:
+    with description_col:
+        # st.write(" ")
         # activity description
         if ss.activity_details and ss.activity_details[3]:
             description = ss.activity_details[3]
@@ -444,38 +481,69 @@ else:
     if processed_laps_df.empty:
         st.info("No lap data found for this activity.")
     else:
-        # Use the data editor. The edited data is returned by the widget.
-        column_config = {
-            # Make the "Intensity" column a dropdown with specific options
-            "Intensity": st.column_config.SelectboxColumn(
-                "Intensity",
-                help="Select the intensity type for the lap",
-                options=[
-                    "warm up",
-                    "active",
-                    "recovery",
-                    "rest",
-                    "cooldown",
-                ],
-                required=True,  # Ensures every row must have an intensity selected
-            ),
-            # Hide the "Activity Id" and "Lap Id" columns completely
-            "Activity Id": None,
-            "Lap Id": None,
-            "Distance (miles)": st.column_config.NumberColumn(format="%.2f"),
-        }
+        laps_tab, details_tab = st.tabs(["🏁 Laps", "📊 Activity Details"])
 
-        # 2. Apply the configuration to the data editor
-        edited_df = st.data_editor(
-            processed_laps_df,
-            hide_index=True,
-            column_config=column_config,  # Pass the configuration here
-            disabled=[
-                "Lap",
-                "Pace (min/mile)",
-            ],  # Keep the Lap number visible but not editable
-            key="lap_editor",
-        )
+        with laps_tab:
+            st.markdown("You can edit values in the table below.")
+
+            column_config = {
+                "Intensity": st.column_config.SelectboxColumn(
+                    "Intensity",
+                    help="Select the intensity type for the lap",
+                    options=["warm up", "active", "recovery", "rest", "cooldown"],
+                    required=True,
+                ),
+                "Activity Id": None,
+                "Lap Id": None,
+                "Distance (miles)": st.column_config.NumberColumn(format="%.2f"),
+            }
+
+            edited_df = st.data_editor(
+                processed_laps_df,
+                hide_index=True,
+                column_config=column_config,
+                disabled=["Lap", "Pace (min/mile)"],
+                key="lap_editor",
+            )
+
+        with details_tab:
+            st.subheader("Activity Details")
+
+            c1, c2, c3, c4 = st.columns(4)
+
+            with c1:
+                st.markdown("**Distance**")
+                st.write(f"{miles:.2f} mi")
+                st.markdown("---")
+                st.markdown("**Pace / Speed**")
+                if sport == "cycling":
+                    st.write(f"{mph:.2f} mph")
+                else:
+                    st.write(f"{pace_min}:{pace_sec:02d} /mi")
+
+            with c2:
+                st.markdown("**Heart Rate**")
+                st.write("Avg HR: {info} will go here")
+                st.write("Max HR: {info} will go here")
+                st.markdown("---")
+                st.markdown("**Duration**")
+                st.write(str(duration_td))
+
+            with c3:
+                st.markdown("**Elevation**")
+                st.write("Ascent: {info} will go here")
+                st.write("Descent: {info} will go here")
+                st.markdown("---")
+                st.markdown("**Pace / Speed Info**")
+                st.write("Best lap pace: {info} will go here")
+
+            with c4:
+                st.markdown("**Running Dynamics**")
+                st.write("Cadence: {info} will go here")
+                st.write("Stride length: {info} will go here")
+                st.write("Vertical ratio: {info} will go here")
+                st.write("Stance time balance: {info} will go here")
+
     if st.button("Save"):
         updates = []
         # Check for edits by comparing the new state to the previous one
