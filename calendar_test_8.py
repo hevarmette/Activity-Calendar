@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from streamlit_calendar import calendar
 from streamlit import session_state as ss
 from db import get_connection
+from pyhigh import get_elevation_batch
 
 # --- 1. FAKE DATA GENERATION (Replaces Database Functions) ---
 # Use @st.cache_data to cache the results so the fake data doesn't change on every rerun.
@@ -200,7 +201,15 @@ def fetch_activity_points(_conn, activity_id):
                 points_df["timestamp"].iloc[0], len(points_df)
             )
             points_df.dropna(subset=["latitude", "longitude"], inplace=True)
-        return points_df
+            # Getting elevation data from 3rd party package because the garmin data is bad
+            # if "latitude" in points_df.columns and "longitude" in points_df.columns:
+            coordinates = list(
+                points_df[["latitude", "longitude"]].itertuples(index=False, name=None)
+            )
+            points_df["corrected_altitude"] = (
+                get_elevation_batch(coordinates) * 3.28084
+            )  # Converting meters to feet
+            return points_df
     except Exception as e:
         st.error(f"Error fetching activity points: {e}")
         return pd.DataFrame()

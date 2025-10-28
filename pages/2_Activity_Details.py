@@ -388,10 +388,22 @@ else:
     point_df = ss.points_df
 
     if not point_df.empty:
-        if (
-            "enhanced_speed" in point_df.columns
-            and point_df["enhanced_speed"].notnull().any()
-        ):
+        # getting summary stats if the column is present
+        # TODO: add average statistics for active reps for intervals
+        pcols = point_df.columns
+        if "heart_rate" in pcols:
+            avg_hr = point_df.loc[:, "heart_rate"].mean()
+            max_hr = point_df.loc[:, "heart_rate"].max()
+        if "cadence" in pcols and "fractional_cadence" in pcols:
+            point_df["total_cadence"] = (
+                point_df["cadence"] + point_df["fractional_cadence"]
+            )
+            avg_cadence = point_df.loc[:, "total_cadence"].mean()
+            max_cadence = point_df.loc[:, "total_cadence"].max()
+# altitude info here
+        
+
+        if "enhanced_speed" in pcols and point_df["enhanced_speed"].notnull().any():
             # Conversion: (meters/mile) / (seconds/minute) = 26.8224
             # We divide this constant by the speed in m/s to get min/mile
             speed_mps = point_df["enhanced_speed"].replace(
