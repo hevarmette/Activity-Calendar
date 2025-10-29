@@ -384,7 +384,7 @@ else:
 
     # --- NEW: Performance Graphs Section ---
     st.header("📈 Performance Graphs")
-
+    # move this above the map and make the map use point df. check if in session state first though
     point_df = ss.points_df
 
     if not point_df.empty:
@@ -400,8 +400,7 @@ else:
             )
             avg_cadence = point_df.loc[:, "total_cadence"].mean()
             max_cadence = point_df.loc[:, "total_cadence"].max()
-# altitude info here
-        
+        # altitude info here
 
         if "enhanced_speed" in pcols and point_df["enhanced_speed"].notnull().any():
             # Conversion: (meters/mile) / (seconds/minute) = 26.8224
@@ -604,3 +603,4 @@ else:
             st.info("No changes detected.")
             # Rerun the script to show the latest data from the DB
             # st.rerun()
+st.write(point_df)
