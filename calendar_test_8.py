@@ -179,6 +179,10 @@ def fetch_activity_details(_conn, activity_id):
 @st.cache_data
 def fetch_activity_points(_conn, activity_id):
     """Fetches GPS and other record data for a specific activity from the database."""
+    ss.hr = False
+    ss.coordinates = False
+    ss.cadence = False
+
     if _conn is None:
         return pd.DataFrame()
 
@@ -189,27 +193,44 @@ def fetch_activity_points(_conn, activity_id):
     """
     try:
         points_df = pd.read_sql_query(sql_query, _conn, params=(activity_id,))
+        pcols = points_df.columns
         if not points_df.empty:
             # Ensure lat/lon are numeric and not null
-            points_df["latitude"] = pd.to_numeric(
-                points_df["latitude"], errors="coerce"
-            )
-            points_df["longitude"] = pd.to_numeric(
-                points_df["longitude"], errors="coerce"
-            )
+            if "latitude" and "longitude" in pcols:
+                ss.coordinates = True
+                points_df["latitude"] = pd.to_numeric(
+                    points_df["latitude"], errors="coerce"
+                )
+                points_df["longitude"] = pd.to_numeric(
+                    points_df["longitude"], errors="coerce"
+                )
+
+                # Getting elevation data from 3rd party package because the garmin data is bad
+                # if "latitude" in points_df.columns and "longitude" in points_df.columns:
+                coordinates = list(
+                    points_df[["latitude", "longitude"]].itertuples(
+                        index=False, name=None
+                    )
+                )
+                points_df["corrected_altitude"] = (
+                    get_elevation_batch(coordinates) * 3.28084
+                )  # Converting meters to feet
+
+            # timestamp, by definition, is included in the records table.
             points_df["elapsed_time"] = points_df["timestamp"] - np.repeat(
                 points_df["timestamp"].iloc[0], len(points_df)
             )
-            points_df.dropna(subset=["latitude", "longitude"], inplace=True)
-            # Getting elevation data from 3rd party package because the garmin data is bad
-            # if "latitude" in points_df.columns and "longitude" in points_df.columns:
-            coordinates = list(
-                points_df[["latitude", "longitude"]].itertuples(index=False, name=None)
-            )
-            points_df["corrected_altitude"] = (
-                get_elevation_batch(coordinates) * 3.28084
-            )  # Converting meters to feet
+
+            # points_df.dropna(subset=["latitude", "longitude"], inplace=True) TODO: this was uncommented, why?
+
+            if "cadence" in pcols and "fractional_cadence" in pcols:
+                ss.cadence = True
+                points_df["total_cadence"] = (
+                    points_df["cadence"] + points_df["fractional_cadence"]
+                )
+
             return points_df
+
     except Exception as e:
         st.error(f"Error fetching activity points: {e}")
         return pd.DataFrame()

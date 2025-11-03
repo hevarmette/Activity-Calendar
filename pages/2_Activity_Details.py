@@ -366,7 +366,7 @@ else:
                 col3.metric("Pace", f"{pace_min}:{pace_sec:02d} /mi")
 
     # --- Map ---
-    if not ss.points_df.empty:
+    if not ss.points_df.empty and "points_df" in ss:
         with map_col:
             activity_map = create_activity_map(ss.points_df)
             st_folium(activity_map, use_container_width=True)
@@ -388,21 +388,10 @@ else:
     point_df = ss.points_df
 
     if not point_df.empty:
-        # getting summary stats if the column is present
-        # TODO: add average statistics for active reps for intervals
-        pcols = point_df.columns
-        if "heart_rate" in pcols:
-            avg_hr = point_df.loc[:, "heart_rate"].mean()
-            max_hr = point_df.loc[:, "heart_rate"].max()
-        if "cadence" in pcols and "fractional_cadence" in pcols:
-            point_df["total_cadence"] = (
-                point_df["cadence"] + point_df["fractional_cadence"]
-            )
-            avg_cadence = point_df.loc[:, "total_cadence"].mean()
-            max_cadence = point_df.loc[:, "total_cadence"].max()
-        # altitude info here
-
-        if "enhanced_speed" in pcols and point_df["enhanced_speed"].notnull().any():
+        if (
+            "enhanced_speed" in point_df.columns
+            and point_df["enhanced_speed"].notnull().any()
+        ):
             # Conversion: (meters/mile) / (seconds/minute) = 26.8224
             # We divide this constant by the speed in m/s to get min/mile
             speed_mps = point_df["enhanced_speed"].replace(
@@ -428,50 +417,50 @@ else:
             st.warning(f"Data for '{x_label}' is not available.")
         else:
             pace_fig = create_plot(
-                point_df,
-                x_col,
-                "pace_min_per_mile",
-                x_label,
-                "Pace (min/mile)",
-                "Pace over " + x_axis_choice,
-                "blue",
+                df=point_df,
+                x_col=x_col,
+                y_col="pace_min_per_mile",
+                x_label=x_label,
+                y_label="Pace (min/mile)",
+                title="Pace over " + x_axis_choice,
+                color="blue",
                 invert_y_axis=True,
             )
             if pace_fig:
                 st.plotly_chart(pace_fig, use_container_width=True)
 
             hr_fig = create_plot(
-                point_df,
-                x_col,
-                "heart_rate",
-                x_label,
-                "Heart Rate (bpm)",
-                "Heart Rate over " + x_axis_choice,
-                "red",
+                df=point_df,
+                x_col=x_col,
+                y_col="heart_rate",
+                x_label=x_label,
+                y_label="Heart Rate (bpm)",
+                title="Heart Rate over " + x_axis_choice,
+                color="red",
             )
             if hr_fig:
                 st.plotly_chart(hr_fig, use_container_width=True)
 
             alt_fig = create_plot(
-                point_df,
-                x_col,
-                "altitude",
-                x_label,
-                "Altitude (m)",
-                "Altitude over " + x_axis_choice,
-                "green",
+                df=point_df,
+                x_col=x_col,
+                y_col="corrected_altitude",
+                x_label=x_label,
+                y_label="Altitude (ft)",
+                title="Altitude over " + x_axis_choice,
+                color="green",
             )
             if alt_fig:
                 st.plotly_chart(alt_fig, use_container_width=True)
 
             cad_fig = create_plot(
-                point_df,
-                x_col,
-                "cadence",
-                x_label,
-                "Cadence (rpm)",
-                "Cadence over " + x_axis_choice,
-                "purple",
+                df=point_df,
+                x_col=x_col,
+                y_col="cadence",
+                x_label=x_label,
+                y_label="Cadence",
+                title="Cadence over " + x_axis_choice,
+                color="purple",
                 is_scatter=True,
             )
             if cad_fig:
@@ -533,24 +522,51 @@ else:
                     st.write(f"{pace_min}:{pace_sec:02d} /mi")
 
             with c2:
-                st.markdown("**Heart Rate**")
-                st.write("Avg HR: {info} will go here")
-                st.write("Max HR: {info} will go here")
-                st.markdown("---")
+                # getting summary stats if the column is present
+                # TODO: add average statistics for active reps for intervals
+                if ss.hr:
+                    avg_hr = point_df.loc[:, "heart_rate"].mean()
+                    max_hr = point_df.loc[:, "heart_rate"].max()
+
+                    st.markdown("**Heart Rate**")
+                    st.write(f"Avg HR: {avg_hr} bpm")
+                    st.write(f"Max HR: {max_hr} bpm")
+                    st.markdown("---")
+
                 st.markdown("**Duration**")
                 st.write(str(duration_td))
 
             with c3:
-                st.markdown("**Elevation**")
-                st.write("Ascent: {info} will go here")
-                st.write("Descent: {info} will go here")
-                st.markdown("---")
+                if ss.coordinates:
+                    # This creates a new Series where each value is (row[i] - row[i-1])
+                    altitude_change = point_df["corrected_altitude"].diff()
+
+                    # Calculate Ascent:
+                    # Filter for only positive changes (gains) and sum them up.
+                    # .clip(lower=0) sets all negative numbers to 0.
+                    total_ascent = altitude_change.clip(lower=0).sum()
+
+                    # Calculate Descent:
+                    # Filter for only negative changes (losses), make them positive, and sum them up.
+                    # .clip(upper=0) sets all positive numbers to 0.
+                    # .abs() makes the negative changes positive.
+                    total_descent = altitude_change.clip(upper=0).abs().sum()
+                    st.markdown("**Elevation**")
+                    st.write(f"Ascent: {total_ascent} feet")
+                    st.write(f"Descent: {total_descent} feet")
+                    st.markdown("---")
                 st.markdown("**Pace / Speed Info**")
                 st.write("Best lap pace: {info} will go here")
 
             with c4:
-                st.markdown("**Running Dynamics**")
-                st.write("Cadence: {info} will go here")
+                if ss.cadence:
+                    avg_cadence = point_df.loc[:, "total_cadence"].mean()
+                    max_cadence = point_df.loc[:, "total_cadence"].max()
+                    st.markdown("**Running Dynamics**")
+                    st.write(f"Avg cadence: {avg_cadence} spm")
+                    st.write(f"Max cadence: {max_cadence} spm")
+
+                # if ss.dynamics
                 st.write("Stride length: {info} will go here")
                 st.write("Vertical ratio: {info} will go here")
                 st.write("Stance time balance: {info} will go here")
