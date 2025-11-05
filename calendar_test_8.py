@@ -229,6 +229,9 @@ def fetch_activity_points(_conn, activity_id):
                     points_df["cadence"] + points_df["fractional_cadence"]
                 )
 
+            if "heart_rate" in pcols:
+                ss.hr = True
+
             return points_df
 
     except Exception as e:
