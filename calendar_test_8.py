@@ -398,7 +398,7 @@ def show_activity_dialog(activity_title, activity_id, activity_sport):
             col3.metric("Pace", f"{pace_min}:{pace_sec:02d} /mi")
 
         # --- Map ---
-        if not points_df.empty:
+        if points_df:
             activity_map = create_activity_map(points_df)
             st_folium(activity_map, width=700, height=500)
         # else:

@@ -366,7 +366,7 @@ else:
                 col3.metric("Pace", f"{pace_min}:{pace_sec:02d} /mi")
 
     # --- Map ---
-    if not ss.points_df.empty and "points_df" in ss:
+    if "points_df" in ss and ss.points_df is not None:
         with map_col:
             activity_map = create_activity_map(ss.points_df)
             st_folium(activity_map, use_container_width=True)
@@ -387,7 +387,7 @@ else:
     # move this above the map and make the map use point df. check if in session state first though
     point_df = ss.points_df
 
-    if not point_df.empty:
+    if point_df is not None:
         if (
             "enhanced_speed" in point_df.columns
             and point_df["enhanced_speed"].notnull().any()
@@ -524,7 +524,7 @@ else:
             with c2:
                 # getting summary stats if the column is present
                 # TODO: add average statistics for active reps for intervals
-                if ss.hr:
+                if "hr" in ss and ss.hr:
                     avg_hr = point_df.loc[:, "heart_rate"].mean()
                     max_hr = point_df.loc[:, "heart_rate"].max()
 
@@ -537,7 +537,7 @@ else:
                 st.write(str(duration_td))
 
             with c3:
-                if ss.coordinates:
+                if "coordinates" in ss and ss.coordinates:
                     # This creates a new Series where each value is (row[i] - row[i-1])
                     altitude_change = point_df["corrected_altitude"].diff()
 
@@ -559,7 +559,7 @@ else:
                 st.write("Best lap pace: {info} will go here")
 
             with c4:
-                if ss.cadence:
+                if "cadence" in ss and ss.cadence:
                     avg_cadence = point_df.loc[:, "total_cadence"].mean()
                     max_cadence = point_df.loc[:, "total_cadence"].max()
                     st.markdown("**Running Dynamics**")
