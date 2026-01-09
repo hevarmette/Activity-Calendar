@@ -196,7 +196,7 @@ def fetch_activity_points(_conn, activity_id):
         pcols = points_df.columns
         if not points_df.empty:
             # Ensure lat/lon are numeric and not null
-            if "latitude" and "longitude" in pcols:
+            if "latitude" in pcols and "longitude" in pcols:
                 ss.coordinates = True
                 points_df["latitude"] = pd.to_numeric(
                     points_df["latitude"], errors="coerce"
@@ -212,9 +212,17 @@ def fetch_activity_points(_conn, activity_id):
                         index=False, name=None
                     )
                 )
-                points_df["corrected_altitude"] = (
-                    get_elevation_batch(coordinates) * 3.28084
-                )  # Converting meters to feet
+                try:
+                    points_df["corrected_altitude"] = (
+                        get_elevation_batch(coordinates) * 3.28084
+                    )  # Converting meters to feet
+                except Exception as e:
+                    # st.warning(f"Network error getting elevation: {e}") # Optional logging
+                    print(e)
+                    if "altitude" in points_df.columns:
+                        points_df["corrected_altitude"] = points_df["altitude"]
+                    else:
+                        points_df["corrected_altitude"] = 0
 
             # timestamp, by definition, is included in the records table.
             points_df["elapsed_time"] = points_df["timestamp"] - np.repeat(

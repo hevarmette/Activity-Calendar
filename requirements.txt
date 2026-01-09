@@ -1,0 +1,8 @@
+streamlit
+pandas
+streamlit-folium
+folium
+streamlit-calendar
+pyhigh
+psycopg2-binary
+plotly

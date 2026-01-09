@@ -239,7 +239,7 @@ def create_plot(
     """A generalized function to create a line or scatter plot with Plotly."""
     # Gracefully handle missing data columns
     if y_col not in df.columns or df[y_col].isnull().all():
-        st.info(f"Data for '{title}' is not available for this activity.")
+        print(f"Data for '{title}' is not available for this activity.")
         return None
 
     # Create the plot
@@ -308,7 +308,10 @@ else:
         updated_title = st.text_input(label=" ", value=title)
     with category_col:
         # category
-        category = ss.activity_details[8].strip()
+        category = ss.activity_details[8]
+        if isinstance(category, str):
+            category = category.strip()
+
         category_options = [
             "uncategorized",
             "training",
@@ -318,7 +321,12 @@ else:
             "touring",
             "fitness",
         ]
-        cat_index = category_options.index(category)
+
+        if category in category_options:
+            cat_index = category_options.index(category)
+        else:
+            cat_index = 0  # Fallback to the first option
+
         updated_category = st.selectbox(
             "---", options=category_options, index=cat_index
         )

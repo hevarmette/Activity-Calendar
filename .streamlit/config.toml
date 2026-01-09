@@ -1,0 +1,20 @@
+[theme]
+# Use "dark" as the base for a Garmin-like dashboard feel
+base = "dark"
+
+# Use a bright blue or cyan for accents/interactive elements
+primaryColor = "#007bff"
+
+# Dark background colors typical of fitness dashboards
+backgroundColor = "#111111"
+secondaryBackgroundColor = "#1e1e1e"
+
+# White or light grey text for high contrast
+textColor = "#ffffff"
+
+# Choose a clean sans-serif font
+font = "sans-serif"
+
+[theme.sidebar]
+# You can customize the sidebar separately if needed
+backgroundColor = "#000000"
