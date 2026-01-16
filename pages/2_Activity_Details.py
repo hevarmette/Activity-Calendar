@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
 from streamlit import session_state as ss
-import random
-from datetime import datetime, timedelta
+from datetime import timedelta
 import plotly.express as px
 from calendar_test_8 import (
     create_activity_map,
@@ -12,6 +11,9 @@ from calendar_test_8 import (
 from streamlit_folium import st_folium
 from db import get_connection
 
+if "schema" not in ss:
+    ss.schema = "PUBLIC"
+# import random
 # @st.cache_data
 # def generate_fake_lap_data(activity_id):
 #     """Generates a realistic DataFrame of fake lap data for a given activity ID."""
@@ -94,9 +96,30 @@ def convert_seconds_to_hms(seconds):
 @st.cache_data
 def fetch_lap_data(_conn, activity_id):
     """Fetches lap data for a specific activity."""
-    # Note: Your query selected '*', which might not match the number of columns provided.
-    # It's safer to explicitly name the columns in the SELECT statement.
-    sql_query = "SELECT *, (total_distance * 0.0006213711922) AS distance_mi FROM public.lap WHERE activity_id = %s ORDER BY number ASC"
+    sql_query = f"""
+        SELECT 
+            lap_id,
+            activity_id,
+            start_time,
+            number,
+            total_distance,
+            total_timer_time,
+            total_ascent,
+            total_descent,
+            avg_vertical_oscillation,
+            avg_stance_time,
+            avg_vertical_ratio,
+            avg_stance_time_balance,
+            avg_step_length,
+            avg_running_cadence,
+            max_heart_rate,
+            avg_heart_rate,
+            intensity,
+            (total_distance * 0.0006213711922) AS distance_mi
+        FROM {ss.schema}.lap
+        WHERE activity_id = %s
+        ORDER BY number ASC
+    """
     df = pd.read_sql_query(sql_query, _conn, params=(activity_id,))
     return df
 
@@ -108,7 +131,7 @@ def update_lap_in_db(_conn, lap_id, column_to_update, new_value):
         # In a real app, you'd have a whitelist of editable columns.
         safe_column = "".join(c for c in column_to_update if c.isalnum() or c == "_")
 
-        query = f"UPDATE public.lap SET {safe_column} = %s WHERE lap_id = %s"
+        query = f"UPDATE {ss.schema}.lap SET {safe_column} = %s WHERE lap_id = %s"
         cur.execute(query, (new_value, lap_id))
     _conn.commit()
 
@@ -119,9 +142,7 @@ def update_lap_in_db_test(lap_id, column_to_update, new_value):
     # In a real app, you'd have a whitelist of editable columns.
     safe_column = "".join(c for c in column_to_update if c.isalnum() or c == "_")
 
-    query = (
-        f"UPDATE public.lap SET {safe_column} = {new_value} WHERE lap_id = {lap_id};"
-    )
+    query = f"UPDATE {ss.schema}.lap SET {safe_column} = {new_value} WHERE lap_id = {lap_id};"
     return query
 
 
@@ -153,16 +174,13 @@ def process_lap_data(df):
         "Distance (miles)",
     ]
 
-    # --- Your data cleaning and feature engineering logic ---
-    # df['Distance (miles)'] = round(df['Distance'] / 1609.34, 2) in query now
-
     # Calculate pace only where distance is not zero
     non_zero_dist = df["Distance"] > 0
-    df["Pace (min/mile)"] = None
-    df.loc[non_zero_dist, "Pace (min/mile)"] = (df["Time"] / 60) / df[
+    df["Pace (min/mile) unformatted"] = None
+    df.loc[non_zero_dist, "Pace (min/mile) unformatted"] = (df["Time"] / 60) / df[
         "Distance (miles)"
     ]
-    df["Pace (min/mile)"] = df["Pace (min/mile)"].apply(
+    df["Pace (min/mile)"] = df["Pace (min/mile) unformatted"].apply(
         lambda x: f"{int(x)}:{round((x % 1) * 60):02d}" if pd.notna(x) else None
     )
 
@@ -179,6 +197,7 @@ def process_lap_data(df):
         "Total Ascent",
         "Total Descent",
         "Intensity",
+        "Pace (min/mile) unformatted",
     ]
 
     # Keep original IDs for updates, but don't show them by default
@@ -503,6 +522,7 @@ else:
                 ),
                 "Activity Id": None,
                 "Lap Id": None,
+                "Pace (min/mile) unformatted": None,
                 "Distance (miles)": st.column_config.NumberColumn(format="%.2f"),
             }
 
@@ -563,19 +583,34 @@ else:
                     st.write(f"Ascent: {total_ascent} feet")
                     st.write(f"Descent: {total_descent} feet")
                     st.markdown("---")
-                st.markdown("**Pace / Speed Info**")
-                st.write("Best lap pace: {info} will go here")
+
+                # TODO: Handle cases for cycling and other sports cause they won't be min/mile
+                st.markdown("**Pace / Speed**")
+                fastest_lap_speed_index = processed_laps_df[
+                    "Pace (min/mile) unformatted"
+                ].idxmin()
+                fastest_lap = processed_laps_df["Lap"].iloc[fastest_lap_speed_index]
+                fastest_lap_pace = processed_laps_df["Pace (min/mile)"].iloc[
+                    fastest_lap_speed_index
+                ]
+                st.write(
+                    f"Fastest lap speed: lap {fastest_lap} with a pace of {fastest_lap_pace} /mi"
+                )
 
             with c4:
                 if "cadence" in ss and ss.cadence:
-                    avg_cadence = point_df.loc[:, "total_cadence"].mean()
-                    max_cadence = point_df.loc[:, "total_cadence"].max()
+                    avg_cadence = point_df.loc[:, "total_cadence"].mean() * 2
+                    max_cadence = point_df.loc[:, "total_cadence"].max() * 2
+                    total_steps = (
+                        avg_cadence * duration_s / 60
+                    )  # total steps would be avg cadence (spm) times the total minutes
+                    avg_stride_length_m = total_steps / distance_m
                     st.markdown("**Running Dynamics**")
                     st.write(f"Avg cadence: {avg_cadence} spm")
                     st.write(f"Max cadence: {max_cadence} spm")
+                    st.write(f"Stride length: {avg_stride_length_m}m")
 
                 # if ss.dynamics
-                st.write("Stride length: {info} will go here")
                 st.write("Vertical ratio: {info} will go here")
                 st.write("Stance time balance: {info} will go here")
 
@@ -608,15 +643,15 @@ else:
 
         if updated_title != ss.activity_details[7]:
             updates.append(
-                f"UPDATE public.activity SET activity_name = '{updated_title}' WHERE activity_id = {activity_id};"
+                f"UPDATE {ss.schema}.activity SET activity_name = '{updated_title}' WHERE activity_id = {activity_id};"
             )
         if updated_category != ss.activity_details[8]:
             updates.append(
-                f"UPDATE public.activity SET category = '{updated_category}' WHERE activity_id = {activity_id};"
+                f"UPDATE {ss.schema}.activity SET category = '{updated_category}' WHERE activity_id = {activity_id};"
             )
         if updated_description != (ss.activity_details[3] or ""):
             updates.append(
-                f"UPDATE public.activity SET description = '{updated_description}' WHERE activity_id = {activity_id};"
+                f"UPDATE {ss.schema}.activity SET description = '{updated_description}' WHERE activity_id = {activity_id};"
             )
 
         if updates:
@@ -627,4 +662,3 @@ else:
             st.info("No changes detected.")
             # Rerun the script to show the latest data from the DB
             # st.rerun()
-st.write(point_df)

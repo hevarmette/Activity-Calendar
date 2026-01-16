@@ -4,19 +4,19 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime
-import random
-import psycopg2
 import folium
 from folium import plugins
 import branca
 from streamlit_folium import st_folium
-from datetime import datetime, timedelta
+from datetime import timedelta
 from streamlit_calendar import calendar
 from streamlit import session_state as ss
 from db import get_connection
 from pyhigh import get_elevation_batch
 
+ss.schema = "PUBLIC"
 # --- 1. FAKE DATA GENERATION (Replaces Database Functions) ---
+# import random
 # Use @st.cache_data to cache the results so the fake data doesn't change on every rerun.
 # @st.cache_data
 # def generate_fake_activity_data(year, month):
@@ -120,14 +120,14 @@ def retrieve_monthly_data(_conn):  # , year, month):
     if _conn is None:
         return pd.DataFrame()
 
-    # sql_query = """
+    # sql_query = f"""
     #     SELECT
     #         a.activity_id,
     #         a.timestamp AS activity_date,
     #         a.activity_name,
     #         s.sport
-    #     FROM public.activity a
-    #     JOIN public.session s ON a.activity_id = s.activity_id
+    #     FROM {ss.schema}.activity a
+    #     JOIN {ss.schema}.session s ON a.activity_id = s.activity_id
     #     WHERE
     #         EXTRACT(YEAR FROM a.timestamp) = %s
     #         AND EXTRACT(MONTH FROM a.timestamp) = %s
@@ -136,14 +136,14 @@ def retrieve_monthly_data(_conn):  # , year, month):
     # try:
     #     df = pd.read_sql_query(sql_query, _conn, params=(year, month))
     #     return df
-    sql_query = """
+    sql_query = f"""
         SELECT
             a.activity_id,
             a.timestamp AS activity_date,
             a.activity_name,
             s.sport
-        FROM public.activity a
-        JOIN public.session s ON a.activity_id = s.activity_id
+        FROM {ss.schema}.activity a
+        JOIN {ss.schema}.session s ON a.activity_id = s.activity_id
         GROUP BY a.activity_id, s.sport
 		ORDER BY activity_date DESC;
     """
@@ -160,9 +160,9 @@ def fetch_activity_details(_conn, activity_id):
     """Fetches main details for a specific activity from the database."""
     if _conn is None:
         return None
-    sql_query = """
+    sql_query = f"""
         SELECT adjusted_distance, adjusted_duration, CAST(avg_power AS INTEGER), description, workout_feel, effort, local_timestamp, activity_name, category
-        FROM public.activity JOIN public.session ON activity.activity_id = session.activity_id WHERE activity.activity_id = %s
+        FROM {ss.schema}.activity JOIN public.session ON activity.activity_id = session.activity_id WHERE activity.activity_id = %s
     """
     try:
         with _conn.cursor() as cursor:
@@ -186,10 +186,23 @@ def fetch_activity_points(_conn, activity_id):
     if _conn is None:
         return pd.DataFrame()
 
-    sql_query = """
-        SELECT *--timestamp, latitude, longitude, lap, altitude, heart_rate, enhanced_speed
-        FROM public.record
-        WHERE activity_id = %s ORDER BY timestamp ASC
+    sql_query = f"""
+        SELECT 
+            record_id,
+            activity_id,
+            latitude,
+            longitude,
+            lap,
+            altitude,
+            "timestamp",
+            heart_rate,
+            cadence,
+            fractional_cadence,
+            enhanced_speed,
+            distance
+        FROM {ss.schema}.record
+        WHERE activity_id = %s 
+        ORDER BY "timestamp" ASC
     """
     try:
         points_df = pd.read_sql_query(sql_query, _conn, params=(activity_id,))
@@ -220,7 +233,9 @@ def fetch_activity_points(_conn, activity_id):
                     # st.warning(f"Network error getting elevation: {e}") # Optional logging
                     print(e)
                     if "altitude" in points_df.columns:
-                        points_df["corrected_altitude"] = points_df["altitude"]
+                        points_df["corrected_altitude"] = (
+                            points_df["altitude"] * 3.28084
+                        )  # converting from meters to feet
                     else:
                         points_df["corrected_altitude"] = 0
 
@@ -413,7 +428,7 @@ def show_activity_dialog(activity_title, activity_id, activity_sport):
         #     st.warning("No GPS data found for this activity.")
 
         # --- Description ---
-        if not description in [None, "0", ""]:
+        if description not in [None, "0", ""]:
             st.markdown(f"**Description:** *{description}*")
 
         subcol1, subcol2, subcol3 = st.columns(
@@ -436,7 +451,7 @@ def show_activity_dialog(activity_title, activity_id, activity_sport):
             with subcol2:
                 st.image(f"assets/{feel_label.replace(" ", "-")}.svg", width="stretch")
         else:
-            feel_string = ""
+            feel_string = ""  # not used rn. might display the label with the image
 
         if effort is not None:
             effort_labels = {
