@@ -564,114 +564,176 @@ else:
 
             c1, c2, c3, c4 = st.columns(4)
 
+            # --------------------
+            # Column 1
+            # --------------------
             with c1:
-                st.markdown("**Distance**")
-                st.write(f"{miles:.2f} mi")
-                st.markdown("---")
-                st.markdown("**Pace / Speed**")
-                if sport == "cycling":
-                    st.write(f"{mph:.2f} mph")
-                else:
-                    st.write(f"{pace_min}:{pace_sec:02d} /mi")
+                if miles is not None:
+                    st.markdown("**Distance**")
+                    st.write(f"{miles:.2f} mi")
 
+                if miles is not None:
+                    st.markdown("---")
+                    st.markdown("**Avg Pace / Speed**")
+                    avg_speed = None
+                    if sport == "cycling" and mph is not None:
+                        avg_speed = f"{mph:.2f} mph"
+                    elif pace_min is not None and pace_sec is not None:
+                        avg_speed = f"{pace_min}:{pace_sec:02d} /mi"
+                    if avg_speed is not None:
+                        st.write(avg_speed)
+
+            # --------------------
+            # Column 2
+            # --------------------
             with c2:
-                # getting summary stats if the column is present
-                # TODO: add average statistics for active reps for intervals
-                if "hr" in ss and ss.hr:
-                    avg_hr = point_df.loc[:, "heart_rate"].mean()
-                    max_hr = point_df.loc[:, "heart_rate"].max()
+                hr_valid = (
+                    "hr" in ss
+                    and ss.hr
+                    and "heart_rate" in point_df
+                    and not point_df["heart_rate"].isna().all()
+                )
+
+                if hr_valid:
+                    avg_hr = point_df["heart_rate"].mean()
+                    max_hr = point_df["heart_rate"].max()
 
                     st.markdown("**Heart Rate**")
                     st.write(f"Avg HR: {avg_hr:.0f} bpm")
-                    st.write(f"Max HR: {max_hr} bpm")
-                    st.markdown("---")
+                    st.write(f"Max HR: {max_hr:.0f} bpm")
 
-                st.markdown("**Duration**")
-                st.write(str(duration_td))
+                if duration_td is not None:
+                    if hr_valid:
+                        st.markdown("---")
+                    st.markdown("**Duration**")
+                    st.write(str(duration_td))
 
+            # --------------------
+            # Column 3
+            # --------------------
             with c3:
-                if "coordinates" in ss and ss.coordinates:
-                    # This creates a new Series where each value is (row[i] - row[i-1])
+                elevation_valid = (
+                    "coordinates" in ss
+                    and ss.coordinates
+                    and "corrected_altitude" in point_df
+                    and not point_df["corrected_altitude"].isna().all()
+                )
+
+                if elevation_valid:
                     altitude_change = point_df["corrected_altitude"].diff()
-
-                    # Calculate Ascent:
-                    # Filter for only positive changes (gains) and sum them up.
-                    # .clip(lower=0) sets all negative numbers to 0.
                     total_ascent = altitude_change.clip(lower=0).sum()
-
-                    # Calculate Descent:
-                    # Filter for only negative changes (losses), make them positive, and sum them up.
-                    # .clip(upper=0) sets all positive numbers to 0.
-                    # .abs() makes the negative changes positive.
                     total_descent = altitude_change.clip(upper=0).abs().sum()
+
                     st.markdown("**Elevation**")
                     st.write(f"Ascent: {total_ascent:.0f} feet")
                     st.write(f"Descent: {total_descent:.0f} feet")
-                    st.markdown("---")
 
-                # TODO: Handle cases for cycling and other sports cause they won't be min/mile
-                st.markdown("**Pace / Speed**")
-                fastest_lap_speed_index = processed_laps_df[
-                    "Pace (min/mile) unformatted"
-                ].idxmin()
-                fastest_lap = processed_laps_df["Lap"].iloc[fastest_lap_speed_index]
-                fastest_lap_pace = processed_laps_df["Pace (min/mile)"].iloc[
-                    fastest_lap_speed_index
-                ]
-                st.write(
-                    f"Fastest lap speed: lap {fastest_lap} with a pace of {fastest_lap_pace} /mi"
+                pace_cols_valid = (
+                    "Pace (min/mile) unformatted" in processed_laps_df
+                    and not processed_laps_df["Pace (min/mile) unformatted"]
+                    .isna()
+                    .all()
                 )
 
+                if pace_cols_valid:
+                    if elevation_valid:
+                        st.markdown("---")
+
+                    fastest_idx = processed_laps_df[
+                        "Pace (min/mile) unformatted"
+                    ].idxmin()
+
+                    # Do to rounding differences in avg speed and lap speed, we will use avg speed if there is only one lap
+                    # TODO: Handle for cycling and other sports
+                    if len(processed_laps_df) > 1:
+                        fastest_lap = processed_laps_df.loc[fastest_idx, "Lap"]
+                        fastest_lap_pace = processed_laps_df.loc[
+                            fastest_idx, "Pace (min/mile)"
+                        ]
+                        fastest_lap_pace = f"{fastest_lap_pace} /mi"
+                    else:
+                        fastest_lap = 1
+                        fastest_lap_pace = avg_speed
+
+                    st.markdown("**Best Pace / Speed**")
+                    st.write(
+                        f"Fastest lap: lap {fastest_lap} " f"at {fastest_lap_pace}"
+                    )
+
+            # --------------------
+            # Column 4
+            # --------------------
             with c4:
-                if "cadence" in ss and ss.cadence:
-                    avg_cadence = point_df.loc[:, "total_cadence"].mean() * 2
-                    max_cadence = int(point_df.loc[:, "total_cadence"].max() * 2)
-                    total_steps = (
-                        avg_cadence * duration_s / 60
-                    )  # total steps would be avg cadence (spm) times the total minutes
-                    avg_stride_length_m = distance_m / total_steps
+                cadence_valid = (
+                    "cadence" in ss
+                    and ss.cadence
+                    and "total_cadence" in point_df
+                    and not point_df["total_cadence"].isna().all()
+                )
+
+                if cadence_valid:
+                    avg_cadence = point_df["total_cadence"].mean() * 2
+                    max_cadence = point_df["total_cadence"].max() * 2
+
+                    if duration_s and distance_m:
+                        total_steps = avg_cadence * duration_s / 60
+                        avg_stride_length_m = distance_m / total_steps
+                    else:
+                        avg_stride_length_m = None
+
                     st.markdown("**Running Dynamics**")
                     st.write(f"Avg cadence: {avg_cadence:.1f} spm")
-                    st.write(f"Max cadence: {max_cadence} spm")
-                    st.write(f"Stride length: {avg_stride_length_m:.2f}m")
+                    st.write(f"Max cadence: {int(max_cadence)} spm")
+
+                    if avg_stride_length_m is not None:
+                        st.write(f"Stride length: {avg_stride_length_m:.2f} m")
 
                 distance_col = "Distance (miles)"
 
                 avg_vertical_oscillation = weighted_average_if_present(
                     processed_laps_df, "Avg Vertical Oscillation", distance_col
                 )
-
                 avg_stance_time = weighted_average_if_present(
                     processed_laps_df, "Avg Stance Time", distance_col
                 )
-
                 avg_vertical_ratio = weighted_average_if_present(
                     processed_laps_df, "Avg Vertical Ratio", distance_col
                 )
-
                 avg_stance_time_balance = weighted_average_if_present(
                     processed_laps_df, "Avg Stance Time Balance", distance_col
                 )
 
-                if avg_vertical_ratio is not None:
-                    st.write(f"Vertical ratio: {avg_vertical_ratio:.2f}%")
+                dynamics_present = any(
+                    v is not None
+                    for v in [
+                        avg_vertical_ratio,
+                        avg_stance_time_balance,
+                        avg_stance_time,
+                        avg_vertical_oscillation,
+                    ]
+                )
 
-                if avg_stance_time_balance is not None:
-                    st.write(
-                        f"Stance time balance: {avg_stance_time_balance:.2f}"
-                    )  # I think this is a percent. haven't checked
+                if dynamics_present:
+                    if avg_vertical_ratio is not None:
+                        st.write(f"Vertical ratio: {avg_vertical_ratio:.2f}%")
 
-                if avg_stance_time is not None:
-                    st.write(f"Average ground contact time: {avg_stance_time:.0f} ms")
+                    if avg_stance_time_balance is not None:
+                        st.write(f"Stance time balance: {avg_stance_time_balance:.2f}")
 
-                if avg_vertical_oscillation is not None:
-                    st.write(
-                        f"Average vertical oscillation: {avg_vertical_oscillation/10:.1f}cm"
-                    )
+                    if avg_stance_time is not None:
+                        st.write(
+                            f"Average ground contact time: {avg_stance_time:.0f} ms"
+                        )
+
+                    if avg_vertical_oscillation is not None:
+                        st.write(
+                            f"Average vertical oscillation: {avg_vertical_oscillation / 10:.1f} cm"
+                        )
 
     if st.button("Save"):
         updates = []
         # Check for edits by comparing the new state to the previous one
+        # FIX: correct column names in sql for the edited lap_df
         if "lap_editor" in ss and ss.lap_editor.get("edited_rows"):
             # st.info("Changes detected. Saving to database...")
 
