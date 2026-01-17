@@ -1,4 +1,6 @@
-# data fix: efforts that are not multiples of 10
+# FIX: october 6, map cannot be shown with NaN in lat/long
+# avg stride length calc is wrong
+# units and rounding for stats
 
 import streamlit as st
 import pandas as pd

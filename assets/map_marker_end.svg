@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="33" height="50" viewBox="0 0 33 50">
+  <defs>
+    <filter id="map_marker_end-copy-a" width="150%" height="297.9%" x="-25%" y="-98.9%" filterUnits="objectBoundingBox">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1"/>
+    </filter>
+    <path id="map_marker_end-copy-b" d="M15,38.25 C25,29.0212155 30,20.9140727 30,13.9285714 C30,6.23603384 23.2842712,0 15,0 C6.71572875,0 3.62332367e-16,6.23603384 0,13.9285714 C0,20.9140727 5,29.0212155 15,38.25 Z"/>
+  </defs>
+  <g fill="none" fill-rule="evenodd" transform="translate(0 3.5)">
+    <ellipse cx="16.5" cy="42.452" fill="#000" fill-opacity=".4" filter="url(#map_marker_end-copy-a)" rx="6" ry="1.516" style="mix-blend-mode:multiply"/>
+    <g transform="translate(1.5 1.516)">
+      <use fill="#FF0018" xlink:href="#map_marker_end-copy-b"/>
+      <path stroke="#FFF" d="M14.6608993,38.6174381 C4.56822344,29.303125 -0.5,21.0853627 -0.5,13.9285714 C-0.5,5.95127321 6.447525,-0.5 15,-0.5 C23.552475,-0.5 30.5,5.95127321 30.5,13.9285714 C30.5,21.0853627 25.4317766,29.303125 15.3391007,38.6174381 L15,38.9303868 L14.6608993,38.6174381 Z"/>
+    </g>
+    <polygon fill="#FAFBFB" points="5.367 17.633 17.633 17.633 17.633 5.367 5.367 5.367" transform="translate(5.25 4.548)"/>
+  </g>
+</svg>

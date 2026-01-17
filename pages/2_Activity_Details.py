@@ -93,6 +93,19 @@ def convert_seconds_to_hms(seconds):
     return f"{m}:{s:05.2f}"
 
 
+def weighted_average_if_present(df, value_col, weight_col):
+    valid = df[[value_col, weight_col]].dropna()
+
+    if valid.empty:
+        return None
+
+    total_weight = valid[weight_col].sum()
+    if total_weight == 0:
+        return None
+
+    return (valid[value_col] * valid[weight_col]).sum() / total_weight
+
+
 @st.cache_data
 def fetch_lap_data(_conn, activity_id):
     """Fetches lap data for a specific activity."""
@@ -196,6 +209,10 @@ def process_lap_data(df):
         "Max Heart Rate",
         "Total Ascent",
         "Total Descent",
+        "Avg Vertical Oscillation",
+        "Avg Stance Time",
+        "Avg Vertical Ratio",
+        "Avg Stance Time Balance",
         "Intensity",
         "Pace (min/mile) unformatted",
     ]
@@ -522,6 +539,10 @@ else:
                 ),
                 "Activity Id": None,
                 "Lap Id": None,
+                "Avg Vertical Oscillation": None,
+                "Avg Stance Time": None,
+                "Avg Vertical Ratio": None,
+                "Avg Stance Time Balance": None,
                 "Pace (min/mile) unformatted": None,
                 "Distance (miles)": st.column_config.NumberColumn(format="%.2f"),
             }
@@ -610,9 +631,37 @@ else:
                     st.write(f"Max cadence: {max_cadence} spm")
                     st.write(f"Stride length: {avg_stride_length_m}m")
 
-                # if ss.dynamics
-                st.write("Vertical ratio: {info} will go here")
-                st.write("Stance time balance: {info} will go here")
+                distance_col = "Distance (miles)"
+
+                avg_vertical_oscillation = weighted_average_if_present(
+                    processed_laps_df, "Avg Vertical Oscillation", distance_col
+                )
+
+                avg_stance_time = weighted_average_if_present(
+                    processed_laps_df, "Avg Stance Time", distance_col
+                )
+
+                avg_vertical_ratio = weighted_average_if_present(
+                    processed_laps_df, "Avg Vertical Ratio", distance_col
+                )
+
+                avg_stance_time_balance = weighted_average_if_present(
+                    processed_laps_df, "Avg Stance Time Balance", distance_col
+                )
+
+                if avg_vertical_ratio is not None:
+                    st.write(f"Vertical ratio: {avg_vertical_ratio:.2f}")
+
+                if avg_stance_time_balance is not None:
+                    st.write(f"Stance time balance: {avg_stance_time_balance:.2f}")
+
+                if avg_stance_time is not None:
+                    st.write(f"Average stance time: {avg_stance_time:.1f} ms")
+
+                if avg_vertical_oscillation is not None:
+                    st.write(
+                        f"Average vertical oscillation: {avg_vertical_oscillation:.2f}"
+                    )
 
     if st.button("Save"):
         updates = []
