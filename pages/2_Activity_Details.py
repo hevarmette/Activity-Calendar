@@ -456,12 +456,17 @@ else:
         )
 
         if x_axis_choice == "Distance":
-            x_col, x_label = "distance", "Distance (km)"
+            if "distance" in point_df.columns:
+                point_df = point_df.copy()
+                point_df["distance_miles"] = point_df["distance"] * 0.621371
+                x_col, x_label = "distance_miles", "Distance (miles)"
+            else:
+                x_col, x_label = None, None
         else:
             x_col, x_label = "elapsed_time", "Time (minutes)"
 
         # Check if the chosen x-axis data exists
-        if x_col not in point_df.columns:
+        if not x_col or x_col not in point_df.columns:
             st.warning(f"Data for '{x_label}' is not available.")
         else:
             pace_fig = create_plot(
@@ -474,7 +479,63 @@ else:
                 color="blue",
                 invert_y_axis=True,
             )
+
             if pace_fig:
+                pace_series = point_df["pace_min_per_mile"].dropna()
+
+                if not pace_series.empty:
+                    # --- Dynamic bounds ---
+                    if updated_category == "training":
+                        p_pace = pace_series.quantile(0.85)
+                    else:
+                        p_pace = pace_series.quantile(0.95) + 3
+                    fastest_pace = pace_series.min()
+
+                    # Top bound logic
+                    if fastest_pace >= 5:
+                        top_bound = 5
+                    else:
+                        top_bound = fastest_pace
+
+                    bottom_bound = p_pace
+
+                    # --- Average pace ---
+                    avg_pace = pace_series.mean()
+                    avg_min = int(avg_pace)
+                    avg_sec = int(round((avg_pace - avg_min) * 60))
+
+                    # --- Y-axis formatting ---
+                    max_tick = int(bottom_bound) + 1
+                    tick_vals = list(range(int(top_bound), max_tick + 1))
+                    tick_text = [f"{m:02d}:00" for m in tick_vals]
+
+                    pace_fig.update_yaxes(
+                        range=[bottom_bound, top_bound],
+                        autorange=False,
+                        tickmode="array",
+                        tickvals=tick_vals,
+                        ticktext=tick_text,
+                        title="Pace (mm:ss / mile)",
+                    )
+
+                    # --- Hover formatting ---
+                    pace_fig.update_traces(
+                        hovertemplate=(
+                            "Distance: %{x:.2f} mi<br>"
+                            "Pace: %{y:.2f} min/mi<br>"
+                            "<extra></extra>"
+                        )
+                    )
+
+                    # --- Average pace line ---
+                    pace_fig.add_hline(
+                        y=avg_pace,
+                        line_dash="dash",
+                        line_color="gray",
+                        annotation_text=f"Avg: {avg_min:02d}:{avg_sec:02d} /mi",
+                        annotation_position="top right",
+                    )
+
                 st.plotly_chart(pace_fig, use_container_width=True)
 
             hr_fig = create_plot(
@@ -501,18 +562,22 @@ else:
             if alt_fig:
                 st.plotly_chart(alt_fig, use_container_width=True)
 
-            cad_fig = create_plot(
-                df=point_df,
-                x_col=x_col,
-                y_col="cadence",
-                x_label=x_label,
-                y_label="Cadence",
-                title="Cadence over " + x_axis_choice,
-                color="purple",
-                is_scatter=True,
-            )
-            if cad_fig:
-                st.plotly_chart(cad_fig, use_container_width=True)
+            if "cadence" in point_df.columns:
+                point_df = point_df.copy()
+                point_df["cadence_spm"] = point_df["cadence"] * 2
+
+                cad_fig = create_plot(
+                    df=point_df,
+                    x_col=x_col,
+                    y_col="cadence_spm",
+                    x_label=x_label,
+                    y_label="Cadence (spm)",
+                    title="Cadence over " + x_axis_choice,
+                    color="purple",
+                    is_scatter=True,
+                )
+                if cad_fig:
+                    st.plotly_chart(cad_fig, use_container_width=True)
     else:
         st.info("No point-by-point data available to generate graphs.")
 
@@ -715,7 +780,7 @@ else:
 
                 if dynamics_present:
                     if avg_vertical_ratio is not None:
-                        st.write(f"Vertical ratio: {avg_vertical_ratio:.2f}%")
+                        st.write(f"Vertical ratio: {avg_vertical_ratio:.1f}%")
 
                     if avg_stance_time_balance is not None:
                         st.write(f"Stance time balance: {avg_stance_time_balance:.2f}")
