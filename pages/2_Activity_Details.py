@@ -194,7 +194,11 @@ def process_lap_data(df):
         "Distance (miles)"
     ]
     df["Pace (min/mile)"] = df["Pace (min/mile) unformatted"].apply(
-        lambda x: f"{int(x)}:{round((x % 1) * 60):02d}" if pd.notna(x) else None
+        lambda x: (
+            "{:d}:{:02d}".format(*divmod(int(round(x * 60)), 60))
+            if pd.notna(x)
+            else None
+        )
     )
 
     df["Time (formatted)"] = df["Time"].apply(convert_seconds_to_hms)
@@ -578,7 +582,7 @@ else:
                     max_hr = point_df.loc[:, "heart_rate"].max()
 
                     st.markdown("**Heart Rate**")
-                    st.write(f"Avg HR: {avg_hr} bpm")
+                    st.write(f"Avg HR: {avg_hr:.0f} bpm")
                     st.write(f"Max HR: {max_hr} bpm")
                     st.markdown("---")
 
@@ -601,8 +605,8 @@ else:
                     # .abs() makes the negative changes positive.
                     total_descent = altitude_change.clip(upper=0).abs().sum()
                     st.markdown("**Elevation**")
-                    st.write(f"Ascent: {total_ascent} feet")
-                    st.write(f"Descent: {total_descent} feet")
+                    st.write(f"Ascent: {total_ascent:.0f} feet")
+                    st.write(f"Descent: {total_descent:.0f} feet")
                     st.markdown("---")
 
                 # TODO: Handle cases for cycling and other sports cause they won't be min/mile
@@ -621,15 +625,15 @@ else:
             with c4:
                 if "cadence" in ss and ss.cadence:
                     avg_cadence = point_df.loc[:, "total_cadence"].mean() * 2
-                    max_cadence = point_df.loc[:, "total_cadence"].max() * 2
+                    max_cadence = int(point_df.loc[:, "total_cadence"].max() * 2)
                     total_steps = (
                         avg_cadence * duration_s / 60
                     )  # total steps would be avg cadence (spm) times the total minutes
-                    avg_stride_length_m = total_steps / distance_m
+                    avg_stride_length_m = distance_m / total_steps
                     st.markdown("**Running Dynamics**")
-                    st.write(f"Avg cadence: {avg_cadence} spm")
+                    st.write(f"Avg cadence: {avg_cadence:.1f} spm")
                     st.write(f"Max cadence: {max_cadence} spm")
-                    st.write(f"Stride length: {avg_stride_length_m}m")
+                    st.write(f"Stride length: {avg_stride_length_m:.2f}m")
 
                 distance_col = "Distance (miles)"
 
@@ -650,17 +654,19 @@ else:
                 )
 
                 if avg_vertical_ratio is not None:
-                    st.write(f"Vertical ratio: {avg_vertical_ratio:.2f}")
+                    st.write(f"Vertical ratio: {avg_vertical_ratio:.2f}%")
 
                 if avg_stance_time_balance is not None:
-                    st.write(f"Stance time balance: {avg_stance_time_balance:.2f}")
+                    st.write(
+                        f"Stance time balance: {avg_stance_time_balance:.2f}"
+                    )  # I think this is a percent. haven't checked
 
                 if avg_stance_time is not None:
-                    st.write(f"Average stance time: {avg_stance_time:.1f} ms")
+                    st.write(f"Average ground contact time: {avg_stance_time:.0f} ms")
 
                 if avg_vertical_oscillation is not None:
                     st.write(
-                        f"Average vertical oscillation: {avg_vertical_oscillation:.2f}"
+                        f"Average vertical oscillation: {avg_vertical_oscillation/10:.1f}cm"
                     )
 
     if st.button("Save"):
