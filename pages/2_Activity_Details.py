@@ -486,7 +486,7 @@ else:
                 if not pace_series.empty:
                     # --- Dynamic bounds ---
                     if updated_category == "training":
-                        p_pace = pace_series.quantile(0.85)
+                        p_pace = min(pace_series.quantile(0.85), 12)
                     else:
                         p_pace = pace_series.quantile(0.95) + 3
                     fastest_pace = pace_series.min()
@@ -799,6 +799,8 @@ else:
         updates = []
         # Check for edits by comparing the new state to the previous one
         # FIX: correct column names in sql for the edited lap_df
+        # this needs to be done for all columns in lap_df
+        # FIX: need to format title and description text to handle apostrophe literals
         if "lap_editor" in ss and ss.lap_editor.get("edited_rows"):
             # st.info("Changes detected. Saving to database...")
 
@@ -823,23 +825,67 @@ else:
             # Clear cache to force a re-fetch of data
             fetch_lap_data.clear()
 
+        set_clauses = []
+        query_params = []
+        
+        # Check Description
+        if updated_description != (ss.activity_details[3]):
+            set_clauses.append("description = %s")
+            query_params.append(updated_description)
+        
+        # Check Title (Activity Name)
         if updated_title != ss.activity_details[7]:
-            updates.append(
-                f"UPDATE {ss.schema}.activity SET activity_name = '{updated_title}' WHERE activity_id = {activity_id};"
-            )
+            set_clauses.append("activity_name = %s")
+            query_params.append(updated_title)
+        
+        # Check Category
         if updated_category != ss.activity_details[8]:
-            updates.append(
-                f"UPDATE {ss.schema}.activity SET category = '{updated_category}' WHERE activity_id = {activity_id};"
-            )
-        if updated_description != (ss.activity_details[3] or ""):
-            updates.append(
-                f"UPDATE {ss.schema}.activity SET description = '{updated_description}' WHERE activity_id = {activity_id};"
-            )
+            set_clauses.append("category = %s")
+            query_params.append(updated_category)
+        
+        # Only proceed if there is at least one change
+        if set_clauses:
+            # Join the clauses with commas (e.g., "description = %s, category = %s")
+            set_logic = ", ".join(set_clauses)
+            
+            # Construct the final query
+            query = f"UPDATE {ss.schema}.activity SET {set_logic} WHERE activity_id = %s;"
+            
+            # Add the activity_id to the end of the parameters for the WHERE clause
+            query_params.append(activity_id)
+            
+            # Append the query and the parameters (converted to a tuple)
+            updates.append((query, tuple(query_params)))
 
         if updates:
             st.subheader("SQL to run:")
-            for q in updates:
-                st.code(q, language="sql")
+            
+            for query, params in updates:
+                # 1. Create a "display version" of the parameters
+                # We need to wrap strings in quotes and handle None/Numbers
+                display_params = []
+                for p in params:
+                    if isinstance(p, str):
+                        # Escape existing apostrophes and wrap the whole thing in quotes
+                        clean_p = p.replace("'", "''")
+                        display_params.append(f"'{clean_p}'")
+                    elif p is None:
+                        display_params.append("NULL")
+                    else:
+                        # Numbers don't get quotes
+                        display_params.append(str(p))
+                
+                # 2. Inject the display parameters into the query
+                # Python's % operator replaces the %s placeholders with our formatted list
+                try:
+                    readable_sql = query % tuple(display_params)
+                    st.code(readable_sql, language="sql")
+                except TypeError:
+                    # Fallback if something goes wrong (e.g., if you have % symbols in your text)
+                    st.warning("Could not format perfectly, showing raw query and params:")
+                    st.text(f"Query: {query}")
+                    st.text(f"Params: {params}")           
+                    # cur.execute(query, params)
         else:
             st.info("No changes detected.")
             # Rerun the script to show the latest data from the DB
