@@ -13,6 +13,34 @@ from db import get_connection
 
 if "schema" not in ss:
     ss.schema = "PUBLIC"
+
+# Keys = Database Column Names
+# Values = UI Display Names
+LAP_COLUMN_MAPPING = {
+    "lap_id": "Lap Id",
+    "activity_id": "Activity Id",
+    "start_time": "Start Time",
+    "number": "Lap",
+    "total_distance": "Distance",
+    "total_timer_time": "Time",
+    "total_ascent": "Total Ascent",
+    "total_descent": "Total Descent",
+    "avg_vertical_oscillation": "Avg Vertical Oscillation",
+    "avg_stance_time": "Avg Stance Time",
+    "avg_vertical_ratio": "Avg Vertical Ratio",
+    "avg_stance_time_balance": "Avg Stance Time Balance",
+    "avg_step_length": "Avg Stride Length",
+    "avg_running_cadence": "Avg Running Cadence",
+    "max_heart_rate": "Max Heart Rate",
+    "avg_heart_rate": "Avg Heart Rate",
+    "intensity": "Intensity",
+    "distance_mi": "Distance (miles)",
+    "time_formatted": "Time (formatted)",
+}
+# Create a reverse map for fast lookups: { 'Avg Heart Rate': 'avg_heart_rate' }
+UI_TO_DB_MAP = {v: k for k, v in LAP_COLUMN_MAPPING.items()}
+
+METERS_TO_MILES = 1609.344
 # import random
 # @st.cache_data
 # def generate_fake_lap_data(activity_id):
@@ -93,6 +121,33 @@ def convert_seconds_to_hms(seconds):
     return f"{m}:{s:05.2f}"
 
 
+def parse_hms_to_seconds(time_str):
+    """
+    Converts 'H:M:S', 'M:S', or 'S' strings back to total seconds.
+    Returns None if parsing fails.
+    """
+    if not isinstance(time_str, str):
+        return None
+
+    try:
+
+        # Split by colon
+        parts = time_str.strip().split(":")
+        parts = [float(p) for p in parts]  # Convert all parts to floats
+
+        if len(parts) == 3:  # H:M:S
+            return (parts[0] * 3600) + (parts[1] * 60) + parts[2]
+        elif len(parts) == 2:  # M:S
+            return (parts[0] * 60) + parts[1]
+
+        elif len(parts) == 1:  # Just Seconds
+            return parts[0]
+        else:
+            return None
+    except ValueError:
+        return None
+
+
 def weighted_average_if_present(df, value_col, weight_col):
     valid = df[[value_col, weight_col]].dropna()
 
@@ -149,14 +204,15 @@ def update_lap_in_db(_conn, lap_id, column_to_update, new_value):
     _conn.commit()
 
 
-def update_lap_in_db_test(lap_id, column_to_update, new_value):
-    """Updates a single value in the lap table."""
-    # Important: Sanitize column name to prevent SQL injection
-    # In a real app, you'd have a whitelist of editable columns.
-    safe_column = "".join(c for c in column_to_update if c.isalnum() or c == "_")
-
-    query = f"UPDATE {ss.schema}.lap SET {safe_column} = {new_value} WHERE lap_id = {lap_id};"
-    return query
+def get_lap_update_query(lap_id, db_column, new_value):
+    """
+    Returns a safe (query, params) tuple for updating a single value.
+    """
+    # Use %s for the value to handle quotes/types safely
+    # We inject db_column directly because we validate it against our map first (safe whitelist)
+    query = f"UPDATE {ss.schema}.lap SET {db_column} = %s WHERE lap_id = %s;"
+    params = (new_value, lap_id)
+    return query, params
 
 
 # --- 2. DATA PROCESSING FUNCTION ---
@@ -166,26 +222,7 @@ def process_lap_data(df):
         return pd.DataFrame()
 
     # Rename columns to be more user-friendly for the editor
-    df.columns = [
-        "Lap Id",
-        "Activity Id",
-        "Start Time",
-        "Lap",
-        "Distance",
-        "Time",
-        "Total Ascent",
-        "Total Descent",
-        "Avg Vertical Oscillation",
-        "Avg Stance Time",
-        "Avg Vertical Ratio",
-        "Avg Stance Time Balance",
-        "Avg Stride Length",
-        "Avg Running Cadence",
-        "Max Heart Rate",
-        "Avg Heart Rate",
-        "Intensity",
-        "Distance (miles)",
-    ]
+    df = df.rename(columns=LAP_COLUMN_MAPPING)
 
     # Calculate pace only where distance is not zero
     non_zero_dist = df["Distance"] > 0
@@ -234,7 +271,7 @@ def process_cycling_laps(df):
     if df.empty:
         return pd.DataFrame()
 
-    df["Distance (miles)"] = round(df["Distance"] / 1609.34, 2)
+    df["Distance (miles)"] = round(df["Distance"] / METERS_TO_MILES, 2)
 
     # Calculate Average Speed in MPH for cycling
     non_zero_time = df["Time"] > 0
@@ -798,70 +835,100 @@ else:
     if st.button("Save"):
         updates = []
         # Check for edits by comparing the new state to the previous one
-        # FIX: correct column names in sql for the edited lap_df
-        # this needs to be done for all columns in lap_df
-        # FIX: need to format title and description text to handle apostrophe literals
         if "lap_editor" in ss and ss.lap_editor.get("edited_rows"):
             # st.info("Changes detected. Saving to database...")
 
             # The edited_rows dict tells us exactly what changed
             for row_idx, changes in ss.lap_editor["edited_rows"].items():
-                # Get the lap_id for the edited row
-                lap_id = processed_laps_df.iloc[row_idx]["Lap Id"]
+                # Get the lap_id using the row index from the ORIGINAL dataframe
+                # Note: Ensure processed_laps_df aligns with the editor's data source
+                try:
+                    lap_id = processed_laps_df.iloc[int(row_idx)]["Lap Id"]
+                except IndexError:
+                    st.error("Could not find Lap ID. Did the sort order change?")
+                    continue
 
-                for col_name, new_value in changes.items():
-                    try:
-                        # Find the original column name if we renamed it
-                        # This part needs to be robust based on your column mapping
-                        original_col = col_name  # Placeholder - adjust if needed
-                        ### update_lap_in_db(conn, lap_id, original_col, new_value)
-                        updates.append(
-                            update_lap_in_db_test(lap_id, original_col, new_value)
+                for ui_col_name, new_value in changes.items():
+
+                    # REVERSE LOOKUP: Check if this UI column maps to a real DB column
+                    if ui_col_name in UI_TO_DB_MAP:
+                        db_col_name = UI_TO_DB_MAP[ui_col_name]
+
+                        if db_col_name == "distance_mi":
+                            # Convert Miles -> Meters
+                            new_value = new_value * METERS_TO_MILES
+                            # Swap the column name
+                            db_col_name = "total_distance"
+
+                        elif db_col_name == "time_formatted":
+                            seconds_value = parse_hms_to_seconds(new_value)
+
+                            if seconds_value is None:
+                                st.error(
+                                    f"Invalid time format '{new_value}'. Use 'M:SS.ss' or 'H:MM:SS'."
+                                )
+                                continue
+
+                            new_value = seconds_value
+                            # Swap column name
+                            db_col_name = "total_timer_time"
+
+                        # Generate the safe query tuple
+                        update_tuple = get_lap_update_query(
+                            lap_id, db_col_name, new_value
                         )
-                        st.toast(f"Updated {col_name} for Lap ID {lap_id}!")
-                    except Exception as e:
-                        st.error(f"Failed to update {col_name}. Error: {e}")
+                        updates.append(update_tuple)
+
+                        # Optional: Toast per successful mapping
+                        # st.toast(f"Staged update for {ui_col_name}")
+
+                    else:
+                        # Handle calculated columns (like 'Pace' or 'Distance (miles)')
+                        st.warning(
+                            f"Skipping '{ui_col_name}': Cannot update calculated fields directly."
+                        )
 
             # Clear cache to force a re-fetch of data
             fetch_lap_data.clear()
 
         set_clauses = []
         query_params = []
-        
+
         # Check Description
         if updated_description != (ss.activity_details[3]):
             set_clauses.append("description = %s")
             query_params.append(updated_description)
-        
+
         # Check Title (Activity Name)
         if updated_title != ss.activity_details[7]:
             set_clauses.append("activity_name = %s")
             query_params.append(updated_title)
-        
+
         # Check Category
         if updated_category != ss.activity_details[8]:
             set_clauses.append("category = %s")
             query_params.append(updated_category)
-        
+
         # Only proceed if there is at least one change
         if set_clauses:
             # Join the clauses with commas (e.g., "description = %s, category = %s")
             set_logic = ", ".join(set_clauses)
-            
+
             # Construct the final query
-            query = f"UPDATE {ss.schema}.activity SET {set_logic} WHERE activity_id = %s;"
-            
+            query = (
+                f"UPDATE {ss.schema}.activity SET {set_logic} WHERE activity_id = %s;"
+            )
+
             # Add the activity_id to the end of the parameters for the WHERE clause
             query_params.append(activity_id)
-            
+
             # Append the query and the parameters (converted to a tuple)
             updates.append((query, tuple(query_params)))
 
         if updates:
             st.subheader("SQL to run:")
-            
+
             for query, params in updates:
-                # 1. Create a "display version" of the parameters
                 # We need to wrap strings in quotes and handle None/Numbers
                 display_params = []
                 for p in params:
@@ -874,18 +941,21 @@ else:
                     else:
                         # Numbers don't get quotes
                         display_params.append(str(p))
-                
-                # 2. Inject the display parameters into the query
+
                 # Python's % operator replaces the %s placeholders with our formatted list
                 try:
                     readable_sql = query % tuple(display_params)
                     st.code(readable_sql, language="sql")
                 except TypeError:
                     # Fallback if something goes wrong (e.g., if you have % symbols in your text)
-                    st.warning("Could not format perfectly, showing raw query and params:")
+                    st.warning(
+                        "Could not format perfectly, showing raw query and params:"
+                    )
                     st.text(f"Query: {query}")
-                    st.text(f"Params: {params}")           
-                    # cur.execute(query, params)
+                    st.text(f"Params: {params}")
+                # with conn.cursor() as cur:
+                # cur.execute(query, params)
+                # st.balloons()
         else:
             st.info("No changes detected.")
             # Rerun the script to show the latest data from the DB
