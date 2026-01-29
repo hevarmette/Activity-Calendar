@@ -183,7 +183,7 @@ def fetch_lap_data(_conn, activity_id):
             max_heart_rate,
             avg_heart_rate,
             intensity,
-            (total_distance * 0.0006213711922) AS distance_mi
+            (total_distance * {1 / METERS_TO_MILES}) AS distance_mi
         FROM {ss.schema}.lap
         WHERE activity_id = %s
         ORDER BY number ASC
@@ -432,7 +432,7 @@ else:
 
     if "activity_details" in ss:
         with metrics_col:
-            miles = distance_m * 0.0006213711922
+            miles = distance_m * 1 / METERS_TO_MILES
             duration_td = timedelta(seconds=int(duration_s))
             duration_hr = duration_s / 3600
             pace_sec_per_mile = duration_s / miles if miles > 0 else 0
@@ -495,7 +495,7 @@ else:
         if x_axis_choice == "Distance":
             if "distance" in point_df.columns:
                 point_df = point_df.copy()
-                point_df["distance_miles"] = point_df["distance"] * 0.621371
+                point_df["distance_miles"] = point_df["distance"] * 1 / METERS_TO_MILES
                 x_col, x_label = "distance_miles", "Distance (miles)"
             else:
                 x_col, x_label = None, None
@@ -534,7 +534,10 @@ else:
                     else:
                         top_bound = fastest_pace
 
-                    bottom_bound = p_pace
+                    if p_pace > 11:
+                        bottom_bound = 11
+                    else:
+                        bottom_bound = p_pace
 
                     # --- Average pace ---
                     avg_pace = pace_series.mean()
@@ -641,7 +644,7 @@ else:
                     "Intensity",
                     help="Select the intensity type for the lap",
                     options=["warm up", "active", "recovery", "rest", "cooldown"],
-                    required=True,
+                    required=False,
                 ),
                 "Activity Id": None,
                 "Lap Id": None,
@@ -651,8 +654,15 @@ else:
                 "Avg Stance Time Balance": None,
                 "Pace (min/mile) unformatted": None,
                 "Distance (miles)": st.column_config.NumberColumn(format="%.2f"),
+                "Avg Heart Rate": st.column_config.NumberColumn(
+                    "Avg Heart Rate", default=int, step=int
+                ),
+                "Max Heart Rate": st.column_config.NumberColumn(
+                    "Max Heart Rate", default=int, step=int
+                ),
             }
 
+            # TODO: Recalc pace min/mile on_callback when data is edited
             edited_df = st.data_editor(
                 processed_laps_df,
                 hide_index=True,
