@@ -192,18 +192,6 @@ def fetch_lap_data(_conn, activity_id):
     return df
 
 
-def update_lap_in_db(_conn, lap_id, column_to_update, new_value):
-    """Updates a single value in the lap table."""
-    with _conn.cursor() as cur:
-        # Important: Sanitize column name to prevent SQL injection
-        # In a real app, you'd have a whitelist of editable columns.
-        safe_column = "".join(c for c in column_to_update if c.isalnum() or c == "_")
-
-        query = f"UPDATE {ss.schema}.lap SET {safe_column} = %s WHERE lap_id = %s"
-        cur.execute(query, (new_value, lap_id))
-    _conn.commit()
-
-
 def get_lap_update_query(lap_id, db_column, new_value):
     """
     Returns a safe (query, params) tuple for updating a single value.
@@ -300,6 +288,26 @@ def process_cycling_laps(df):
     # Return a DataFrame with only the relevant columns, plus the ID for updates
     df_display = df[["Lap Id"] + [col for col in display_cols if col in df.columns]]
     return df_display
+
+
+# This is for the to do to recalculate paces as user edits data. requires processed lap data to be in the session state
+def recalculate_pace(df):
+    non_zero_dist = df["Distance (miles)"] > 0
+    # get seconds per lap
+    df["Time"] = df["Time (formatted)"].apply(parse_hms_to_seconds())
+    df["Pace (min/mile) unformatted"] = None
+    df.loc[non_zero_dist, "Pace (min/mile) unformatted"] = (df["Time"] / 60) / df[
+        "Distance (miles)"
+    ]
+    df["Pace (min/mile)"] = df["Pace (min/mile) unformatted"].apply(
+        lambda x: (
+            "{:d}:{:02d}".format(*divmod(int(round(x * 60)), 60))
+            if pd.notna(x)
+            else None
+        )
+    )
+
+    df["Time (formatted)"] = df["Time"].apply(convert_seconds_to_hms)
 
 
 def create_plot(
@@ -655,10 +663,10 @@ else:
                 "Pace (min/mile) unformatted": None,
                 "Distance (miles)": st.column_config.NumberColumn(format="%.2f"),
                 "Avg Heart Rate": st.column_config.NumberColumn(
-                    "Avg Heart Rate", default=int, step=int
+                    "Avg Heart Rate", step=1, format="%d"
                 ),
                 "Max Heart Rate": st.column_config.NumberColumn(
-                    "Max Heart Rate", default=int, step=int
+                    "Max Heart Rate", step=1, format="%d"
                 ),
             }
 
@@ -956,6 +964,12 @@ else:
                 try:
                     readable_sql = query % tuple(display_params)
                     st.code(readable_sql, language="sql")
+                    with conn:
+                        with conn.cursor() as cur:
+                            cur.execute(readable_sql)
+                    st.toast()
+                    fetch_lap_data.clear()
+                    conn.close()
                 except TypeError:
                     # Fallback if something goes wrong (e.g., if you have % symbols in your text)
                     st.warning(
@@ -963,9 +977,6 @@ else:
                     )
                     st.text(f"Query: {query}")
                     st.text(f"Params: {params}")
-                # with conn.cursor() as cur:
-                # cur.execute(query, params)
-                # st.balloons()
         else:
             st.info("No changes detected.")
             # Rerun the script to show the latest data from the DB
