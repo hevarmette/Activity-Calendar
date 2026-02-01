@@ -10,6 +10,7 @@ from calendar_test_8 import (
 )
 from streamlit_folium import st_folium
 from db import get_connection
+from calendar_test_8 import retrieve_monthly_data
 
 if "schema" not in ss:
     ss.schema = "PUBLIC"
@@ -462,7 +463,7 @@ else:
     if "points_df" in ss and ss.points_df is not None:
         with map_col:
             activity_map = create_activity_map(ss.points_df)
-            st_folium(activity_map, use_container_width=True)
+            st_folium(activity_map, width="stretch")
 
     with description_col:
         # st.write(" ")
@@ -584,7 +585,7 @@ else:
                         annotation_position="top right",
                     )
 
-                st.plotly_chart(pace_fig, use_container_width=True)
+                st.plotly_chart(pace_fig, width="stretch")
 
             hr_fig = create_plot(
                 df=point_df,
@@ -596,7 +597,7 @@ else:
                 color="red",
             )
             if hr_fig:
-                st.plotly_chart(hr_fig, use_container_width=True)
+                st.plotly_chart(hr_fig, width="stretch")
 
             alt_fig = create_plot(
                 df=point_df,
@@ -608,7 +609,7 @@ else:
                 color="green",
             )
             if alt_fig:
-                st.plotly_chart(alt_fig, use_container_width=True)
+                st.plotly_chart(alt_fig, width="stretch")
 
             if "cadence" in point_df.columns:
                 point_df = point_df.copy()
@@ -625,7 +626,7 @@ else:
                     is_scatter=True,
                 )
                 if cad_fig:
-                    st.plotly_chart(cad_fig, use_container_width=True)
+                    st.plotly_chart(cad_fig, width="stretch")
     else:
         st.info("No point-by-point data available to generate graphs.")
 
@@ -964,12 +965,6 @@ else:
                 try:
                     readable_sql = query % tuple(display_params)
                     st.code(readable_sql, language="sql")
-                    with conn:
-                        with conn.cursor() as cur:
-                            cur.execute(readable_sql)
-                    st.toast()
-                    fetch_lap_data.clear()
-                    conn.close()
                 except TypeError:
                     # Fallback if something goes wrong (e.g., if you have % symbols in your text)
                     st.warning(
@@ -977,6 +972,13 @@ else:
                     )
                     st.text(f"Query: {query}")
                     st.text(f"Params: {params}")
+                with conn:
+                    with conn.cursor() as cur:
+                        cur.execute(readable_sql)
+                st.toast("Updates have been saved!")
+                st.cache_data.clear()
+                if "activities_df" in ss:
+                    del ss["activities_df"]
         else:
             st.info("No changes detected.")
             # Rerun the script to show the latest data from the DB
