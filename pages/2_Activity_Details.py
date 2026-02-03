@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from streamlit import session_state as ss
 from datetime import timedelta
 import plotly.express as px
@@ -219,13 +220,7 @@ def process_lap_data(df):
     df.loc[non_zero_dist, "Pace (min/mile) unformatted"] = (df["Time"] / 60) / df[
         "Distance (miles)"
     ]
-    df["Pace (min/mile)"] = df["Pace (min/mile) unformatted"].apply(
-        lambda x: (
-            "{:d}:{:02d}".format(*divmod(int(round(x * 60)), 60))
-            if pd.notna(x)
-            else None
-        )
-    )
+    df["Pace (min/mile)"] = df["Pace (min/mile) unformatted"].apply(format_pace)
 
     df["Time (formatted)"] = df["Time"].apply(convert_seconds_to_hms)
 
@@ -291,6 +286,123 @@ def process_cycling_laps(df):
     return df_display
 
 
+def format_pace(x):
+    """pace formatting logic."""
+    if pd.notna(x):
+        return "{:d}:{:02d}".format(*divmod(int(round(x * 60)), 60))
+    return None
+
+
+def create_auto_laps(points_df, auto_lap_dist=1):
+    if points_df.empty:
+        return pd.DataFrame()
+
+    # Convert cumulative meters to miles
+    points_df = points_df.copy()
+    points_df["dist_miles_cumulative"] = points_df["distance"] / METERS_TO_MILES
+
+    # Floor of distance + 1 gives us 1 for 0-0.99, 2 for 1.0-1.99, etc.
+    points_df["lap_no"] = points_df["dist_miles_cumulative"].apply(
+        lambda x: int(x) + auto_lap_dist
+    )
+
+    # Calculate Deltas for precise summing (Altitude Gain/Loss)
+    points_df["alt_diff"] = points_df["corrected_altitude"].diff().fillna(0)
+
+    # Separate gains and losses for ascent/descent calculations
+    points_df["ascent_ft"] = points_df["alt_diff"].clip(lower=0)
+    points_df["descent_ft"] = points_df["alt_diff"].clip(upper=0).abs()
+
+    # Define how to aggregate each column
+    agg_dict = {
+        "timestamp": [np.min, np.max],  # To calculate duration
+        "dist_miles_cumulative": [np.min, np.max],  # To calculate lap distance
+        "ascent_ft": "sum",
+        "descent_ft": "sum",
+    }
+
+    # Add optional columns if they exist in the data
+    if "heart_rate" in points_df.columns:
+        agg_dict["heart_rate"] = ["mean", "max"]
+
+    if "total_cadence" in points_df.columns:
+        agg_dict["total_cadence"] = ["mean", "max"]
+    elif "cadence" in points_df.columns:
+        agg_dict["cadence"] = ["mean", "max"]
+
+    # Group by Lap Number
+    laps_grouped = points_df.groupby("lap_no").agg(agg_dict)
+
+    # Flatten MultiIndex columns (e.g., ('heart_rate', 'mean') -> 'Avg Heart Rate')
+    laps_df = pd.DataFrame(index=laps_grouped.index)
+
+    # Distance
+    laps_df["Distance (miles)"] = (
+        laps_grouped["dist_miles_cumulative"]["max"]
+        - laps_grouped["dist_miles_cumulative"]["min"]
+    )
+
+    # Calculate duration in seconds
+    laps_df["seconds_raw"] = (
+        laps_grouped["timestamp"]["max"] - laps_grouped["timestamp"]["min"]
+    ).dt.total_seconds()
+
+    # Elevation
+    laps_df["Total Ascent (ft)"] = laps_grouped["ascent_ft"]["sum"]
+    laps_df["Total Descent (ft)"] = laps_grouped["descent_ft"]["sum"]
+
+    # Heart Rate
+    if "heart_rate" in points_df.columns:
+        laps_df["Avg HR"] = laps_grouped["heart_rate"]["mean"].round(0)
+        laps_df["Max HR"] = laps_grouped["heart_rate"]["max"]
+
+    # Cadence
+    cadence_col = "total_cadence" if "total_cadence" in points_df.columns else "cadence"
+    if cadence_col in points_df.columns:
+        laps_df["Avg Cadence"] = laps_grouped[cadence_col]["mean"].round(0)
+        laps_df["Max Cadence"] = laps_grouped[cadence_col]["max"]
+
+    # 4. CALCULATE PACE & FORMATTING
+
+    # Time Formatting
+    laps_df["Time"] = laps_df["seconds_raw"].apply(convert_seconds_to_hms)
+
+    # Pace Calculation (Time in Minutes / Distance in Miles)
+    # Avoid division by zero
+    non_zero_dist = laps_df["Distance (miles)"] > 0
+    laps_df["Pace (min/mile) unformatted"] = None
+
+    laps_df.loc[non_zero_dist, "Pace (min/mile) unformatted"] = (
+        laps_df.loc[non_zero_dist, "seconds_raw"] / 60
+    ) / laps_df.loc[non_zero_dist, "Distance (miles)"]
+
+    laps_df["Pace (min/mile)"] = laps_df["Pace (min/mile) unformatted"].apply(
+        format_pace
+    )
+
+    # Cleanup: Select and Order columns for final display
+    # We reset index so "Lap" becomes a column
+    final_df = laps_df.reset_index().rename(columns={"lap_no": "Lap"})
+
+    cols_to_display = [
+        "Lap",
+        "Time",
+        "Distance (miles)",
+        "Pace (min/mile)",
+        "Total Ascent (ft)",
+        "Total Descent (ft)",
+    ]
+
+    # Append conditional columns if they exist
+    if "Avg HR" in final_df.columns:
+        cols_to_display += ["Avg HR", "Max HR"]
+    if "Avg Cadence" in final_df.columns:
+        cols_to_display += ["Avg Cadence", "Max Cadence"]
+
+    return final_df[cols_to_display]
+
+
+# NOTE: Not used right now
 # This is for the to do to recalculate paces as user edits data. requires processed lap data to be in the session state
 def recalculate_pace(df):
     non_zero_dist = df["Distance (miles)"] > 0
@@ -679,6 +791,9 @@ else:
                 disabled=["Lap", "Pace (min/mile)"],
                 key="lap_editor",
             )
+
+            auto_laps = create_auto_laps(ss.points_df)
+            st.dataframe(auto_laps)
 
         with details_tab:
             st.subheader("Activity Details")

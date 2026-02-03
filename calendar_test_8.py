@@ -474,7 +474,7 @@ def show_activity_dialog(activity_title, activity_id, activity_sport):
         else:
             effort_string = ""
 
-        with subcol1:
+        with subcol3:
             # --- View Details Button ---
             if st.button("View Lap Details 📈"):
                 ss.selected_activity_id = activity_id
