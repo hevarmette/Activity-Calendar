@@ -42,7 +42,6 @@ LAP_COLUMN_MAPPING = {
 # Create a reverse map for fast lookups: { 'Avg Heart Rate': 'avg_heart_rate' }
 UI_TO_DB_MAP = {v: k for k, v in LAP_COLUMN_MAPPING.items()}
 
-METERS_TO_MILES = 1609.344
 # import random
 # @st.cache_data
 # def generate_fake_lap_data(activity_id):
@@ -185,7 +184,7 @@ def fetch_lap_data(_conn, activity_id):
             max_heart_rate,
             avg_heart_rate,
             intensity,
-            (total_distance * {1 / METERS_TO_MILES}) AS distance_mi
+            (total_distance * {1 / ss.meters_to_miles}) AS distance_mi
         FROM {ss.schema}.lap
         WHERE activity_id = %s
         ORDER BY number ASC
@@ -255,7 +254,7 @@ def process_cycling_laps(df):
     if df.empty:
         return pd.DataFrame()
 
-    df["Distance (miles)"] = round(df["Distance"] / METERS_TO_MILES, 2)
+    df["Distance (miles)"] = round(df["Distance"] / ss.meters_to_miles, 2)
 
     # Calculate Average Speed in MPH for cycling
     non_zero_time = df["Time"] > 0
@@ -294,12 +293,12 @@ def format_pace(x):
 
 
 def create_auto_laps(points_df, auto_lap_dist=1):
-    if points_df.empty:
+    if not ss.coordinates:
         return pd.DataFrame()
 
     # Convert cumulative meters to miles
     points_df = points_df.copy()
-    points_df["dist_miles_cumulative"] = points_df["distance"] / METERS_TO_MILES
+    points_df["dist_miles_cumulative"] = points_df["distance"] / ss.meters_to_miles
 
     # Floor of distance + 1 gives us 1 for 0-0.99, 2 for 1.0-1.99, etc.
     points_df["lap_no"] = points_df["dist_miles_cumulative"].apply(
@@ -322,13 +321,11 @@ def create_auto_laps(points_df, auto_lap_dist=1):
     }
 
     # Add optional columns if they exist in the data
-    if "heart_rate" in points_df.columns:
+    if ss.hr and points_df["heart_rate"].notna().all():
         agg_dict["heart_rate"] = ["mean", "max"]
 
-    if "total_cadence" in points_df.columns:
+    if ss.cadence and points_df["total_cadence"].notna().all():
         agg_dict["total_cadence"] = ["mean", "max"]
-    elif "cadence" in points_df.columns:
-        agg_dict["cadence"] = ["mean", "max"]
 
     # Group by Lap Number
     laps_grouped = points_df.groupby("lap_no").agg(agg_dict)
@@ -352,33 +349,35 @@ def create_auto_laps(points_df, auto_lap_dist=1):
     laps_df["Total Descent (ft)"] = laps_grouped["descent_ft"]["sum"]
 
     # Heart Rate
-    if "heart_rate" in points_df.columns:
+    if ss.hr and points_df["heart_rate"].notna().all():
         laps_df["Avg HR"] = laps_grouped["heart_rate"]["mean"].round(0)
         laps_df["Max HR"] = laps_grouped["heart_rate"]["max"]
 
     # Cadence
-    cadence_col = "total_cadence" if "total_cadence" in points_df.columns else "cadence"
-    if cadence_col in points_df.columns:
-        laps_df["Avg Cadence"] = laps_grouped[cadence_col]["mean"].round(0)
-        laps_df["Max Cadence"] = laps_grouped[cadence_col]["max"]
+    if ss.cadence and points_df["total_cadence"].notna().all():
+        laps_df["Avg Cadence"] = laps_grouped["total_cadence"]["mean"].round(0) * 2
+        laps_df["Max Cadence"] = laps_grouped["total_cadence"]["max"] * 2
 
     # 4. CALCULATE PACE & FORMATTING
 
     # Time Formatting
     laps_df["Time"] = laps_df["seconds_raw"].apply(convert_seconds_to_hms)
 
-    # Pace Calculation (Time in Minutes / Distance in Miles)
-    # Avoid division by zero
-    non_zero_dist = laps_df["Distance (miles)"] > 0
-    laps_df["Pace (min/mile) unformatted"] = None
+    if auto_lap_dist == 1:
+        laps_df["Pace (min/mile)"] = laps_df["Time"]
+    else:
+        # Pace Calculation (Time in Minutes / Distance in Miles)
+        # Avoid division by zero
+        non_zero_dist = laps_df["Distance (miles)"] > 0
+        laps_df["Pace (min/mile) unformatted"] = None
 
-    laps_df.loc[non_zero_dist, "Pace (min/mile) unformatted"] = (
-        laps_df.loc[non_zero_dist, "seconds_raw"] / 60
-    ) / laps_df.loc[non_zero_dist, "Distance (miles)"]
+        laps_df.loc[non_zero_dist, "Pace (min/mile) unformatted"] = (
+            laps_df.loc[non_zero_dist, "seconds_raw"] / 60
+        ) / laps_df.loc[non_zero_dist, "Distance (miles)"]
 
-    laps_df["Pace (min/mile)"] = laps_df["Pace (min/mile) unformatted"].apply(
-        format_pace
-    )
+        laps_df["Pace (min/mile)"] = laps_df["Pace (min/mile) unformatted"].apply(
+            format_pace
+        )
 
     # Cleanup: Select and Order columns for final display
     # We reset index so "Lap" becomes a column
@@ -553,7 +552,7 @@ else:
 
     if "activity_details" in ss:
         with metrics_col:
-            miles = distance_m * 1 / METERS_TO_MILES
+            miles = distance_m * 1 / ss.meters_to_miles
             duration_td = timedelta(seconds=int(duration_s))
             duration_hr = duration_s / 3600
             pace_sec_per_mile = duration_s / miles if miles > 0 else 0
@@ -616,7 +615,9 @@ else:
         if x_axis_choice == "Distance":
             if "distance" in point_df.columns:
                 point_df = point_df.copy()
-                point_df["distance_miles"] = point_df["distance"] * 1 / METERS_TO_MILES
+                point_df["distance_miles"] = (
+                    point_df["distance"] * 1 / ss.meters_to_miles
+                )
                 x_col, x_label = "distance_miles", "Distance (miles)"
             else:
                 x_col, x_label = None, None
@@ -755,7 +756,9 @@ else:
     if processed_laps_df.empty:
         st.info("No lap data found for this activity.")
     else:
-        laps_tab, details_tab = st.tabs(["🏁 Laps", "📊 Activity Details"])
+        laps_tab, details_tab, auto_laps_tab = st.tabs(
+            ["↩  Laps", "📊 Activity Details", "↻ Auto Laps"]
+        )
 
         with laps_tab:
             st.markdown("You can edit values in the table below.")
@@ -791,9 +794,6 @@ else:
                 disabled=["Lap", "Pace (min/mile)"],
                 key="lap_editor",
             )
-
-            auto_laps = create_auto_laps(ss.points_df)
-            st.dataframe(auto_laps)
 
         with details_tab:
             st.subheader("Activity Details")
@@ -966,6 +966,13 @@ else:
                             f"Average vertical oscillation: {avg_vertical_oscillation / 10:.1f} cm"
                         )
 
+        with auto_laps_tab:
+            auto_laps_config = {
+                "Distance (miles)": st.column_config.NumberColumn(format="%.2f")
+            }
+            auto_laps = create_auto_laps(ss.points_df)
+            st.dataframe(auto_laps, column_config=auto_laps_config, hide_index=True)
+
     if st.button("Save"):
         updates = []
         # Check for edits by comparing the new state to the previous one
@@ -990,7 +997,7 @@ else:
 
                         if db_col_name == "distance_mi":
                             # Convert Miles -> Meters
-                            new_value = new_value * METERS_TO_MILES
+                            new_value = new_value * ss.meters_to_miles
                             # Swap the column name
                             db_col_name = "total_distance"
 

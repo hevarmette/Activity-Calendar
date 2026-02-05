@@ -398,7 +398,7 @@ def show_activity_dialog(activity_title, activity_id, activity_sport):
         st.markdown(f"_{time_ago.days} days ago_")
 
         # --- Stats ---
-        miles = distance_m * 0.0006213711922
+        miles = distance_m / ss.meters_to_miles
         duration_td = timedelta(seconds=int(duration_s))
         duration_hr = duration_s / 3600
         pace_sec_per_mile = duration_s / miles if miles > 0 else 0
@@ -503,6 +503,8 @@ if __name__ == "__main__":
     # activities_df = generate_fake_activity_data(selected_year, selected_month)
     if "activities_df" not in ss:
         ss.activities_df = retrieve_monthly_data(conn)
+    if "meters_to_miles" not in ss:
+        ss.meters_to_miles = 1609.344
 
     # --- Sidebar for Navigation ---
     with st.sidebar:
