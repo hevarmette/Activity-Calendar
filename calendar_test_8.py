@@ -14,7 +14,7 @@ from db import (
 )
 from plotting import create_activity_map
 
-ss.schema = "PUBLIC"
+ss.schema = "public"
 
 
 @st.dialog("Activity Summary", width="medium")

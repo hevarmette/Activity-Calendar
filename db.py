@@ -107,7 +107,7 @@ def fetch_activity_details(_conn, activity_id):
         return None
     sql_query = f"""
         SELECT adjusted_distance, adjusted_duration, CAST(avg_power AS INTEGER), description, workout_feel, effort, local_timestamp, activity_name, category
-        FROM {ss.schema}.activity JOIN public.session ON activity.activity_id = session.activity_id WHERE activity.activity_id = %s
+        FROM {ss.schema}.activity JOIN {ss.schema}.session ON activity.activity_id = session.activity_id WHERE activity.activity_id = %s
     """
     try:
         with _conn.cursor() as cursor:
