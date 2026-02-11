@@ -200,7 +200,7 @@ def fetch_activity_points(_conn, activity_id):
             if "heart_rate" in pcols:
                 ss.hr = True
 
-            return points_df
+        return points_df
 
     except Exception as e:
         st.error(f"Error fetching activity points: {e}")

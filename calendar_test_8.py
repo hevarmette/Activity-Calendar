@@ -14,7 +14,7 @@ from db import (
 )
 from plotting import create_activity_map
 
-ss.schema = "public"
+ss.schema = st.secrets.postgresql.schema
 
 
 @st.dialog("Activity Summary", width="medium")
@@ -252,5 +252,4 @@ if __name__ == "__main__":
         activity_id = extended_props.get("activity_id", "N/A")
         activity_sport = extended_props.get("sport", "N/A")
 
-        # Call the decorated function to open the dialog
         show_activity_dialog(activity_title, activity_id, activity_sport)

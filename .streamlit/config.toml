@@ -12,9 +12,6 @@ secondaryBackgroundColor = "#1e1e1e"
 # White or light grey text for high contrast
 textColor = "#ffffff"
 
-# Choose a clean sans-serif font
-font = "sans-serif"
-
 [theme.sidebar]
 # You can customize the sidebar separately if needed
 backgroundColor = "#000000"

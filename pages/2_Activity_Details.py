@@ -17,10 +17,12 @@ from plotting import create_plot
 from lap_processing import process_cycling_laps, process_lap_data, create_auto_laps
 
 if "schema" not in ss:
-    ss.schema = "PUBLIC"
-
+    ss.schema = st.secrets.postgresql.schema
+if "meters_to_miles" not in ss:
+    ss.meters_to_miles = 1609.344
 # Keys = Database Column Names
 # Values = UI Display Names
+# This is used to map database column names with display column names
 LAP_COLUMN_MAPPING = {
     "lap_id": "Lap Id",
     "activity_id": "Activity Id",
@@ -43,9 +45,10 @@ LAP_COLUMN_MAPPING = {
     "time_formatted": "Time (formatted)",
 }
 # Create a reverse map for fast lookups: { 'Avg Heart Rate': 'avg_heart_rate' }
+# This is to convert edited columns to db name
 UI_TO_DB_MAP = {v: k for k, v in LAP_COLUMN_MAPPING.items()}
 
-# --- 3. PAGE LAYOUT ---
+# --- PAGE LAYOUT ---
 st.set_page_config(page_title="Activity Details", layout="wide")
 
 # Check if an activity has been selected
@@ -176,12 +179,12 @@ else:
             "enhanced_speed" in point_df.columns
             and point_df["enhanced_speed"].notnull().any()
         ):
-            # Conversion: (meters/mile) / (seconds/minute) = 26.8224
-            # We divide this constant by the speed in m/s to get min/mile
+            # Conversion: m/s = meters/(1/60min) = meter to mile constant in ss * (1/60min) = constant
+            # We divide this constant by the each points specific speed in m/s to get min/mile for each point
             speed_mps = point_df["enhanced_speed"].replace(
                 0, pd.NA
             )  # Avoid division by zero
-            point_df["pace_min_per_mile"] = 26.8224 / speed_mps
+            point_df["pace_min_per_mile"] = ss.meters_to_miles / 60 / speed_mps
 
         # Create the toggle for the x-axis
         x_axis_choice = st.radio(
