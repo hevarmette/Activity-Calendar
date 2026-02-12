@@ -131,12 +131,50 @@ def fetch_activity_points(_conn, activity_id):
     if _conn is None:
         return pd.DataFrame()
 
+    # In rare cases, I was receiving an NA error when plotting some maps, so
+    # this query will impute missing values by taking the next available, and
+    # previous lat and long. will not work if missing value is at the start or
+    # end. for that see if the session table has the start and end lat and longs
     sql_query = f"""
+        WITH groups AS (
+            SELECT 
+                record_id,
+                activity_id,
+                "timestamp",
+                latitude,
+                longitude,
+                lap,
+                altitude,
+                heart_rate,
+                cadence,
+                fractional_cadence,
+                enhanced_speed,
+                distance,
+                -- Create a group ID that includes a valid row and all subsequent NULLs
+                COUNT(latitude) OVER (ORDER BY "timestamp" ASC) as fwd_grp,
+                -- Create a group ID that includes a valid row and all preceding NULLs
+                COUNT(latitude) OVER (ORDER BY "timestamp" DESC) as bwd_grp
+            FROM {ss.schema}.record
+            WHERE activity_id = %s
+        ),
+        imputed_bounds AS (
+            SELECT 
+                *,
+                -- Grab the latitude from the start of the forward group (Previous Valid)
+                FIRST_VALUE(latitude) OVER (PARTITION BY fwd_grp ORDER BY "timestamp" ASC) as prev_lat,
+                FIRST_VALUE(longitude) OVER (PARTITION BY fwd_grp ORDER BY "timestamp" ASC) as prev_long,
+                
+                -- Grab the latitude from the start of the backward group (Next Valid)
+                FIRST_VALUE(latitude) OVER (PARTITION BY bwd_grp ORDER BY "timestamp" DESC) as next_lat,
+                FIRST_VALUE(longitude) OVER (PARTITION BY bwd_grp ORDER BY "timestamp" DESC) as next_long
+            FROM groups
+        )
         SELECT 
             record_id,
             activity_id,
-            latitude,
-            longitude,
+            -- If lat is null, take the average of the bounds
+            COALESCE(latitude, (prev_lat + next_lat) / 2.0) as latitude,
+            COALESCE(longitude, (prev_long + next_long) / 2.0) as longitude,
             lap,
             altitude,
             "timestamp",
@@ -145,9 +183,8 @@ def fetch_activity_points(_conn, activity_id):
             fractional_cadence,
             enhanced_speed,
             distance
-        FROM {ss.schema}.record
-        WHERE activity_id = %s 
-        ORDER BY "timestamp" ASC
+        FROM imputed_bounds
+        ORDER BY "timestamp" ASC;
     """
     try:
         points_df = pd.read_sql_query(sql_query, _conn, params=(activity_id,))
