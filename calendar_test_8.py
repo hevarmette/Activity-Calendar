@@ -1,5 +1,6 @@
-# FIX: october 6, map cannot be shown with NaN in lat/long
-
+# FIX: october 6, map cannot be shown with NaN in lat/long in folium
+# remove stopped time in auto laps
+# TODO: Pills to sort laps by intensity
 import streamlit as st
 from datetime import datetime
 from streamlit_folium import st_folium
