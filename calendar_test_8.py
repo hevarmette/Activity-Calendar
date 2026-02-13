@@ -1,6 +1,7 @@
-# FIX: october 6, map cannot be shown with NaN in lat/long in folium
 # remove stopped time in auto laps
 # TODO: Pills to sort laps by intensity
+# when using the arrows to change activity for the second page
+# ss.sport type or whatever it is doesn't get changed
 import streamlit as st
 from datetime import datetime
 from streamlit_folium import st_folium

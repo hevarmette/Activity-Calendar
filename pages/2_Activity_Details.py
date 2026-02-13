@@ -153,7 +153,7 @@ else:
                 col3.metric("Pace", f"{pace_min}:{pace_sec:02d} /mi")
 
     # --- Map ---
-    if "points_df" in ss and ss.points_df is not None:
+    if "points_df" in ss and not ss.points_df.empty:
         with map_col:
             activity_map = create_activity_map(ss.points_df)
             st_folium(activity_map, width="stretch")
@@ -169,7 +169,7 @@ else:
             "Description", description, width="stretch", height=200
         )
 
-    # --- NEW: Performance Graphs Section ---
+    # Performance Graphs Section ---
     st.header("📈 Performance Graphs")
     # move this above the map and make the map use point df. check if in session state first though
     point_df = ss.points_df

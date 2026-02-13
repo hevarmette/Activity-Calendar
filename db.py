@@ -150,9 +150,8 @@ def fetch_activity_points(_conn, activity_id):
                 fractional_cadence,
                 enhanced_speed,
                 distance,
-                -- Create a group ID that includes a valid row and all subsequent NULLs
+                -- Create group IDs for forward and backward fills
                 COUNT(latitude) OVER (ORDER BY "timestamp" ASC) as fwd_grp,
-                -- Create a group ID that includes a valid row and all preceding NULLs
                 COUNT(latitude) OVER (ORDER BY "timestamp" DESC) as bwd_grp
             FROM {ss.schema}.record
             WHERE activity_id = %s
@@ -160,11 +159,11 @@ def fetch_activity_points(_conn, activity_id):
         imputed_bounds AS (
             SELECT 
                 *,
-                -- Grab the latitude from the start of the forward group (Previous Valid)
+                -- Previous valid value (forward fill)
                 FIRST_VALUE(latitude) OVER (PARTITION BY fwd_grp ORDER BY "timestamp" ASC) as prev_lat,
                 FIRST_VALUE(longitude) OVER (PARTITION BY fwd_grp ORDER BY "timestamp" ASC) as prev_long,
                 
-                -- Grab the latitude from the start of the backward group (Next Valid)
+                -- Next valid value (backward fill)
                 FIRST_VALUE(latitude) OVER (PARTITION BY bwd_grp ORDER BY "timestamp" DESC) as next_lat,
                 FIRST_VALUE(longitude) OVER (PARTITION BY bwd_grp ORDER BY "timestamp" DESC) as next_long
             FROM groups
@@ -172,9 +171,18 @@ def fetch_activity_points(_conn, activity_id):
         SELECT 
             record_id,
             activity_id,
-            -- If lat is null, take the average of the bounds
-            COALESCE(latitude, (prev_lat + next_lat) / 2.0) as latitude,
-            COALESCE(longitude, (prev_long + next_long) / 2.0) as longitude,
+            COALESCE(
+                latitude,                                    -- Use actual value if not null
+                (prev_lat + next_lat) / 2.0,                -- Average if both bounds exist
+                next_lat,                                    -- Use next if at start (no previous)
+                prev_lat                                     -- Use previous if at end (no next)
+            ) as latitude,
+            COALESCE(
+                longitude,
+                (prev_long + next_long) / 2.0,
+                next_long,                                   -- Use next if at start
+                prev_long                                    -- Use previous if at end
+            ) as longitude,
             lap,
             altitude,
             "timestamp",
