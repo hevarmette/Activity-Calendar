@@ -127,7 +127,7 @@ def create_auto_laps(points_df, auto_lap_dist=1):
     # We calculate speed (m/s) to handle both "Watch Paused" (gap in data) and "Standing Still" (data points with 0 dist).
 
     # We count speeds below this as stopped. I'm not sure when resuming an activity if the distance point of resumption will be the same as the point of stopping
-    STOP_THRESHOLD_MPS = 0.001
+    STOP_THRESHOLD_MPS = 0.00001
 
     # Avoid division by zero
     points_df["segment_speed"] = 0.0
@@ -202,21 +202,20 @@ def create_auto_laps(points_df, auto_lap_dist=1):
     laps_df["Time"] = laps_df["seconds_raw"].apply(convert_seconds_to_hms)
 
     # Pace Calculation. This doesn't work for the last lap yet.
-    is_lap_one_unit = laps_df["Distance (miles)"] == 1.00
-    if auto_lap_dist == 1:
-        laps_df["Pace (min/mile)"] = laps_df["Time"]
-    else:
-        non_zero_dist = laps_df["Distance (miles)"] > 0
-        laps_df["Pace (min/mile) unformatted"] = None
-        laps_df.loc[non_zero_dist, "Pace (min/mile) unformatted"] = (
-            laps_df.loc[non_zero_dist, "seconds_raw"] / 60
-        ) / laps_df.loc[non_zero_dist, "Distance (miles)"]
+    is_one_unit = laps_df["Distance (miles)"].between(0.99, 1.01)
+    laps_df.loc[is_one_unit, "Pace (min/mile)"] = laps_df["Time"]
 
-        laps_df["Pace (min/mile)"] = laps_df["Pace (min/mile) unformatted"].apply(
-            format_pace
-        )
+    non_zero_dist = laps_df["Distance (miles)"] > 0
+    laps_df["Pace (min/mile) unformatted"] = None
 
-    final_df = laps_df.reset_index().rename(columns={"lap_no": "Lap"})
+    rows_to_format = (~is_one_unit) & non_zero_dist
+    laps_df.loc[rows_to_format, "Pace (min/mile) unformatted"] = (
+        laps_df.loc[rows_to_format, "seconds_raw"] / 60
+    ) / laps_df.loc[rows_to_format, "Distance (miles)"]
+
+    laps_df.loc[rows_to_format, "Pace (min/mile)"] = laps_df.loc[
+        rows_to_format, "Pace (min/mile) unformatted"
+    ].apply(format_pace)
 
     cols_to_display = [
         "Lap",
