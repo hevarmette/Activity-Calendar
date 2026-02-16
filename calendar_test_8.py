@@ -149,7 +149,7 @@ def month_cb():
 if __name__ == "__main__":
     st.set_page_config(page_title="Activity Calendar", layout="wide")
 
-    conn = get_connection()
+    conn = get_connection(local=False)
 
     # --- Fetch and Format Data ---
     # Call the fake data generator instead of the database function

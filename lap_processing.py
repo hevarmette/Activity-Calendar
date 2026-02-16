@@ -217,6 +217,8 @@ def create_auto_laps(points_df, auto_lap_dist=1):
         rows_to_format, "Pace (min/mile) unformatted"
     ].apply(format_pace)
 
+    final_df = laps_df.reset_index().rename(columns={"lap_no": "Lap"})
+
     cols_to_display = [
         "Lap",
         "Time",

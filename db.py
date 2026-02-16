@@ -6,14 +6,17 @@ import numpy as np
 from pyhigh import get_elevation_batch
 
 
-def get_connection():
-    return psycopg2.connect(
-        host=st.secrets["postgresql"]["host"],
-        port=st.secrets["postgresql"]["port"],
-        dbname=st.secrets["postgresql"]["database"],
-        user=st.secrets["postgresql"]["username"],
-        password=st.secrets["postgresql"]["password"],
-    )
+def get_connection(local=True):
+    if local:
+        return psycopg2.connect(
+            host=st.secrets["postgresql"]["host"],
+            port=st.secrets["postgresql"]["port"],
+            dbname=st.secrets["postgresql"]["database"],
+            user=st.secrets["postgresql"]["username"],
+            password=st.secrets["postgresql"]["password"],
+        )
+    else:
+        return psycopg2.connect(st.secrets["postgresql_cloud"]["db_url"])
 
 
 @st.cache_data
