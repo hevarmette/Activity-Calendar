@@ -16,7 +16,7 @@ from db import (
 )
 from plotting import create_activity_map
 
-ss.schema = st.secrets.postgresql.schema
+ss.schema = st.secrets.schema
 
 
 @st.dialog("Activity Summary", width="medium")

@@ -17,7 +17,7 @@ from plotting import create_plot
 from lap_processing import process_cycling_laps, process_lap_data, create_auto_laps
 
 if "schema" not in ss:
-    ss.schema = st.secrets.postgresql.schema
+    ss.schema = st.secrets.schema
 if "meters_to_miles" not in ss:
     ss.meters_to_miles = 1609.344
 # Keys = Database Column Names
