@@ -85,7 +85,7 @@ def show_activity_dialog(activity_title, activity_id, activity_sport):
             st.markdown(f"**Description:** *{description}*")
 
         subcol1, subcol2, subcol3 = st.columns(
-            [0.65, 0.08, 0.27], vertical_alignment="center"
+            [0.08, 0.65, 0.27], vertical_alignment="center"
         )
         # --- Workout Feel + Effort --
         if feel is not None:
@@ -101,7 +101,7 @@ def show_activity_dialog(activity_title, activity_id, activity_sport):
             }
             feel_label = feel_map.get(feel, "Unknown")
             feel_string = f"{svg} "
-            with subcol2:
+            with subcol1:
                 st.image(f"assets/{feel_label.replace(" ", "-")}.svg", width="stretch")
         else:
             feel_string = ""  # not used rn. might display the label with the image
@@ -122,7 +122,7 @@ def show_activity_dialog(activity_title, activity_id, activity_sport):
             effort_index = int(effort / 10)
             effort_label = effort_labels.get(effort_index, "Unknown")
             effort_string = f"| **Effort:** {effort_index} – {effort_label}"
-            with subcol3:
+            with subcol2:
                 st.markdown(f"{effort_string}", unsafe_allow_html=True)
         else:
             effort_string = ""
