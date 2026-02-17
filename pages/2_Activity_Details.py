@@ -59,7 +59,7 @@ else:
     activity_id = ss.selected_activity_id
     sport = ss.selected_activity_sport
     # conn = init_connection()
-    conn = get_connection(local=False)
+    conn = get_connection(local=True)
 
     st.title(f"Lap Data for Activity ID: {activity_id}")
 
