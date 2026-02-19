@@ -185,18 +185,20 @@ def create_auto_laps(points_df, auto_lap_dist=1):
     laps_df["seconds_raw"] = laps_grouped["moving_seconds"]["sum"]
 
     # Elevation
-    laps_df["Total Ascent (ft)"] = laps_grouped["ascent_ft"]["sum"]
-    laps_df["Total Descent (ft)"] = laps_grouped["descent_ft"]["sum"]
+    laps_df["Total Ascent (ft)"] = pd.to_numeric(laps_grouped["ascent_ft"]["sum"])
+    laps_df["Total Descent (ft)"] = pd.to_numeric(laps_grouped["descent_ft"]["sum"])
 
     # Heart Rate
     if ss.hr and points_df["heart_rate"].notna().all():
-        laps_df["Avg HR"] = laps_grouped["heart_rate"]["mean"].round(0)
-        laps_df["Max HR"] = laps_grouped["heart_rate"]["max"]
+        laps_df["Avg HR"] = pd.to_numeric(laps_grouped["heart_rate"]["mean"]).round(0)
+        laps_df["Max HR"] = pd.to_numeric(laps_grouped["heart_rate"]["max"])
 
     # Cadence
     if ss.cadence and points_df["total_cadence"].notna().all():
-        laps_df["Avg Cadence"] = laps_grouped["total_cadence"]["mean"].round(0) * 2
-        laps_df["Max Cadence"] = laps_grouped["total_cadence"]["max"] * 2
+        laps_df["Avg Cadence"] = (
+            pd.to_numeric(laps_grouped["total_cadence"]["mean"]).round(0) * 2
+        )
+        laps_df["Max Cadence"] = pd.to_numeric(laps_grouped["total_cadence"]["max"]) * 2
 
     # Time Formatting
     laps_df["Time"] = laps_df["seconds_raw"].apply(convert_seconds_to_hms)

@@ -1,5 +1,5 @@
 import streamlit as st
-import psycopg2
+import psycopg
 from streamlit import session_state as ss
 import pandas as pd
 import numpy as np
@@ -8,7 +8,7 @@ from pyhigh import get_elevation_batch
 
 def get_connection(local=True):
     if local:
-        return psycopg2.connect(
+        return psycopg.connect(
             host=st.secrets["postgresql"]["host"],
             port=st.secrets["postgresql"]["port"],
             dbname=st.secrets["postgresql"]["database"],
@@ -16,7 +16,7 @@ def get_connection(local=True):
             password=st.secrets["postgresql"]["password"],
         )
     else:
-        return psycopg2.connect(st.secrets["postgresql_cloud"]["db_url"])
+        return psycopg.connect(st.secrets["postgresql_cloud"]["db_url"])
 
 
 @st.cache_data
@@ -46,7 +46,12 @@ def fetch_lap_data(_conn, activity_id):
         WHERE activity_id = %s
         ORDER BY number ASC
     """
-    df = pd.read_sql_query(sql_query, _conn, params=(activity_id,))
+    with _conn.cursor() as cursor:
+        cursor.execute(sql_query, (activity_id,))
+        columns = [desc.name for desc in cursor.description]
+        data = cursor.fetchall()
+
+    df = pd.DataFrame(data, columns=columns)
     return df
 
 
@@ -93,10 +98,15 @@ def retrieve_monthly_data(_conn):  # , year, month):
         FROM {ss.schema}.activity a
         JOIN {ss.schema}.session s ON a.activity_id = s.activity_id
         GROUP BY a.activity_id, s.sport
-		ORDER BY activity_date DESC;
+        ORDER BY activity_date DESC;
     """
     try:
-        df = pd.read_sql_query(sql_query, _conn)
+        with _conn.cursor() as cursor:
+            cursor.execute(sql_query)
+            columns = [desc.name for desc in cursor.description]
+            data = cursor.fetchall()
+
+        df = pd.DataFrame(data, columns=columns)
         return df
     except Exception as e:
         st.error(f"Error executing query: {e}")
@@ -198,7 +208,12 @@ def fetch_activity_points(_conn, activity_id):
         ORDER BY "timestamp" ASC;
     """
     try:
-        points_df = pd.read_sql_query(sql_query, _conn, params=(activity_id,))
+        with _conn.cursor() as cursor:
+            cursor.execute(sql_query, (activity_id,))
+            columns = [desc.name for desc in cursor.description]
+            data = cursor.fetchall()
+
+        points_df = pd.DataFrame(data, columns=columns)
         pcols = points_df.columns
         if not points_df.empty:
             # Ensure lat/lon are numeric and not null

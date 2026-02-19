@@ -8,7 +8,12 @@ from calendar_test_8 import (
     fetch_activity_points,
 )
 from streamlit_folium import st_folium
-from db import get_connection, fetch_lap_data, get_lap_update_query
+from db import (
+    get_connection,
+    fetch_lap_data,
+    get_lap_update_query,
+    retrieve_monthly_data,
+)
 from utils import (
     parse_hms_to_seconds,
     weighted_average_if_present,
@@ -16,6 +21,7 @@ from utils import (
 from plotting import create_plot
 from lap_processing import process_cycling_laps, process_lap_data, create_auto_laps
 
+# constants
 if "schema" not in ss:
     ss.schema = st.secrets.schema
 if "meters_to_miles" not in ss:
@@ -60,6 +66,8 @@ else:
     sport = ss.selected_activity_sport
     # conn = init_connection()
     conn = get_connection(local=True)
+    if "activities_df" not in ss:
+        ss.activities_df = retrieve_monthly_data(conn)
 
     st.title(f"Lap Data for Activity ID: {activity_id}")
 
@@ -676,10 +684,11 @@ else:
                     )
                     st.text(f"Query: {query}")
                     st.text(f"Params: {params}")
-                with conn:
-                    with conn.cursor() as cur:
-                        cur.execute(readable_sql)
+                with conn.transaction():
+                    conn.execute(readable_sql)
                 st.toast("Updates have been saved!")
+                # deleting the info to requery from the database. because this is quicker to code
+                # than updating the existing variables
                 st.cache_data.clear()
                 if "activities_df" in ss:
                     del ss["activities_df"]
