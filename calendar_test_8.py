@@ -1,7 +1,13 @@
 # remove stopped time in auto laps
 # TODO: Pills to sort laps by intensity
+# Add way to edit workout feel and effort
 # when using the arrows to change activity for the second page
-# ss.sport type or whatever it is doesn't get changed
+# ss.sport type or whatever it is doesn't get changed. neither does the category or the description
+# add functionality to see average time by set and stats like that
+# add full screen button to the map
+# display auto lap markers on the map
+# fix format of last lap display in auto laps
+# auto lap to calc to hundredths place
 import streamlit as st
 from datetime import datetime
 from streamlit_folium import st_folium
