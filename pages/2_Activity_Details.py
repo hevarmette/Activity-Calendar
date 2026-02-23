@@ -71,7 +71,8 @@ else:
 
     st.title(f"Lap Data for Activity ID: {activity_id}")
 
-    if "activity_details" in ss:
+    # st.write(ss.activity_details)
+    if ss.activity_details:
         # Getting activity details
         distance_m = ss.activity_details[0]
         duration_s = ss.activity_details[1]
@@ -84,6 +85,8 @@ else:
         # day of activity
         # TODO: It looks like the old watch? stored local timestamp at the end of the activity but new watch is beginning of activity. Activities from form are from the start of the activity
         st.markdown(f"_{local_timestamp.strftime("%B %d, %Y @ %I:%M %p")}_")
+    else:
+        st.warning(f"No activity details for activity {activity_id}")
 
     title_col, category_col, nav_col = st.columns(
         [0.7, 0.25, 0.05], vertical_alignment="bottom"
@@ -91,8 +94,12 @@ else:
     # Title
     with title_col:
         title = ss.activity_details[7]
+        # st.write(title)
+        if title is None:
+            title = ""
         # with title_col:
         updated_title = st.text_input(label=" ", value=title)
+        # st.write(updated_title)
     with category_col:
         # category
         category = ss.activity_details[8]
@@ -172,7 +179,8 @@ else:
         if ss.activity_details and ss.activity_details[3]:
             description = ss.activity_details[3]
         else:
-            description = None
+            description = ""
+        # st.write(description)
         updated_description = st.text_area(
             "Description", description, width="stretch", height=200
         )
@@ -627,11 +635,15 @@ else:
 
         # Check Description
         if updated_description != (ss.activity_details[3]):
+            if updated_description == "":
+                updated_description = None
             set_clauses.append("description = %s")
             query_params.append(updated_description)
 
         # Check Title (Activity Name)
         if updated_title != ss.activity_details[7]:
+            if updated_title == "":
+                updated_title = None
             set_clauses.append("activity_name = %s")
             query_params.append(updated_title)
 
@@ -692,6 +704,8 @@ else:
                 st.cache_data.clear()
                 if "activities_df" in ss:
                     del ss["activities_df"]
+                # if "activity_details" in ss:
+                #     del ss["activity_details"]
         else:
             st.info("No changes detected.")
             # Rerun the script to show the latest data from the DB
