@@ -1,11 +1,6 @@
 # remove stopped time in auto laps
 # TODO: Pills to sort laps by intensity
 # Add way to edit workout feel and effort
-# when using the arrows to change activity for the second page
-# it is doesn't get changed. neither does the category or the description or title.
-# for whatever reason, those three won't change in the widgetes, but the info queryied does change. if not sent to the database
-# it will display the edited but not saved value until another activity has changes from the original value of the original activity, then it works fine
-# so if both activities have Running as title, it will be sticky, otherwise it won't. I have no idea what's wrong, it doesn't seem related to the session state
 
 # add functionality to see average time by set and stats like that
 # add full screen button to the map

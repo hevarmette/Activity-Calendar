@@ -71,7 +71,6 @@ else:
 
     st.title(f"Lap Data for Activity ID: {activity_id}")
 
-    # st.write(ss.activity_details)
     if ss.activity_details:
         # Getting activity details
         distance_m = ss.activity_details[0]
@@ -94,12 +93,12 @@ else:
     # Title
     with title_col:
         title = ss.activity_details[7]
-        # st.write(title)
         if title is None:
             title = ""
         # with title_col:
-        updated_title = st.text_input(label=" ", value=title)
-        # st.write(updated_title)
+        updated_title = st.text_input(
+            label=" ", value=title, key=f"title_input_{activity_id}"
+        )
     with category_col:
         # category
         category = ss.activity_details[8]
@@ -122,7 +121,10 @@ else:
             cat_index = 0  # Fallback to the first option
 
         updated_category = st.selectbox(
-            "---", options=category_options, index=cat_index
+            "---",
+            options=category_options,
+            index=cat_index,
+            key=f"category_select_{activity_id}",
         )
     with nav_col:
         back_col, forward_col = st.columns(2, gap=None)
@@ -174,15 +176,18 @@ else:
             st_folium(activity_map, width="stretch")
 
     with description_col:
-        # st.write(" ")
         # activity description
         if ss.activity_details and ss.activity_details[3]:
             description = ss.activity_details[3]
         else:
             description = ""
-        # st.write(description)
+
         updated_description = st.text_area(
-            "Description", description, width="stretch", height=200
+            "Description",
+            description,
+            width="stretch",
+            height=200,
+            key=f"desc_input_{activity_id}",
         )
 
     # Performance Graphs Section ---
@@ -651,6 +656,16 @@ else:
         if updated_category != ss.activity_details[8]:
             set_clauses.append("category = %s")
             query_params.append(updated_category)
+
+        # Check Feel
+        # if updated_feel != ss.activity_details[4]:
+        #     set_clauses.append("workout_feel = %s")
+        #     query_params.append(updated_feel)
+
+        # Check Effort
+        # if updated_effort != ss.activity_details[5]:
+        #     set_clauses.append("effort = %s")
+        #     query_params.append(updated_effort)
 
         # Only proceed if there is at least one change
         if set_clauses:
