@@ -1,4 +1,5 @@
 import pandas as pd
+import base64
 
 
 # --- Helper Function to format time ---
@@ -79,3 +80,15 @@ def format_pace(x):
     if pd.notna(x):
         return "{:d}:{:02d}".format(*divmod(int(round(x * 60)), 60))
     return None
+
+
+def get_svg_markdown(label):
+    """Reads an SVG and converts it to a markdown image string."""
+    filename = f"assets/{label.replace(' ', '-')}.svg"
+    try:
+        with open(filename, "rb") as f:
+            b64_encoded = base64.b64encode(f.read()).decode("utf-8")
+        # Creates a markdown image tag followed by the label text
+        return f"![{label}](data:image/svg+xml;base64,{b64_encoded}) {label}"
+    except FileNotFoundError:
+        return label  # Fallback to plain text if the SVG is missing

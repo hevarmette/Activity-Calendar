@@ -93,6 +93,7 @@ def show_activity_dialog(activity_title, activity_id, activity_sport):
             [0.08, 0.65, 0.27], vertical_alignment="center"
         )
         # --- Workout Feel + Effort --
+        # Converting feel from db value to label
         if feel is not None:
             # Load the SVG file not used rn
             with open(r"assets/normal.svg", "r") as f:
@@ -111,6 +112,7 @@ def show_activity_dialog(activity_title, activity_id, activity_sport):
         else:
             feel_string = ""  # not used rn. might display the label with the image
 
+        # converting effort from db value to label
         if effort is not None:
             effort_labels = {
                 1: "very light",

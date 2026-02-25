@@ -17,6 +17,7 @@ from db import (
 from utils import (
     parse_hms_to_seconds,
     weighted_average_if_present,
+    get_svg_markdown,
 )
 from plotting import create_plot
 from lap_processing import process_cycling_laps, process_lap_data, create_auto_laps
@@ -26,6 +27,25 @@ if "schema" not in ss:
     ss.schema = st.secrets.schema
 if "meters_to_miles" not in ss:
     ss.meters_to_miles = 1609.344
+feel_map = {
+    0: "very weak",
+    25: "weak",
+    50: "normal",
+    75: "strong",
+    100: "very strong",
+}
+effort_labels = {
+    1: "very light",
+    2: "light",
+    3: "moderate",
+    4: "somewhat hard",
+    5: "hard",
+    6: "hard",
+    7: "very hard",
+    8: "very hard",
+    9: "extremely hard",
+    10: "maximum",
+}
 # Keys = Database Column Names
 # Values = UI Display Names
 # This is used to map database column names with display column names
@@ -575,6 +595,40 @@ else:
             }
             auto_laps = create_auto_laps(ss.points_df)
             st.dataframe(auto_laps, column_config=auto_laps_config, hide_index=True)
+
+        with c1:
+            # The widget options are the raw integers
+            feel_options = list(feel_map.keys())
+            # Default value fallback if 'feel' is None in the database
+            if feel is not None:
+                current_feel_index = feel_options.index(feel)
+            else:
+                current_feel_index = None
+
+            st.write(feel)
+            updated_feel = st.radio(
+                label="How did you feel?",
+                options=feel_options,
+                index=current_feel_index,
+                # The format_func takes the integer, finds the string, and adds the SVG
+                format_func=lambda x: get_svg_markdown(feel_map.get(x, "Unknown")),
+                key=f"feel_radio_{activity_id}",
+            )
+            st.write(updated_feel)
+
+        effort_options = [i * 10 for i in range(1, 11)]
+        current_effort = effort if effort in effort_options else 50
+
+        st.write(effort)
+        updated_effort = st.select_slider(
+            label="Perceived Effort",
+            options=effort_options,
+            value=current_effort,
+            # The format_func divides by 10 to fetch the correct string from the dictionary
+            format_func=lambda x: effort_labels.get(int(x / 10), "Unknown"),
+            key=f"effort_slider_{activity_id}",
+        )
+        st.write(updated_effort)
 
     if st.button("Save"):
         updates = []
