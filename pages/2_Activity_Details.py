@@ -18,6 +18,7 @@ from utils import (
     parse_hms_to_seconds,
     weighted_average_if_present,
     get_svg_markdown,
+    format_effort,
 )
 from plotting import create_plot
 from lap_processing import process_cycling_laps, process_lap_data, create_auto_laps
@@ -27,25 +28,27 @@ if "schema" not in ss:
     ss.schema = st.secrets.schema
 if "meters_to_miles" not in ss:
     ss.meters_to_miles = 1609.344
-feel_map = {
-    0: "very weak",
-    25: "weak",
-    50: "normal",
-    75: "strong",
-    100: "very strong",
-}
-effort_labels = {
-    1: "very light",
-    2: "light",
-    3: "moderate",
-    4: "somewhat hard",
-    5: "hard",
-    6: "hard",
-    7: "very hard",
-    8: "very hard",
-    9: "extremely hard",
-    10: "maximum",
-}
+if "feel_map" not in ss:
+    ss.feel_map = {
+        0: "very weak",
+        25: "weak",
+        50: "normal",
+        75: "strong",
+        100: "very strong",
+    }
+if "effort_labels" not in ss:
+    ss.effort_labels = {
+        1: "very light",
+        2: "light",
+        3: "moderate",
+        4: "somewhat hard",
+        5: "hard",
+        6: "hard",
+        7: "very hard",
+        8: "very hard",
+        9: "extremely hard",
+        10: "maximum",
+    }
 # Keys = Database Column Names
 # Values = UI Display Names
 # This is used to map database column names with display column names
@@ -167,6 +170,8 @@ else:
                     st.rerun()
 
     metrics_col, white_space_col = st.columns([0.7, 0.3])
+    # different columns so I can alilgn the values to the top of the columns.
+    # So the map and description can be vertically aligned
     map_col, description_col = st.columns([0.7, 0.3])
 
     if "activity_details" in ss:
@@ -596,39 +601,36 @@ else:
             auto_laps = create_auto_laps(ss.points_df)
             st.dataframe(auto_laps, column_config=auto_laps_config, hide_index=True)
 
-        with c1:
-            # The widget options are the raw integers
-            feel_options = list(feel_map.keys())
-            # Default value fallback if 'feel' is None in the database
+        feel_col, effort_col = st.columns([0.3, 0.7])
+
+        with feel_col:
+            # The widget options are the raw integers (Values from the db)
+            feel_options = list(ss.feel_map.keys())
             if feel is not None:
                 current_feel_index = feel_options.index(feel)
             else:
                 current_feel_index = None
 
-            st.write(feel)
             updated_feel = st.radio(
                 label="How did you feel?",
                 options=feel_options,
                 index=current_feel_index,
                 # The format_func takes the integer, finds the string, and adds the SVG
-                format_func=lambda x: get_svg_markdown(feel_map.get(x, "Unknown")),
+                format_func=lambda x: get_svg_markdown(ss.feel_map.get(x, "Unknown")),
+                # captions=list(ss.feel_map.values()),
                 key=f"feel_radio_{activity_id}",
             )
-            st.write(updated_feel)
 
-        effort_options = [i * 10 for i in range(1, 11)]
-        current_effort = effort if effort in effort_options else 50
-
-        st.write(effort)
-        updated_effort = st.select_slider(
-            label="Perceived Effort",
-            options=effort_options,
-            value=current_effort,
-            # The format_func divides by 10 to fetch the correct string from the dictionary
-            format_func=lambda x: effort_labels.get(int(x / 10), "Unknown"),
-            key=f"effort_slider_{activity_id}",
-        )
-        st.write(updated_effort)
+        with effort_col:
+            effort_options = [None] + [i * 10 for i in range(1, 11)]
+            updated_effort = st.select_slider(
+                label="Perceived Effort",
+                options=effort_options,
+                value=effort,
+                # The format_func divides by 10 to fetch the correct string from the dictionary
+                format_func=format_effort,
+                key=f"effort_slider_{activity_id}",
+            )
 
     if st.button("Save"):
         updates = []
@@ -712,14 +714,14 @@ else:
             query_params.append(updated_category)
 
         # Check Feel
-        # if updated_feel != ss.activity_details[4]:
-        #     set_clauses.append("workout_feel = %s")
-        #     query_params.append(updated_feel)
+        if updated_feel != ss.activity_details[4]:
+            set_clauses.append("workout_feel = %s")
+            query_params.append(updated_feel)
 
         # Check Effort
-        # if updated_effort != ss.activity_details[5]:
-        #     set_clauses.append("effort = %s")
-        #     query_params.append(updated_effort)
+        if updated_effort != ss.activity_details[5]:
+            set_clauses.append("effort = %s")
+            query_params.append(updated_effort)
 
         # Only proceed if there is at least one change
         if set_clauses:

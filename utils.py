@@ -1,4 +1,5 @@
 import pandas as pd
+from streamlit import session_state as ss
 import base64
 
 
@@ -92,3 +93,9 @@ def get_svg_markdown(label):
         return f"![{label}](data:image/svg+xml;base64,{b64_encoded}) {label}"
     except FileNotFoundError:
         return label  # Fallback to plain text if the SVG is missing
+
+
+def format_effort(val):
+    if val is None:
+        return "None"
+    return ss.effort_labels.get(int(val / 10), "Unknown")

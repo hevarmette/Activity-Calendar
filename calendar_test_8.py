@@ -1,6 +1,5 @@
 # remove stopped time in auto laps
 # TODO: Pills to sort laps by intensity
-# Add way to edit workout feel and effort
 
 # add functionality to see average time by set and stats like that
 # add full screen button to the map
@@ -22,6 +21,27 @@ from db import (
 from plotting import create_activity_map
 
 ss.schema = st.secrets.schema
+if "feel_map" not in ss:
+    ss.feel_map = {
+        0: "very weak",
+        25: "weak",
+        50: "normal",
+        75: "strong",
+        100: "very strong",
+    }
+if "effort_labels" not in ss:
+    ss.effort_labels = {
+        1: "very light",
+        2: "light",
+        3: "moderate",
+        4: "somewhat hard",
+        5: "hard",
+        6: "hard",
+        7: "very hard",
+        8: "very hard",
+        9: "extremely hard",
+        10: "maximum",
+    }
 
 
 @st.dialog("Activity Summary", width="medium")
@@ -98,14 +118,7 @@ def show_activity_dialog(activity_title, activity_id, activity_sport):
             # Load the SVG file not used rn
             with open(r"assets/normal.svg", "r") as f:
                 svg = f.read()
-            feel_map = {
-                0: "very weak",
-                25: "weak",
-                50: "normal",
-                75: "strong",
-                100: "very strong",
-            }
-            feel_label = feel_map.get(feel, "Unknown")
+            feel_label = ss.feel_map.get(feel, "Unknown")
             feel_string = f"{svg} "
             with subcol1:
                 st.image(f"assets/{feel_label.replace(" ", "-")}.svg", width="stretch")
@@ -114,20 +127,8 @@ def show_activity_dialog(activity_title, activity_id, activity_sport):
 
         # converting effort from db value to label
         if effort is not None:
-            effort_labels = {
-                1: "very light",
-                2: "light",
-                3: "moderate",
-                4: "somewhat hard",
-                5: "hard",
-                6: "hard",
-                7: "very hard",
-                8: "very hard",
-                9: "extremely hard",
-                10: "maximum",
-            }
             effort_index = int(effort / 10)
-            effort_label = effort_labels.get(effort_index, "Unknown")
+            effort_label = ss.effort_labels.get(effort_index, "Unknown")
             effort_string = f"| **Effort:** {effort_index} – {effort_label}"
             with subcol2:
                 st.markdown(f"{effort_string}", unsafe_allow_html=True)
