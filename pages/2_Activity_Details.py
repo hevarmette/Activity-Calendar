@@ -388,14 +388,32 @@ else:
             ["↩  Laps", "📊 Activity Details", "↻ Auto Laps"]
         )
 
+        st.session_state.processed_laps_df = processed_laps_df.copy()
+
         with laps_tab:
             st.markdown("You can edit values in the table below.")
+
+            intensity_options = ["warm up", "active", "recovery", "rest", "cooldown"]
+
+            # st.pills returns the selected string, or None if deselected
+            selected_intensity = st.pills(
+                "Filter by Intensity", options=intensity_options, default=None
+            )
+
+            # 3. If a pill is selected, filter. If None, show all.
+            if selected_intensity:
+                filtered_df = st.session_state.processed_laps_df[
+                    st.session_state.processed_laps_df["Intensity"]
+                    == selected_intensity
+                ]
+            else:
+                filtered_df = st.session_state.processed_laps_df
 
             column_config = {
                 "Intensity": st.column_config.SelectboxColumn(
                     "Intensity",
                     help="Select the intensity type for the lap",
-                    options=["warm up", "active", "recovery", "rest", "cooldown"],
+                    options=intensity_options,
                     required=False,
                 ),
                 "Activity Id": None,
@@ -416,12 +434,15 @@ else:
 
             # TODO: Recalc pace min/mile on_callback when data is edited
             edited_df = st.data_editor(
-                processed_laps_df,
+                filtered_df,
                 hide_index=True,
                 column_config=column_config,
                 disabled=["Lap", "Pace (min/mile)"],
                 key="lap_editor",
             )
+
+            if not edited_df.equals(filtered_df):
+                st.session_state.processed_laps_df.update(edited_df)
 
         with details_tab:
             st.subheader("Activity Details")
@@ -643,7 +664,7 @@ else:
                 # Get the lap_id using the row index from the ORIGINAL dataframe
                 # Note: Ensure processed_laps_df aligns with the editor's data source
                 try:
-                    lap_id = processed_laps_df.iloc[int(row_idx)]["Lap Id"]
+                    lap_id = filtered_df.iloc[int(row_idx)]["Lap Id"]
                 except IndexError:
                     st.error("Could not find Lap ID. Did the sort order change?")
                     continue
@@ -687,7 +708,6 @@ else:
                         st.warning(
                             f"Skipping '{ui_col_name}': Cannot update calculated fields directly."
                         )
-
             # Clear cache to force a re-fetch of data
             fetch_lap_data.clear()
 
