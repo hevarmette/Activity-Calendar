@@ -1,7 +1,7 @@
 # remove stopped time in auto laps
-# TODO: Pills to sort laps by intensity
+# TODO: functionality to save intensity values after editing and when selecting pill values
 
-# add functionality to see average time by set and stats like that
+# add functionality to see average time by set and stats like that. and summary stats on the homepage or an extra page
 # add full screen button to the map
 # display auto lap markers on the map
 # fix format of last lap display in auto laps
