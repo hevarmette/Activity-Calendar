@@ -118,18 +118,12 @@ def create_auto_laps(points_df, auto_lap_dist=1):
 
     points_df = points_df.copy()
 
-    # 1. Calculate the time difference (seconds) and distance difference (meters) between points
+    # 1. Calculate the time difference and distance difference
     points_df["time_diff"] = points_df["timestamp"].diff().dt.total_seconds().fillna(0)
     points_df["dist_diff_meters"] = points_df["distance"].diff().fillna(0)
 
     # 2. Identify "Stopped" time
-    # If the watch is paused, we will see a large time_diff with near-zero dist_diff.
-    # We calculate speed (m/s) to handle both "Watch Paused" (gap in data) and "Standing Still" (data points with 0 dist).
-
-    # We count speeds below this as stopped. I'm not sure when resuming an activity if the distance point of resumption will be the same as the point of stopping
     STOP_THRESHOLD_MPS = 0.00001
-
-    # Avoid division by zero
     points_df["segment_speed"] = 0.0
     mask_moving = points_df["time_diff"] > 0
     points_df.loc[mask_moving, "segment_speed"] = (
@@ -137,89 +131,117 @@ def create_auto_laps(points_df, auto_lap_dist=1):
         / points_df.loc[mask_moving, "time_diff"]
     )
 
-    # Create a "moving_seconds" column.
-    # If speed is too low, we assume 0 seconds of moving time for that interval.
     points_df["moving_seconds"] = points_df["time_diff"]
     points_df.loc[points_df["segment_speed"] < STOP_THRESHOLD_MPS, "moving_seconds"] = 0
-    # ----------------------------------
-
-    # Convert cumulative meters to miles
-    points_df["dist_miles_cumulative"] = points_df["distance"] / ss.meters_to_miles
-
-    # Floor of distance + 1 gives us 1 for 0-0.99, 2 for 1.0-1.99, etc.
-    points_df["lap_no"] = points_df["dist_miles_cumulative"].apply(
-        lambda x: int(x) + auto_lap_dist
-    )
 
     # Calculate Deltas for altitude
     points_df["alt_diff"] = points_df["corrected_altitude"].diff().fillna(0)
     points_df["ascent_ft"] = points_df["alt_diff"].clip(lower=0)
     points_df["descent_ft"] = points_df["alt_diff"].clip(upper=0).abs()
 
-    # Define how to aggregate each column
-    agg_dict = {
-        # We no longer look at timestamp min/max for duration
-        "moving_seconds": "sum",  # Sum up only the active seconds
-        "dist_miles_cumulative": [np.min, np.max],
-        "ascent_ft": "sum",
-        "descent_ft": "sum",
-    }
+    # ---------------------------------------------------------
+    # NEW INTERPOLATION LOGIC
+    # ---------------------------------------------------------
+    points_df["dist_miles_cumulative"] = points_df["distance"] / ss.meters_to_miles
 
+    # Calculate cumulative metrics for interpolation
+    points_df["cum_moving_seconds"] = points_df["moving_seconds"].cumsum()
+    points_df["cum_ascent"] = points_df["ascent_ft"].cumsum()
+    points_df["cum_descent"] = points_df["descent_ft"].cumsum()
+
+    max_dist = points_df["dist_miles_cumulative"].max()
+    if pd.isna(max_dist) or max_dist == 0:
+        return pd.DataFrame()
+
+    # Define exact lap boundaries (e.g., [0.0, 1.0, 2.0, 3.0, 3.45])
+    lap_boundaries = np.arange(auto_lap_dist, max_dist, auto_lap_dist).tolist()
+    if max_dist > (lap_boundaries[-1] if lap_boundaries else 0):
+        lap_boundaries.append(max_dist)
+    target_dists = [0.0] + lap_boundaries
+
+    # To use np.interp, the x-axis (distance) must be strictly increasing.
+    # We drop duplicates to handle "standing still" data points cleanly.
+    interp_df = points_df.drop_duplicates(
+        subset=["dist_miles_cumulative"], keep="first"
+    )
+    xp = interp_df["dist_miles_cumulative"].values
+
+    # Interpolate exact cumulative values at the precise mile markers
+    interp_times = np.interp(target_dists, xp, interp_df["cum_moving_seconds"].values)
+    interp_ascent = np.interp(target_dists, xp, interp_df["cum_ascent"].values)
+    interp_descent = np.interp(target_dists, xp, interp_df["cum_descent"].values)
+
+    # Build the laps by taking the difference between the interpolated boundaries
+    laps_data = []
+    for i in range(1, len(target_dists)):
+        laps_data.append(
+            {
+                "Lap": i,
+                "Distance (miles)": target_dists[i] - target_dists[i - 1],
+                "seconds_raw": interp_times[i] - interp_times[i - 1],
+                "Total Ascent (ft)": interp_ascent[i] - interp_ascent[i - 1],
+                "Total Descent (ft)": interp_descent[i] - interp_descent[i - 1],
+            }
+        )
+    laps_df = pd.DataFrame(laps_data)
+
+    # ---------------------------------------------------------
+    # HR & CADENCE LOGIC (Binning original points)
+    # ---------------------------------------------------------
+    # Assign each raw GPS point to an exact lap using pd.cut
+    points_df["exact_lap_no"] = pd.cut(
+        points_df["dist_miles_cumulative"],
+        bins=target_dists,
+        labels=range(1, len(target_dists)),
+        include_lowest=True,
+    )
+
+    agg_dict = {}
     if ss.hr and points_df["heart_rate"].notna().all():
         agg_dict["heart_rate"] = ["mean", "max"]
-
     if ss.cadence and points_df["total_cadence"].notna().all():
         agg_dict["total_cadence"] = ["mean", "max"]
 
-    # Group by Lap Number
-    laps_grouped = points_df.groupby("lap_no").agg(agg_dict)
-    laps_df = pd.DataFrame(index=laps_grouped.index)
+    if agg_dict:
+        # Group raw points by the new exact lap boundaries
+        laps_grouped = points_df.groupby("exact_lap_no", observed=True).agg(agg_dict)
+        laps_grouped.index = laps_grouped.index.astype(int)  # align indices
 
-    # Distance
-    laps_df["Distance (miles)"] = (
-        laps_grouped["dist_miles_cumulative"]["max"]
-        - laps_grouped["dist_miles_cumulative"]["min"]
-    )
+        if "heart_rate" in agg_dict:
+            # Force numeric, turning any weird values or empty bins into safe NaNs
+            hr_mean = pd.to_numeric(laps_grouped["heart_rate"]["mean"], errors="coerce")
+            hr_max = pd.to_numeric(laps_grouped["heart_rate"]["max"], errors="coerce")
 
-    # CHANGE: Use the summed moving seconds instead of raw timestamp diff
-    laps_df["seconds_raw"] = laps_grouped["moving_seconds"]["sum"]
+            laps_df["Avg HR"] = hr_mean.round(0).values
+            laps_df["Max HR"] = hr_max.values
 
-    # Elevation
-    laps_df["Total Ascent (ft)"] = pd.to_numeric(laps_grouped["ascent_ft"]["sum"])
-    laps_df["Total Descent (ft)"] = pd.to_numeric(laps_grouped["descent_ft"]["sum"])
+        if "total_cadence" in agg_dict:
+            # Force numeric here as well
+            cad_mean = pd.to_numeric(
+                laps_grouped["total_cadence"]["mean"], errors="coerce"
+            )
+            cad_max = pd.to_numeric(
+                laps_grouped["total_cadence"]["max"], errors="coerce"
+            )
 
-    # Heart Rate
-    if ss.hr and points_df["heart_rate"].notna().all():
-        laps_df["Avg HR"] = pd.to_numeric(laps_grouped["heart_rate"]["mean"]).round(0)
-        laps_df["Max HR"] = pd.to_numeric(laps_grouped["heart_rate"]["max"])
+            laps_df["Avg Cadence"] = (cad_mean * 2).round(0).values
+            laps_df["Max Cadence"] = (cad_max * 2).values
+    # ---------------------------------------------------------
+    # FORMATTING
+    # ---------------------------------------------------------
+    # Round ascent/descent for cleaner display
+    laps_df["Total Ascent (ft)"] = laps_df["Total Ascent (ft)"].round(0)
+    laps_df["Total Descent (ft)"] = laps_df["Total Descent (ft)"].round(0)
 
-    # Cadence
-    if ss.cadence and points_df["total_cadence"].notna().all():
-        laps_df["Avg Cadence"] = (
-            pd.to_numeric(laps_grouped["total_cadence"]["mean"]).round(0) * 2
-        )
-        laps_df["Max Cadence"] = pd.to_numeric(laps_grouped["total_cadence"]["max"]) * 2
-
-    # Time Formatting
     laps_df["Time"] = laps_df["seconds_raw"].apply(convert_seconds_to_hms)
 
-    # Pace Calculation. This doesn't work for the last lap yet.
-    is_one_unit = laps_df["Distance (miles)"].between(0.99, 1.01)
-    laps_df.loc[is_one_unit, "Pace (min/mile)"] = laps_df["Time"]
-
-    non_zero_dist = laps_df["Distance (miles)"] > 0
-    laps_df["Pace (min/mile) unformatted"] = None
-
-    rows_to_format = (~is_one_unit) & non_zero_dist
-    laps_df.loc[rows_to_format, "Pace (min/mile) unformatted"] = (
-        laps_df.loc[rows_to_format, "seconds_raw"] / 60
-    ) / laps_df.loc[rows_to_format, "Distance (miles)"]
-
-    laps_df.loc[rows_to_format, "Pace (min/mile)"] = laps_df.loc[
-        rows_to_format, "Pace (min/mile) unformatted"
-    ].apply(format_pace)
-
-    final_df = laps_df.reset_index().rename(columns={"lap_no": "Lap"})
+    # Universal Pace Calculation (Handles all laps mathematically)
+    laps_df["Pace (min/mile) unformatted"] = (laps_df["seconds_raw"] / 60) / laps_df[
+        "Distance (miles)"
+    ]
+    laps_df["Pace (min/mile)"] = laps_df["Pace (min/mile) unformatted"].apply(
+        format_pace
+    )
 
     cols_to_display = [
         "Lap",
@@ -230,9 +252,9 @@ def create_auto_laps(points_df, auto_lap_dist=1):
         "Total Descent (ft)",
     ]
 
-    if "Avg HR" in final_df.columns:
+    if "Avg HR" in laps_df.columns:
         cols_to_display += ["Avg HR", "Max HR"]
-    if "Avg Cadence" in final_df.columns:
+    if "Avg Cadence" in laps_df.columns:
         cols_to_display += ["Avg Cadence", "Max Cadence"]
 
-    return final_df[cols_to_display]
+    return laps_df[cols_to_display]
