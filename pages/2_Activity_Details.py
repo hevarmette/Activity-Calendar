@@ -653,7 +653,7 @@ else:
                 key=f"effort_slider_{activity_id}",
             )
 
-    if st.button("Save"):
+    if st.button("Save", shortcut="s"):
         updates = []
         # Check for edits by comparing the new state to the previous one
         if "lap_editor" in ss and ss.lap_editor.get("edited_rows"):
