@@ -2,10 +2,6 @@
 # TODO: functionality to save intensity values after editing and when selecting pill values
 
 # add functionality to see average time by set and stats like that. and summary stats on the homepage or an extra page
-# add full screen button to the map
-# display auto lap markers on the map
-# fix format of last lap display in auto laps
-# auto lap to calc to hundredths place
 import streamlit as st
 from datetime import datetime
 from streamlit_folium import st_folium
@@ -100,7 +96,7 @@ def show_activity_dialog(activity_title, activity_id, activity_sport):
 
         # --- Map ---
         if not points_df.empty:
-            activity_map = create_activity_map(points_df)
+            activity_map = create_activity_map(points_df, fullscreen=False)
             st_folium(activity_map, width=700, height=500)
         # else:
         #     st.warning("No GPS data found for this activity.")

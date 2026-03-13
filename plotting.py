@@ -1,9 +1,10 @@
 import folium
 import branca
 import plotly.express as px
+from streamlit import session_state as ss
 
 
-def create_activity_map(points_df):
+def create_activity_map(points_df, fullscreen, auto_lap_dist=1):
     """Creates a Folium map from a DataFrame of points."""
     laps = []
 
@@ -75,6 +76,32 @@ def create_activity_map(points_df):
                 location=[laps[i]["latitude"], laps[i]["longitude"]], icon=icon_number
             ).add_to(icons)
 
+    mile_markers_layer = folium.FeatureGroup(
+        name="Auto Mile Markers", show=False
+    ).add_to(route_map)
+
+    points_df["distance_auto_lap"] = (
+        points_df["distance"] / ss.meters_to_miles * auto_lap_dist
+    )
+    max_miles = int(points_df["distance_auto_lap"].max())
+
+    # Iterate through each whole mile and place a marker
+    for unit in range(1, max_miles + 1):
+        # Find the first row where the cumulative distance passes this mile mark
+        mile_row = points_df[points_df["distance_auto_lap"] >= unit].iloc[0]
+
+        mile_icon = folium.plugins.BeautifyIcon(
+            border_color="white",
+            text_color="black",
+            number=unit,
+            inner_icon_style="margin-top:0;",
+        )
+
+        folium.Marker(
+            location=[mile_row["latitude"], mile_row["longitude"]],
+            icon=mile_icon,
+        ).add_to(mile_markers_layer)
+
     # Get start and end points_df and plot as marker
     start = points_df[["latitude", "longitude"]].iloc[0, :]
     end = points_df[["latitude", "longitude"]].iloc[-1, :]
@@ -101,6 +128,14 @@ def create_activity_map(points_df):
 
     # Automatic fit and zoom
     route_map.fit_bounds(route_map.get_bounds())
+
+    if fullscreen:
+        folium.plugins.Fullscreen(
+            position="bottomright",
+            title="Expand map",
+            title_cancel="Exit full screen",
+            force_separate_button=True,
+        ).add_to(route_map)
 
     folium.LayerControl(position="topright").add_to(route_map)
     return route_map

@@ -197,7 +197,7 @@ else:
     # --- Map ---
     if "points_df" in ss and not ss.points_df.empty:
         with map_col:
-            activity_map = create_activity_map(ss.points_df)
+            activity_map = create_activity_map(ss.points_df, fullscreen=True)
             st_folium(activity_map, width="stretch")
 
     with description_col:
