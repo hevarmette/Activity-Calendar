@@ -15,29 +15,7 @@ from db import (
     fetch_activity_points,
 )
 from plotting import create_activity_map
-
-ss.schema = st.secrets.schema
-if "feel_map" not in ss:
-    ss.feel_map = {
-        0: "very weak",
-        25: "weak",
-        50: "normal",
-        75: "strong",
-        100: "very strong",
-    }
-if "effort_labels" not in ss:
-    ss.effort_labels = {
-        1: "very light",
-        2: "light",
-        3: "moderate",
-        4: "somewhat hard",
-        5: "hard",
-        6: "hard",
-        7: "very hard",
-        8: "very hard",
-        9: "extremely hard",
-        10: "maximum",
-    }
+from utils import init_session_state
 
 
 @st.dialog("Activity Summary", width="medium")
@@ -153,6 +131,8 @@ def month_cb():
 if __name__ == "__main__":
     st.set_page_config(page_title="Activity Calendar", layout="wide")
 
+    init_session_state()
+
     conn = get_connection(local=True)
 
     # --- Fetch and Format Data ---
@@ -160,8 +140,6 @@ if __name__ == "__main__":
     # activities_df = generate_fake_activity_data(selected_year, selected_month)
     if "activities_df" not in ss:
         ss.activities_df = retrieve_monthly_data(conn)
-    if "meters_to_miles" not in ss:
-        ss.meters_to_miles = 1609.344
 
     # --- Sidebar for Navigation ---
     with st.sidebar:

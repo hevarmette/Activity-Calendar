@@ -1,6 +1,36 @@
 import pandas as pd
+import streamlit as st
 from streamlit import session_state as ss
 import base64
+
+
+def init_session_state():
+    # constants
+    if "schema" not in ss:
+        ss.schema = st.secrets.schema
+    if "meters_to_miles" not in ss:
+        ss.meters_to_miles = 1609.344
+    if "feel_map" not in ss:
+        ss.feel_map = {
+            0: "very weak",
+            25: "weak",
+            50: "normal",
+            75: "strong",
+            100: "very strong",
+        }
+    if "effort_labels" not in ss:
+        ss.effort_labels = {
+            1: "very light",
+            2: "light",
+            3: "moderate",
+            4: "somewhat hard",
+            5: "hard",
+            6: "hard",
+            7: "very hard",
+            8: "very hard",
+            9: "extremely hard",
+            10: "maximum",
+        }
 
 
 # --- Helper Function to format time ---

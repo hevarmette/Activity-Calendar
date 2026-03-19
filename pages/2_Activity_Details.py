@@ -19,36 +19,12 @@ from utils import (
     weighted_average_if_present,
     get_svg_markdown,
     format_effort,
+    init_session_state,
 )
 from plotting import create_plot
 from lap_processing import process_cycling_laps, process_lap_data, create_auto_laps
 
-# constants
-if "schema" not in ss:
-    ss.schema = st.secrets.schema
-if "meters_to_miles" not in ss:
-    ss.meters_to_miles = 1609.344
-if "feel_map" not in ss:
-    ss.feel_map = {
-        0: "very weak",
-        25: "weak",
-        50: "normal",
-        75: "strong",
-        100: "very strong",
-    }
-if "effort_labels" not in ss:
-    ss.effort_labels = {
-        1: "very light",
-        2: "light",
-        3: "moderate",
-        4: "somewhat hard",
-        5: "hard",
-        6: "hard",
-        7: "very hard",
-        8: "very hard",
-        9: "extremely hard",
-        10: "maximum",
-    }
+init_session_state()
 # Keys = Database Column Names
 # Values = UI Display Names
 # This is used to map database column names with display column names
