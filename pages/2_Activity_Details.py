@@ -597,6 +597,7 @@ else:
             }
             auto_laps = create_auto_laps(ss.points_df)
             st.dataframe(auto_laps, column_config=auto_laps_config, hide_index=True)
+            st.dataframe(ss.points_df)
 
         feel_col, effort_col = st.columns([0.3, 0.7])
 
