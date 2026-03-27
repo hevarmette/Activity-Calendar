@@ -268,3 +268,27 @@ def fetch_activity_points(_conn, activity_id):
     except Exception as e:
         st.error(f"Error fetching activity points: {e}")
         return pd.DataFrame()
+
+
+@st.cache_data
+def fetch_activity_events(_conn, activity_id):
+    """Fetches timer events to calculate paused time."""
+    if _conn is None:
+        return pd.DataFrame()
+
+    sql_query = f"""
+        SELECT timestamp, event, event_type
+        FROM {ss.schema}.event
+        WHERE activity_id = %s AND event = 'timer'
+        ORDER BY timestamp ASC;
+    """
+    try:
+        with _conn.cursor() as cursor:
+            cursor.execute(sql_query, (activity_id,))
+            columns = [desc.name for desc in cursor.description]
+            data = cursor.fetchall()
+
+        return pd.DataFrame(data, columns=columns)
+    except Exception as e:
+        st.error(f"Error fetching activity events: {e}")
+        return pd.DataFrame()

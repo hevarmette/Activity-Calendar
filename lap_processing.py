@@ -112,7 +112,14 @@ def process_cycling_laps(df):
     return df_display
 
 
-def create_auto_laps(points_df, auto_lap_dist=1):
+def create_auto_laps(points_df, events_df=None, auto_lap_dist=1):
+    """
+    Create a new dataframe with laps at the defined auto_lap_dist argument. Event and point dfs are sorted when queried and original dataframes are not altered
+
+    :param points_df pandas.DataFrame: GPS coordinates; matches record FIT Frame
+    :param events_df pandas.DataFrame: Event log during activity; matches event FIT Frame
+    :param auto_lap_dist int: distance in miles to create laps for
+    """
     if not ss.coordinates:
         return pd.DataFrame()
 
@@ -120,6 +127,62 @@ def create_auto_laps(points_df, auto_lap_dist=1):
 
     # 1. Calculate the time difference and distance difference
     points_df["time_diff"] = points_df["timestamp"].diff().dt.total_seconds().fillna(0)
+    if events_df is not None and not events_df.empty:
+        timer_events = events_df[events_df["event"] == "timer"]
+
+        # Create boolean masks for stops and starts
+        is_stop = timer_events["event_type"] == "stop_all"
+        is_start = timer_events["event_type"] == "start"
+
+        stops = timer_events.loc[is_stop, "timestamp"].reset_index(drop=True)
+
+        if not stops.empty:
+            # Filter starts to only those that happen AFTER the very first stop
+            # (This ignores the initial 'start' event at the beginning of the activity)
+            starts = timer_events.loc[
+                is_start & (timer_events["timestamp"] > stops.iloc[0]), "timestamp"
+            ].reset_index(drop=True)
+
+            # Align lengths in case the activity ended on a 'stop_all' without resuming
+            pair_count = min(len(stops), len(starts))
+
+            # Create a dataframe of the exact pause intervals
+            pauses_df = pd.DataFrame(
+                {
+                    "pause_end": starts.iloc[:pair_count],
+                    "duration": (
+                        starts.iloc[:pair_count] - stops.iloc[:pair_count]
+                    ).dt.total_seconds(),
+                }
+            )
+
+            # Filter out any weird negative/zero durations just in case
+            pauses_df = pauses_df[pauses_df["duration"] > 0]
+
+            if not pauses_df.empty:
+                # Use merge_asof to match each pause to the FIRST gps point that occurs AFTER the pause ends
+                # This requires both dataframes to be sorted by the timestamp
+                points_subset = points_df[["timestamp"]].reset_index()
+                pauses_df = pauses_df.sort_values("pause_end")
+
+                matched = pd.merge_asof(
+                    pauses_df,
+                    points_subset,
+                    left_on="pause_end",
+                    right_on="timestamp",
+                    direction="forward",  # Matches to the next available timestamp in points_df
+                )
+
+                # If multiple pauses happened before a single GPS point, group them by index and sum the durations
+                pause_adjustments = matched.groupby("index")["duration"].sum()
+
+                # Subtract the paused time from the identified points
+                points_df.loc[
+                    pause_adjustments.index, "time_diff"
+                ] -= pause_adjustments.values
+
+                # Ensure no time diffs drop below 0 due to precision issues
+                points_df["time_diff"] = points_df["time_diff"].clip(lower=0)
     points_df["dist_diff_meters"] = points_df["distance"].diff().fillna(0)
 
     # 2. Identify "Stopped" time
