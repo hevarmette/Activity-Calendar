@@ -77,20 +77,42 @@ def process_lap_data(df):
 
 
 def process_cycling_laps(df):
-    """Processes lap data with cycling-specific metrics like speed."""
+    """Processes lap data with cycling-specific metrics like speed and HR."""
     if df.empty:
         return pd.DataFrame()
 
-    df["Distance (miles)"] = round(df["Distance"] / ss.meters_to_miles, 2)
+    # --- Distance ---
+    df["Distance (miles)"] = round(df["total_distance"] / ss.meters_to_miles, 2)
 
-    # Calculate Average Speed in MPH for cycling
-    non_zero_time = df["Time"] > 0
-    df["Avg Speed (mph)"] = None
-    df.loc[non_zero_time, "Avg Speed (mph)"] = round(
-        df["Distance (miles)"] / (df["Time"] / 3600), 1
+    # --- Time ---
+    df["Time (formatted)"] = df["total_timer_time"].apply(
+        lambda s: str(timedelta(seconds=int(s))) if pd.notna(s) else None
     )
 
-    df["Time (formatted)"] = df["Time"].apply(lambda s: str(timedelta(seconds=int(s))))
+    # --- Average Speed in MPH ---
+    non_zero_time = df["total_timer_time"] > 0
+    df["Avg Speed (mph)"] = None
+    df.loc[non_zero_time, "Avg Speed (mph)"] = round(
+        df.loc[non_zero_time, "Distance (miles)"]
+        / (df.loc[non_zero_time, "total_timer_time"] / 3600),
+        1,
+    )
+
+    # --- Heart Rate ---
+    if "avg_heart_rate" in df.columns:
+        df["Avg Heart Rate"] = df["avg_heart_rate"]
+    if "max_heart_rate" in df.columns:
+        df["Max Heart Rate"] = df["max_heart_rate"]
+
+    # --- Elevation ---
+    if "total_ascent" in df.columns:
+        df["Total Ascent"] = df["total_ascent"]
+    if "total_descent" in df.columns:
+        df["Total Descent"] = df["total_descent"]
+
+    # --- Lap number and intensity ---
+    df["Lap"] = df["number"]
+    df["Intensity"] = df["intensity"] if "intensity" in df.columns else None
 
     # Define columns relevant to cycling
     display_cols = [
@@ -100,15 +122,13 @@ def process_cycling_laps(df):
         "Avg Speed (mph)",
         "Avg Heart Rate",
         "Max Heart Rate",
-        "Avg Power",
-        "Avg Cadence",
         "Total Ascent",
         "Total Descent",
         "Intensity",
     ]
 
-    # Return a DataFrame with only the relevant columns, plus the ID for updates
-    df_display = df[["Lap Id"] + [col for col in display_cols if col in df.columns]]
+    df_display = df[["lap_id"] + [col for col in display_cols if col in df.columns]]
+    df_display = df_display.rename(columns={"lap_id": "Lap Id"})
     return df_display
 
 
@@ -183,6 +203,7 @@ def create_auto_laps(points_df, events_df=None, auto_lap_dist=1):
 
                 # Ensure no time diffs drop below 0 due to precision issues
                 points_df["time_diff"] = points_df["time_diff"].clip(lower=0)
+
     points_df["dist_diff_meters"] = points_df["distance"].diff().fillna(0)
 
     # 2. Identify "Stopped" time
@@ -260,21 +281,26 @@ def create_auto_laps(points_df, events_df=None, auto_lap_dist=1):
     )
 
     agg_dict = {}
-    if ss.hr and points_df["heart_rate"].notna().all():
+    if ss.hr and points_df["heart_rate"].notna().any():
         agg_dict["heart_rate"] = ["mean", "max"]
-    if ss.cadence and points_df["total_cadence"].notna().all():
+    if ss.cadence and points_df["total_cadence"].notna().any():
         agg_dict["total_cadence"] = ["mean", "max"]
 
+    # Speed in m/s — always aggregate for cycling auto laps
+    if (
+        "enhanced_speed" in points_df.columns
+        and points_df["enhanced_speed"].notna().any()
+    ):
+        agg_dict["enhanced_speed"] = ["mean", "max"]
+
     if agg_dict:
-        # Group raw points by the new exact lap boundaries
         laps_grouped = points_df.groupby("exact_lap_no", observed=True).agg(agg_dict)
-        laps_grouped.index = laps_grouped.index.astype(int)  # align indices
+        laps_grouped.index = laps_grouped.index.astype(int)
 
         if "heart_rate" in agg_dict:
             # Force numeric, turning any weird values or empty bins into safe NaNs
             hr_mean = pd.to_numeric(laps_grouped["heart_rate"]["mean"], errors="coerce")
             hr_max = pd.to_numeric(laps_grouped["heart_rate"]["max"], errors="coerce")
-
             laps_df["Avg HR"] = hr_mean.round(0).values
             laps_df["Max HR"] = hr_max.values
 
@@ -286,19 +312,34 @@ def create_auto_laps(points_df, events_df=None, auto_lap_dist=1):
             cad_max = pd.to_numeric(
                 laps_grouped["total_cadence"]["max"], errors="coerce"
             )
+            laps_df["Avg Cadence"] = cad_mean.round(0).values
+            laps_df["Max Cadence"] = cad_max.values
 
-            laps_df["Avg Cadence"] = (cad_mean * 2).round(0).values
-            laps_df["Max Cadence"] = (cad_max * 2).values
+        if "enhanced_speed" in agg_dict:
+            spd_mean = pd.to_numeric(
+                laps_grouped["enhanced_speed"]["mean"], errors="coerce"
+            )
+            spd_max = pd.to_numeric(
+                laps_grouped["enhanced_speed"]["max"], errors="coerce"
+            )
+            # Convert m/s -> mph
+            laps_df["Avg Speed (mph)"] = (spd_mean * 2.23694).round(1).values
+            laps_df["Max Speed (mph)"] = (spd_max * 2.23694).round(1).values
+
     # ---------------------------------------------------------
     # FORMATTING
     # ---------------------------------------------------------
     # Round ascent/descent for cleaner display
     laps_df["Total Ascent (ft)"] = laps_df["Total Ascent (ft)"].round(0)
     laps_df["Total Descent (ft)"] = laps_df["Total Descent (ft)"].round(0)
-
     laps_df["Time"] = laps_df["seconds_raw"].apply(convert_seconds_to_hms)
 
-    # Universal Pace Calculation (Handles all laps mathematically)
+    return laps_df, target_dists
+
+
+def build_running_auto_laps(laps_df):
+    """Format auto laps dataframe for running display (pace-based)."""
+    laps_df = laps_df.copy()
     laps_df["Pace (min/mile) unformatted"] = (laps_df["seconds_raw"] / 60) / laps_df[
         "Distance (miles)"
     ]
@@ -314,7 +355,27 @@ def create_auto_laps(points_df, events_df=None, auto_lap_dist=1):
         "Total Ascent (ft)",
         "Total Descent (ft)",
     ]
+    if "Avg HR" in laps_df.columns:
+        cols_to_display += ["Avg HR", "Max HR"]
+    if "Avg Cadence" in laps_df.columns:
+        cols_to_display += ["Avg Cadence", "Max Cadence"]
 
+    return laps_df[cols_to_display]
+
+
+def build_cycling_auto_laps(laps_df):
+    """Format auto laps dataframe for cycling display (speed-based)."""
+    laps_df = laps_df.copy()
+
+    cols_to_display = [
+        "Lap",
+        "Time",
+        "Distance (miles)",
+        "Total Ascent (ft)",
+        "Total Descent (ft)",
+    ]
+    if "Avg Speed (mph)" in laps_df.columns:
+        cols_to_display += ["Avg Speed (mph)", "Max Speed (mph)"]
     if "Avg HR" in laps_df.columns:
         cols_to_display += ["Avg HR", "Max HR"]
     if "Avg Cadence" in laps_df.columns:

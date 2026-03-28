@@ -9,7 +9,6 @@ from calendar_test_8 import (
 )
 from streamlit_folium import st_folium
 from db import (
-    fetch_activity_events,
     get_connection,
     fetch_lap_data,
     get_lap_update_query,
@@ -23,12 +22,18 @@ from utils import (
     init_session_state,
 )
 from plotting import create_plot
-from lap_processing import process_cycling_laps, process_lap_data, create_auto_laps
+from lap_processing import (
+    process_cycling_laps,
+    process_lap_data,
+    create_auto_laps,
+    build_running_auto_laps,
+    build_cycling_auto_laps,
+)
 
 init_session_state()
+
 # Keys = Database Column Names
 # Values = UI Display Names
-# This is used to map database column names with display column names
 LAP_COLUMN_MAPPING = {
     "lap_id": "Lap Id",
     "activity_id": "Activity Id",
@@ -57,14 +62,12 @@ UI_TO_DB_MAP = {v: k for k, v in LAP_COLUMN_MAPPING.items()}
 # --- PAGE LAYOUT ---
 st.set_page_config(page_title="Activity Details", layout="wide")
 
-# Check if an activity has been selected
 if "selected_activity_id" not in ss:
     st.warning("Please select an activity from the calendar page first.")
     st.page_link("calendar test 8.py", label="Back to Calendar", icon="🗓️")
 else:
     activity_id = ss.selected_activity_id
     sport = ss.selected_activity_sport
-    # conn = init_connection()
     conn = get_connection(local=True)
     if "activities_df" not in ss:
         ss.activities_df = retrieve_monthly_data(conn)
@@ -72,7 +75,6 @@ else:
     st.title(f"Lap Data for Activity ID: {activity_id}")
 
     if ss.activity_details:
-        # Getting activity details
         distance_m = ss.activity_details[0]
         duration_s = ss.activity_details[1]
         avg_power = ss.activity_details[2]
@@ -81,16 +83,15 @@ else:
         effort = ss.activity_details[5]
         local_timestamp = ss.activity_details[6]
 
+        st.markdown(f"_{local_timestamp.strftime('%B %d, %Y @ %I:%M %p')}_")
         # day of activity
         # TODO: It looks like the old watch? stored local timestamp at the end of the activity but new watch is beginning of activity. Activities from form are from the start of the activity
-        st.markdown(f"_{local_timestamp.strftime("%B %d, %Y @ %I:%M %p")}_")
     else:
         st.warning(f"No activity details for activity {activity_id}")
 
     title_col, category_col, nav_col = st.columns(
         [0.7, 0.25, 0.05], vertical_alignment="bottom"
     )
-    # Title
     with title_col:
         title = ss.activity_details[7]
         if title is None:
@@ -171,14 +172,12 @@ else:
             else:
                 col3.metric("Pace", f"{pace_min}:{pace_sec:02d} /mi")
 
-    # --- Map ---
     if "points_df" in ss and not ss.points_df.empty:
         with map_col:
             activity_map = create_activity_map(ss.points_df, fullscreen=True)
             st_folium(activity_map, width="stretch")
 
     with description_col:
-        # activity description
         if ss.activity_details and ss.activity_details[3]:
             description = ss.activity_details[3]
         else:
@@ -192,24 +191,27 @@ else:
             key=f"desc_input_{activity_id}",
         )
 
-    # Performance Graphs Section ---
+    # -------------------------------------------------------------------------
+    # PERFORMANCE GRAPHS
+    # -------------------------------------------------------------------------
     st.header("📈 Performance Graphs")
-    # move this above the map and make the map use point df. check if in session state first though
     point_df = ss.points_df
 
-    if point_df is not None:
+    if point_df is not None and not point_df.empty:
+
+        # --- Derive speed columns for both sports ---
         if (
             "enhanced_speed" in point_df.columns
             and point_df["enhanced_speed"].notnull().any()
         ):
-            # Conversion: m/s = meters/(1/60min) = meter to mile constant in ss * (1/60min) = constant
-            # We divide this constant by the each points specific speed in m/s to get min/mile for each point
-            speed_mps = point_df["enhanced_speed"].replace(
-                0, pd.NA
-            )  # Avoid division by zero
-            point_df["pace_min_per_mile"] = ss.meters_to_miles / 60 / speed_mps
+            speed_mps = point_df["enhanced_speed"].replace(0, pd.NA)
+            if sport == "cycling":
+                # mph for cycling
+                point_df["speed_mph"] = speed_mps * 2.23694
+            else:
+                # pace (min/mile) for running
+                point_df["pace_min_per_mile"] = ss.meters_to_miles / 60 / speed_mps
 
-        # Create the toggle for the x-axis
         x_axis_choice = st.radio(
             "Plot against:",
             ("Distance", "Time"),
@@ -220,134 +222,206 @@ else:
         if x_axis_choice == "Distance":
             if "distance" in point_df.columns:
                 point_df = point_df.copy()
-                point_df["distance_miles"] = (
-                    point_df["distance"] * 1 / ss.meters_to_miles
-                )
+                point_df["distance_miles"] = point_df["distance"] / ss.meters_to_miles
                 x_col, x_label = "distance_miles", "Distance (miles)"
             else:
                 x_col, x_label = None, None
         else:
-            x_col, x_label = "elapsed_time", "Time (minutes)"
+            x_col, x_label = "elapsed_time", "Time"
 
-        # Check if the chosen x-axis data exists
         if not x_col or x_col not in point_df.columns:
             st.warning(f"Data for '{x_label}' is not available.")
         else:
-            pace_fig = create_plot(
-                df=point_df,
-                x_col=x_col,
-                y_col="pace_min_per_mile",
-                x_label=x_label,
-                y_label="Pace (min/mile)",
-                title="Pace over " + x_axis_choice,
-                color="blue",
-                invert_y_axis=True,
-            )
+            # -----------------------------------------------------------------
+            # CYCLING GRAPHS: Speed, HR, Altitude, Cadence (RPM)
+            # -----------------------------------------------------------------
+            if sport == "cycling":
 
-            if pace_fig:
-                pace_series = point_df["pace_min_per_mile"].dropna()
-
-                if not pace_series.empty:
-                    # --- Dynamic bounds ---
-                    if updated_category == "training":
-                        p_pace = min(pace_series.quantile(0.85), 12)
-                    else:
-                        p_pace = pace_series.quantile(0.95) + 3
-                    fastest_pace = pace_series.min()
-
-                    # Top bound logic
-                    if fastest_pace >= 5:
-                        top_bound = 5
-                    else:
-                        top_bound = fastest_pace
-
-                    if p_pace > 11:
-                        bottom_bound = 11
-                    else:
-                        bottom_bound = p_pace
-
-                    # --- Average pace ---
-                    avg_pace = pace_series.mean()
-                    avg_min = int(avg_pace)
-                    avg_sec = int(round((avg_pace - avg_min) * 60))
-
-                    # --- Y-axis formatting ---
-                    max_tick = int(bottom_bound) + 1
-                    tick_vals = list(range(int(top_bound), max_tick + 1))
-                    tick_text = [f"{m:02d}:00" for m in tick_vals]
-
-                    pace_fig.update_yaxes(
-                        range=[bottom_bound, top_bound],
-                        autorange=False,
-                        tickmode="array",
-                        tickvals=tick_vals,
-                        ticktext=tick_text,
-                        title="Pace (mm:ss / mile)",
+                # Speed
+                if (
+                    "speed_mph" in point_df.columns
+                    and point_df["speed_mph"].notnull().any()
+                ):
+                    speed_fig = create_plot(
+                        df=point_df,
+                        x_col=x_col,
+                        y_col="speed_mph",
+                        x_label=x_label,
+                        y_label="Speed (mph)",
+                        title="Speed over " + x_axis_choice,
+                        color="blue",
                     )
-
-                    # --- Hover formatting ---
-                    pace_fig.update_traces(
-                        hovertemplate=(
-                            "Distance: %{x:.2f} mi<br>"
-                            "Pace: %{y:.2f} min/mi<br>"
-                            "<extra></extra>"
+                    if speed_fig:
+                        speed_series = point_df["speed_mph"].dropna()
+                        avg_spd = speed_series.mean()
+                        speed_fig.update_traces(
+                            hovertemplate=(
+                                "Distance: %{x:.2f} mi<br>"
+                                "Speed: %{y:.1f} mph<br>"
+                                "<extra></extra>"
+                            )
                         )
-                    )
+                        speed_fig.add_hline(
+                            y=avg_spd,
+                            line_dash="dash",
+                            line_color="gray",
+                            annotation_text=f"Avg: {avg_spd:.1f} mph",
+                            annotation_position="top right",
+                        )
+                        st.plotly_chart(speed_fig, width="stretch")
 
-                    # --- Average pace line ---
-                    pace_fig.add_hline(
-                        y=avg_pace,
-                        line_dash="dash",
-                        line_color="gray",
-                        annotation_text=f"Avg: {avg_min:02d}:{avg_sec:02d} /mi",
-                        annotation_position="top right",
-                    )
-
-                st.plotly_chart(pace_fig, width="stretch")
-
-            hr_fig = create_plot(
-                df=point_df,
-                x_col=x_col,
-                y_col="heart_rate",
-                x_label=x_label,
-                y_label="Heart Rate (bpm)",
-                title="Heart Rate over " + x_axis_choice,
-                color="red",
-            )
-            if hr_fig:
-                st.plotly_chart(hr_fig, width="stretch")
-
-            alt_fig = create_plot(
-                df=point_df,
-                x_col=x_col,
-                y_col="corrected_altitude",
-                x_label=x_label,
-                y_label="Altitude (ft)",
-                title="Altitude over " + x_axis_choice,
-                color="green",
-            )
-            if alt_fig:
-                st.plotly_chart(alt_fig, width="stretch")
-
-            if "cadence" in point_df.columns:
-                point_df = point_df.copy()
-                point_df["cadence_spm"] = point_df["cadence"] * 2
-
-                cad_fig = create_plot(
+                # Heart Rate
+                hr_fig = create_plot(
                     df=point_df,
                     x_col=x_col,
-                    y_col="cadence_spm",
+                    y_col="heart_rate",
                     x_label=x_label,
-                    y_label="Cadence (spm)",
-                    title="Cadence over " + x_axis_choice,
-                    color="purple",
-                    is_scatter=True,
+                    y_label="Heart Rate (bpm)",
+                    title="Heart Rate over " + x_axis_choice,
+                    color="red",
                 )
-                if cad_fig:
-                    st.plotly_chart(cad_fig, width="stretch")
+                if hr_fig:
+                    st.plotly_chart(hr_fig, width="stretch")
+
+                # Altitude
+                alt_fig = create_plot(
+                    df=point_df,
+                    x_col=x_col,
+                    y_col="corrected_altitude",
+                    x_label=x_label,
+                    y_label="Altitude (ft)",
+                    title="Altitude over " + x_axis_choice,
+                    color="green",
+                )
+                if alt_fig:
+                    st.plotly_chart(alt_fig, width="stretch")
+
+                # Cadence (RPM) — raw cadence for cycling, no doubling
+                if (
+                    "cadence" in point_df.columns
+                    and point_df["cadence"].notnull().any()
+                ):
+                    cad_fig = create_plot(
+                        df=point_df,
+                        x_col=x_col,
+                        y_col="cadence",
+                        x_label=x_label,
+                        y_label="Cadence (rpm)",
+                        title="Cadence over " + x_axis_choice,
+                        color="purple",
+                        is_scatter=True,
+                    )
+                    if cad_fig:
+                        st.plotly_chart(cad_fig, width="stretch")
+
+            # -----------------------------------------------------------------
+            # RUNNING GRAPHS: Pace, HR, Altitude, Cadence (SPM)
+            # -----------------------------------------------------------------
+            else:
+                pace_fig = create_plot(
+                    df=point_df,
+                    x_col=x_col,
+                    y_col="pace_min_per_mile",
+                    x_label=x_label,
+                    y_label="Pace (min/mile)",
+                    title="Pace over " + x_axis_choice,
+                    color="blue",
+                    invert_y_axis=True,
+                )
+
+                if pace_fig:
+                    pace_series = point_df["pace_min_per_mile"].dropna()
+
+                    if not pace_series.empty:
+                        if updated_category == "training":
+                            p_pace = min(pace_series.quantile(0.85), 12)
+                        else:
+                            p_pace = pace_series.quantile(0.95) + 3
+                        fastest_pace = pace_series.min()
+
+                        top_bound = 5 if fastest_pace >= 5 else fastest_pace
+                        bottom_bound = 11 if p_pace > 11 else p_pace
+
+                        avg_pace = pace_series.mean()
+                        avg_min = int(avg_pace)
+                        avg_sec = int(round((avg_pace - avg_min) * 60))
+
+                        max_tick = int(bottom_bound) + 1
+                        tick_vals = list(range(int(top_bound), max_tick + 1))
+                        tick_text = [f"{m:02d}:00" for m in tick_vals]
+
+                        pace_fig.update_yaxes(
+                            range=[bottom_bound, top_bound],
+                            autorange=False,
+                            tickmode="array",
+                            tickvals=tick_vals,
+                            ticktext=tick_text,
+                            title="Pace (mm:ss / mile)",
+                        )
+                        pace_fig.update_traces(
+                            hovertemplate=(
+                                "Distance: %{x:.2f} mi<br>"
+                                "Pace: %{y:.2f} min/mi<br>"
+                                "<extra></extra>"
+                            )
+                        )
+                        pace_fig.add_hline(
+                            y=avg_pace,
+                            line_dash="dash",
+                            line_color="gray",
+                            annotation_text=f"Avg: {avg_min:02d}:{avg_sec:02d} /mi",
+                            annotation_position="top right",
+                        )
+
+                    st.plotly_chart(pace_fig, width="stretch")
+
+                hr_fig = create_plot(
+                    df=point_df,
+                    x_col=x_col,
+                    y_col="heart_rate",
+                    x_label=x_label,
+                    y_label="Heart Rate (bpm)",
+                    title="Heart Rate over " + x_axis_choice,
+                    color="red",
+                )
+                if hr_fig:
+                    st.plotly_chart(hr_fig, width="stretch")
+
+                alt_fig = create_plot(
+                    df=point_df,
+                    x_col=x_col,
+                    y_col="corrected_altitude",
+                    x_label=x_label,
+                    y_label="Altitude (ft)",
+                    title="Altitude over " + x_axis_choice,
+                    color="green",
+                )
+                if alt_fig:
+                    st.plotly_chart(alt_fig, width="stretch")
+
+                # Running cadence: raw cadence × 2 = steps per minute
+                if "cadence" in point_df.columns:
+                    point_df = point_df.copy()
+                    point_df["cadence_spm"] = point_df["cadence"] * 2
+
+                    cad_fig = create_plot(
+                        df=point_df,
+                        x_col=x_col,
+                        y_col="cadence_spm",
+                        x_label=x_label,
+                        y_label="Cadence (spm)",
+                        title="Cadence over " + x_axis_choice,
+                        color="purple",
+                        is_scatter=True,
+                    )
+                    if cad_fig:
+                        st.plotly_chart(cad_fig, width="stretch")
     else:
         st.info("No point-by-point data available to generate graphs.")
 
+    # -------------------------------------------------------------------------
+    # LAP TABLE + TABS
+    # -------------------------------------------------------------------------
     st.markdown("You can edit values in the table below.")
 
     raw_laps_df = fetch_lap_data(conn, activity_id)
@@ -367,6 +441,9 @@ else:
 
         st.session_state.processed_laps_df = processed_laps_df.copy()
 
+        # -----------------------------------------------------------------
+        # LAPS TAB
+        # -----------------------------------------------------------------
         with laps_tab:
             st.markdown("You can edit values in the table below.")
 
@@ -386,68 +463,81 @@ else:
             else:
                 filtered_df = st.session_state.processed_laps_df
 
-            column_config = {
-                "Intensity": st.column_config.SelectboxColumn(
-                    "Intensity",
-                    help="Select the intensity type for the lap",
-                    options=intensity_options,
-                    required=False,
-                ),
-                "Activity Id": None,
-                "Lap Id": None,
-                "Avg Vertical Oscillation": None,
-                "Avg Stance Time": None,
-                "Avg Vertical Ratio": None,
-                "Avg Stance Time Balance": None,
-                "Pace (min/mile) unformatted": None,
-                "Distance (miles)": st.column_config.NumberColumn(format="%.2f"),
-                "Avg Heart Rate": st.column_config.NumberColumn(
-                    "Avg Heart Rate", step=1, format="%d"
-                ),
-                "Max Heart Rate": st.column_config.NumberColumn(
-                    "Max Heart Rate", step=1, format="%d"
-                ),
-            }
+            if sport == "cycling":
+                column_config = {
+                    "Intensity": st.column_config.SelectboxColumn(
+                        "Intensity",
+                        options=intensity_options,
+                        required=False,
+                    ),
+                    "Lap Id": None,
+                    "Distance (miles)": st.column_config.NumberColumn(format="%.2f"),
+                    "Avg Speed (mph)": st.column_config.NumberColumn(format="%.1f"),
+                    "Avg Heart Rate": st.column_config.NumberColumn(
+                        step=1, format="%d"
+                    ),
+                    "Max Heart Rate": st.column_config.NumberColumn(
+                        step=1, format="%d"
+                    ),
+                }
+                disabled_cols = ["Lap", "Avg Speed (mph)"]
+            else:
+                column_config = {
+                    "Intensity": st.column_config.SelectboxColumn(
+                        "Intensity",
+                        help="Select the intensity type for the lap",
+                        options=intensity_options,
+                        required=False,
+                    ),
+                    "Activity Id": None,
+                    "Lap Id": None,
+                    "Avg Vertical Oscillation": None,
+                    "Avg Stance Time": None,
+                    "Avg Vertical Ratio": None,
+                    "Avg Stance Time Balance": None,
+                    "Pace (min/mile) unformatted": None,
+                    "Distance (miles)": st.column_config.NumberColumn(format="%.2f"),
+                    "Avg Heart Rate": st.column_config.NumberColumn(
+                        "Avg Heart Rate", step=1, format="%d"
+                    ),
+                    "Max Heart Rate": st.column_config.NumberColumn(
+                        "Max Heart Rate", step=1, format="%d"
+                    ),
+                }
+                disabled_cols = ["Lap", "Pace (min/mile)"]
 
-            # TODO: Recalc pace min/mile on_callback when data is edited
             edited_df = st.data_editor(
                 filtered_df,
                 hide_index=True,
                 column_config=column_config,
-                disabled=["Lap", "Pace (min/mile)"],
+                disabled=disabled_cols,
                 key="lap_editor",
             )
 
             if not edited_df.equals(filtered_df):
                 st.session_state.processed_laps_df.update(edited_df)
 
+        # -----------------------------------------------------------------
+        # ACTIVITY DETAILS TAB
+        # -----------------------------------------------------------------
         with details_tab:
             st.subheader("Activity Details")
 
             c1, c2, c3, c4 = st.columns(4)
 
-            # --------------------
-            # Column 1
-            # --------------------
             with c1:
                 if miles is not None:
                     st.markdown("**Distance**")
                     st.write(f"{miles:.2f} mi")
-
-                if miles is not None:
                     st.markdown("---")
-                    st.markdown("**Avg Pace / Speed**")
-                    avg_speed = None
-                    if sport == "cycling" and mph is not None:
-                        avg_speed = f"{mph:.2f} mph"
-                    elif pace_min is not None and pace_sec is not None:
-                        avg_speed = f"{pace_min}:{pace_sec:02d} /mi"
-                    if avg_speed is not None:
-                        st.write(avg_speed)
 
-            # --------------------
-            # Column 2
-            # --------------------
+                if sport == "cycling":
+                    st.markdown("**Avg Speed**")
+                    st.write(f"{mph:.2f} mph")
+                else:
+                    st.markdown("**Avg Pace**")
+                    st.write(f"{pace_min}:{pace_sec:02d} /mi")
+
             with c2:
                 hr_valid = (
                     "hr" in ss
@@ -459,7 +549,6 @@ else:
                 if hr_valid:
                     avg_hr = point_df["heart_rate"].mean()
                     max_hr = point_df["heart_rate"].max()
-
                     st.markdown("**Heart Rate**")
                     st.write(f"Avg HR: {avg_hr:.0f} bpm")
                     st.write(f"Max HR: {max_hr:.0f} bpm")
@@ -470,9 +559,6 @@ else:
                     st.markdown("**Duration**")
                     st.write(str(duration_td))
 
-            # --------------------
-            # Column 3
-            # --------------------
             with c3:
                 elevation_valid = (
                     "coordinates" in ss
@@ -485,121 +571,187 @@ else:
                     altitude_change = point_df["corrected_altitude"].diff()
                     total_ascent = altitude_change.clip(lower=0).sum()
                     total_descent = altitude_change.clip(upper=0).abs().sum()
-
                     st.markdown("**Elevation**")
                     st.write(f"Ascent: {total_ascent:.0f} feet")
                     st.write(f"Descent: {total_descent:.0f} feet")
 
-                pace_cols_valid = (
-                    "Pace (min/mile) unformatted" in processed_laps_df
-                    and not processed_laps_df["Pace (min/mile) unformatted"]
-                    .isna()
-                    .all()
-                )
-
-                if pace_cols_valid:
-                    if elevation_valid:
-                        st.markdown("---")
-
-                    fastest_idx = processed_laps_df[
-                        "Pace (min/mile) unformatted"
-                    ].idxmin()
-
-                    # Do to rounding differences in avg speed and lap speed, we will use avg speed if there is only one lap
-                    # TODO: Handle for cycling and other sports
-                    if len(processed_laps_df) > 1:
-                        fastest_lap = processed_laps_df.loc[fastest_idx, "Lap"]
-                        fastest_lap_pace = processed_laps_df.loc[
-                            fastest_idx, "Pace (min/mile)"
+                if sport == "cycling":
+                    # Best lap by speed
+                    if "Avg Speed (mph)" in processed_laps_df.columns:
+                        if elevation_valid:
+                            st.markdown("---")
+                        fastest_idx = processed_laps_df["Avg Speed (mph)"].idxmax()
+                        fastest_lap_num = processed_laps_df.loc[fastest_idx, "Lap"]
+                        fastest_lap_spd = processed_laps_df.loc[
+                            fastest_idx, "Avg Speed (mph)"
                         ]
-                        fastest_lap_pace = f"{fastest_lap_pace} /mi"
-                    else:
-                        fastest_lap = 1
-                        fastest_lap_pace = avg_speed
+                        st.markdown("**Best Speed**")
+                        st.write(
+                            f"Fastest lap: lap {fastest_lap_num} at {fastest_lap_spd:.1f} mph"
+                        )
+                else:
+                    # Best lap by pace
+                    pace_cols_valid = (
+                        "Pace (min/mile) unformatted" in processed_laps_df
+                        and not processed_laps_df["Pace (min/mile) unformatted"]
+                        .isna()
+                        .all()
+                    )
+                    if pace_cols_valid:
+                        if elevation_valid:
+                            st.markdown("---")
+                        fastest_idx = processed_laps_df[
+                            "Pace (min/mile) unformatted"
+                        ].idxmin()
 
-                    st.markdown("**Best Pace / Speed**")
-                    st.write(
-                        f"Fastest lap: lap {fastest_lap} " f"at {fastest_lap_pace}"
+                        # Do to rounding differences in avg speed and lap speed, we will use avg speed if there is only one lap
+                        # TODO: Handle for cycling and other sports
+                        if len(processed_laps_df) > 1:
+                            fastest_lap = processed_laps_df.loc[fastest_idx, "Lap"]
+                            fastest_lap_pace = processed_laps_df.loc[
+                                fastest_idx, "Pace (min/mile)"
+                            ]
+                            fastest_lap_pace = f"{fastest_lap_pace} /mi"
+                        else:
+                            fastest_lap = 1
+                            fastest_lap_pace = f"{pace_min}:{pace_sec:02d} /mi"
+                        st.markdown("**Best Pace**")
+                        st.write(
+                            f"Fastest lap: lap {fastest_lap} at {fastest_lap_pace}"
+                        )
+
+            with c4:
+                if sport == "cycling":
+                    # Cadence in RPM (no doubling)
+                    cadence_valid = (
+                        "cadence" in point_df.columns
+                        and not point_df["cadence"].isna().all()
+                    )
+                    if cadence_valid:
+                        avg_cadence_rpm = point_df["cadence"].mean()
+                        max_cadence_rpm = point_df["cadence"].max()
+                        st.markdown("**Cadence**")
+                        st.write(f"Avg cadence: {avg_cadence_rpm:.1f} rpm")
+                        st.write(f"Max cadence: {int(max_cadence_rpm)} rpm")
+
+                    # Max speed from record data
+                    if (
+                        "enhanced_speed" in point_df.columns
+                        and point_df["enhanced_speed"].notnull().any()
+                    ):
+                        max_speed_mph = point_df["enhanced_speed"].max() * 2.23694
+                        if cadence_valid:
+                            st.markdown("---")
+                        st.markdown("**Max Speed**")
+                        st.write(f"{max_speed_mph:.1f} mph")
+
+                else:
+                    # Running dynamics
+                    cadence_valid = (
+                        "cadence" in ss
+                        and ss.cadence
+                        and "total_cadence" in point_df
+                        and not point_df["total_cadence"].isna().all()
                     )
 
-            # --------------------
-            # Column 4
-            # --------------------
-            with c4:
-                cadence_valid = (
-                    "cadence" in ss
-                    and ss.cadence
-                    and "total_cadence" in point_df
-                    and not point_df["total_cadence"].isna().all()
-                )
+                    if cadence_valid:
+                        avg_cadence = point_df["total_cadence"].mean() * 2
+                        max_cadence = point_df["total_cadence"].max() * 2
 
-                if cadence_valid:
-                    avg_cadence = point_df["total_cadence"].mean() * 2
-                    max_cadence = point_df["total_cadence"].max() * 2
+                        if duration_s and distance_m:
+                            total_steps = avg_cadence * duration_s / 60
+                            avg_stride_length_m = distance_m / total_steps
+                        else:
+                            avg_stride_length_m = None
 
-                    if duration_s and distance_m:
-                        total_steps = avg_cadence * duration_s / 60
-                        avg_stride_length_m = distance_m / total_steps
-                    else:
-                        avg_stride_length_m = None
+                        st.markdown("**Running Dynamics**")
+                        st.write(f"Avg cadence: {avg_cadence:.1f} spm")
+                        st.write(f"Max cadence: {int(max_cadence)} spm")
+                        if avg_stride_length_m is not None:
+                            st.write(f"Stride length: {avg_stride_length_m:.2f} m")
 
-                    st.markdown("**Running Dynamics**")
-                    st.write(f"Avg cadence: {avg_cadence:.1f} spm")
-                    st.write(f"Max cadence: {int(max_cadence)} spm")
+                    distance_col = "Distance (miles)"
+                    avg_vertical_oscillation = weighted_average_if_present(
+                        processed_laps_df, "Avg Vertical Oscillation", distance_col
+                    )
+                    avg_stance_time = weighted_average_if_present(
+                        processed_laps_df, "Avg Stance Time", distance_col
+                    )
+                    avg_vertical_ratio = weighted_average_if_present(
+                        processed_laps_df, "Avg Vertical Ratio", distance_col
+                    )
+                    avg_stance_time_balance = weighted_average_if_present(
+                        processed_laps_df, "Avg Stance Time Balance", distance_col
+                    )
 
-                    if avg_stride_length_m is not None:
-                        st.write(f"Stride length: {avg_stride_length_m:.2f} m")
+                    dynamics_present = any(
+                        v is not None
+                        for v in [
+                            avg_vertical_ratio,
+                            avg_stance_time_balance,
+                            avg_stance_time,
+                            avg_vertical_oscillation,
+                        ]
+                    )
 
-                distance_col = "Distance (miles)"
+                    if dynamics_present:
+                        if avg_vertical_ratio is not None:
+                            st.write(f"Vertical ratio: {avg_vertical_ratio:.1f}%")
+                        if avg_stance_time_balance is not None:
+                            st.write(
+                                f"Stance time balance: {avg_stance_time_balance:.2f}"
+                            )
+                        if avg_stance_time is not None:
+                            st.write(
+                                f"Average ground contact time: {avg_stance_time:.0f} ms"
+                            )
+                        if avg_vertical_oscillation is not None:
+                            st.write(
+                                f"Average vertical oscillation: {avg_vertical_oscillation / 10:.1f} cm"
+                            )
 
-                avg_vertical_oscillation = weighted_average_if_present(
-                    processed_laps_df, "Avg Vertical Oscillation", distance_col
-                )
-                avg_stance_time = weighted_average_if_present(
-                    processed_laps_df, "Avg Stance Time", distance_col
-                )
-                avg_vertical_ratio = weighted_average_if_present(
-                    processed_laps_df, "Avg Vertical Ratio", distance_col
-                )
-                avg_stance_time_balance = weighted_average_if_present(
-                    processed_laps_df, "Avg Stance Time Balance", distance_col
-                )
-
-                dynamics_present = any(
-                    v is not None
-                    for v in [
-                        avg_vertical_ratio,
-                        avg_stance_time_balance,
-                        avg_stance_time,
-                        avg_vertical_oscillation,
-                    ]
-                )
-
-                if dynamics_present:
-                    if avg_vertical_ratio is not None:
-                        st.write(f"Vertical ratio: {avg_vertical_ratio:.1f}%")
-
-                    if avg_stance_time_balance is not None:
-                        st.write(f"Stance time balance: {avg_stance_time_balance:.2f}")
-
-                    if avg_stance_time is not None:
-                        st.write(
-                            f"Average ground contact time: {avg_stance_time:.0f} ms"
-                        )
-
-                    if avg_vertical_oscillation is not None:
-                        st.write(
-                            f"Average vertical oscillation: {avg_vertical_oscillation / 10:.1f} cm"
-                        )
-
+        # -----------------------------------------------------------------
+        # AUTO LAPS TAB
+        # -----------------------------------------------------------------
         with auto_laps_tab:
-            auto_laps_config = {
-                "Distance (miles)": st.column_config.NumberColumn(format="%.2f")
-            }
-            event_df = fetch_activity_events(conn, activity_id)
-            auto_laps = create_auto_laps(ss.points_df, event_df)
-            st.dataframe(auto_laps, column_config=auto_laps_config, hide_index=True)
+            if sport == "cycling":
+                auto_lap_dist = 5
+            else:
+                auto_lap_dist = 1
 
+            auto_laps_result = create_auto_laps(
+                ss.points_df, auto_lap_dist=auto_lap_dist
+            )
+
+            # create_auto_laps now returns a tuple (laps_df, target_dists)
+            if isinstance(auto_laps_result, tuple):
+                raw_auto_laps_df, target_dists = auto_laps_result
+
+                if sport == "cycling":
+                    auto_laps_config = {
+                        "Distance (miles)": st.column_config.NumberColumn(
+                            format="%.2f"
+                        ),
+                        "Avg Speed (mph)": st.column_config.NumberColumn(format="%.1f"),
+                        "Max Speed (mph)": st.column_config.NumberColumn(format="%.1f"),
+                    }
+                    auto_laps = build_cycling_auto_laps(raw_auto_laps_df)
+                else:
+                    auto_laps_config = {
+                        "Distance (miles)": st.column_config.NumberColumn(
+                            format="%.2f"
+                        ),
+                    }
+                    auto_laps = build_running_auto_laps(raw_auto_laps_df)
+
+                st.dataframe(auto_laps, column_config=auto_laps_config, hide_index=True)
+            else:
+                # Fallback: empty or unexpected return
+                st.info("No auto lap data available.")
+
+        # -------------------------------------------------------------------------
+        # FEEL + EFFORT
+        # -------------------------------------------------------------------------
         feel_col, effort_col = st.columns([0.3, 0.7])
 
         with feel_col:
@@ -631,9 +783,12 @@ else:
                 key=f"effort_slider_{activity_id}",
             )
 
+    # -------------------------------------------------------------------------
+    # SAVE BUTTON
+    # -------------------------------------------------------------------------
     if st.button("Save", shortcut="s"):
         updates = []
-        # Check for edits by comparing the new state to the previous one
+
         if "lap_editor" in ss and ss.lap_editor.get("edited_rows"):
             # st.info("Changes detected. Saving to database...")
 
@@ -658,7 +813,6 @@ else:
                             new_value = new_value * ss.meters_to_miles
                             # Swap the column name
                             db_col_name = "total_distance"
-
                         elif db_col_name == "time_formatted":
                             seconds_value = parse_hms_to_seconds(new_value)
 
@@ -680,13 +834,10 @@ else:
 
                         # Optional: Toast per successful mapping
                         # st.toast(f"Staged update for {ui_col_name}")
-
                     else:
-                        # Handle calculated columns (like 'Pace' or 'Distance (miles)')
                         st.warning(
                             f"Skipping '{ui_col_name}': Cannot update calculated fields directly."
                         )
-            # Clear cache to force a re-fetch of data
             fetch_lap_data.clear()
 
         set_clauses = []
@@ -739,9 +890,7 @@ else:
 
         if updates:
             st.subheader("SQL to run:")
-
             for query, params in updates:
-                # We need to wrap strings in quotes and handle None/Numbers
                 display_params = []
                 for p in params:
                     if isinstance(p, str):
@@ -767,15 +916,13 @@ else:
                     st.text(f"Params: {params}")
                 with conn.transaction():
                     conn.execute(readable_sql)
-                st.toast("Updates have been saved!")
-                # deleting the info to requery from the database. because this is quicker to code
-                # than updating the existing variables
-                st.cache_data.clear()
-                if "activities_df" in ss:
-                    del ss["activities_df"]
-                # if "activity_details" in ss:
-                #     del ss["activity_details"]
+            st.toast("Updates have been saved!")
+            # deleting the info to requery from the database. because this is quicker to code
+            # than updating the existing variables
+            st.cache_data.clear()
+            if "activities_df" in ss:
+                del ss["activities_df"]
+            # if "activity_details" in ss:
+            #     del ss["activity_details"]
         else:
             st.info("No changes detected.")
-            # Rerun the script to show the latest data from the DB
-            # st.rerun()
