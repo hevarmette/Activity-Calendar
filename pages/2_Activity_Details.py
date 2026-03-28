@@ -3,7 +3,6 @@ import pandas as pd
 from streamlit import session_state as ss
 from datetime import timedelta
 from calendar_test_8 import (
-    create_activity_map,
     fetch_activity_details,
     fetch_activity_points,
 )
@@ -11,6 +10,8 @@ from streamlit_folium import st_folium
 from db import (
     get_connection,
     fetch_lap_data,
+    fetch_lap_data_for_session,
+    fetch_sessions_for_activity,
     get_lap_update_query,
     retrieve_monthly_data,
 )
@@ -21,7 +22,7 @@ from utils import (
     format_effort,
     init_session_state,
 )
-from plotting import create_plot
+from plotting import create_activity_map, create_plot
 from lap_processing import (
     process_cycling_laps,
     process_lap_data,
@@ -34,6 +35,7 @@ init_session_state()
 
 # Keys = Database Column Names
 # Values = UI Display Names
+# This is used to map database column names with display column names
 LAP_COLUMN_MAPPING = {
     "lap_id": "Lap Id",
     "activity_id": "Activity Id",
@@ -59,147 +61,111 @@ LAP_COLUMN_MAPPING = {
 # This is to convert edited columns to db name
 UI_TO_DB_MAP = {v: k for k, v in LAP_COLUMN_MAPPING.items()}
 
-# --- PAGE LAYOUT ---
-st.set_page_config(page_title="Activity Details", layout="wide")
 
-if "selected_activity_id" not in ss:
-    st.warning("Please select an activity from the calendar page first.")
-    st.page_link("calendar test 8.py", label="Back to Calendar", icon="🗓️")
-else:
-    activity_id = ss.selected_activity_id
-    sport = ss.selected_activity_sport
-    conn = get_connection(local=True)
-    if "activities_df" not in ss:
-        ss.activities_df = retrieve_monthly_data(conn)
+# =============================================================================
+# HELPERS
+# =============================================================================
 
-    st.title(f"Lap Data for Activity ID: {activity_id}")
 
-    if ss.activity_details:
+def _set_ss_flags_for_points(points_df):
+    """
+    Re-evaluate ss.hr, ss.cadence, ss.coordinates for a sub-sliced points_df.
+    This is needed when rendering individual legs of a multisport activity.
+    """
+    if points_df.empty:
+        ss.hr = False
+        ss.cadence = False
+        ss.coordinates = False
+        return
+
+    ss.coordinates = (
+        "latitude" in points_df.columns
+        and "longitude" in points_df.columns
+        and not points_df["latitude"].isna().all()
+    )
+    ss.hr = (
+        "heart_rate" in points_df.columns and not points_df["heart_rate"].isna().all()
+    )
+    ss.cadence = (
+        "cadence" in points_df.columns
+        and "fractional_cadence" in points_df.columns
+        and not points_df["cadence"].isna().all()
+    )
+    if ss.cadence and "total_cadence" not in points_df.columns:
+        points_df["total_cadence"] = points_df["cadence"] + points_df[
+            "fractional_cadence"
+        ].astype(float)
+
+
+def _render_session_content(
+    conn,
+    activity_id,
+    session_row,
+    points_df,
+    updated_category,
+    session_key_suffix,
+    map_col=None,
+):
+    """
+    Renders map, graphs, lap table, auto laps, and stats for one session.
+
+    session_row         — a Series from sessions_df, or None for single-sport
+                          (falls back to ss.activity_details)
+    points_df           — already filtered to this session's time window
+    session_key_suffix  — appended to all widget keys to avoid collisions
+    """
+    sport = (
+        (session_row["sport"] or "").lower()
+        if session_row is not None
+        else ss.selected_activity_sport
+    )
+
+    # ---- derive metrics for this session ------------------------------------
+    if session_row is not None:
+        distance_m = session_row["total_distance"] or 0
+        duration_s = session_row["total_timer_time"] or 0
+        avg_power = session_row.get("avg_power")
+    else:
         distance_m = ss.activity_details[0]
         duration_s = ss.activity_details[1]
         avg_power = ss.activity_details[2]
-        description = ss.activity_details[3] if ss.activity_details[3] else ""
-        feel = ss.activity_details[4]
-        effort = ss.activity_details[5]
-        local_timestamp = ss.activity_details[6]
 
-        st.markdown(f"_{local_timestamp.strftime('%B %d, %Y @ %I:%M %p')}_")
-        # day of activity
-        # TODO: It looks like the old watch? stored local timestamp at the end of the activity but new watch is beginning of activity. Activities from form are from the start of the activity
+    miles = distance_m / ss.meters_to_miles
+    duration_td = timedelta(seconds=int(duration_s))
+    duration_hr = duration_s / 3600
+    pace_sec_per_mile = duration_s / miles if miles > 0 else 0
+    pace_min, pace_sec = divmod(int(pace_sec_per_mile), 60)
+    mph = miles / duration_hr if duration_hr > 0 else 0
+
+    # ---- top summary metrics ------------------------------------------------
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Distance", f"{miles:.2f} mi")
+    col2.metric("Duration", str(duration_td))
+    if sport == "cycling":
+        if avg_power:
+            col3.metric("Power", f"{avg_power} watts")
+        else:
+            col3.metric("Speed", f"{mph:.2f} mph")
     else:
-        st.warning(f"No activity details for activity {activity_id}")
+        col3.metric("Pace", f"{pace_min}:{pace_sec:02d} /mi")
 
-    title_col, category_col, nav_col = st.columns(
-        [0.7, 0.25, 0.05], vertical_alignment="bottom"
-    )
-    with title_col:
-        title = ss.activity_details[7]
-        if title is None:
-            title = ""
-        # with title_col:
-        updated_title = st.text_input(
-            label=" ", value=title, key=f"title_input_{activity_id}"
-        )
-    with category_col:
-        # category
-        category = ss.activity_details[8]
-        if isinstance(category, str):
-            category = category.strip()
-
-        category_options = [
-            "uncategorized",
-            "training",
-            "race",
-            "transportation",
-            "recreational",
-            "touring",
-            "fitness",
-        ]
-
-        if category in category_options:
-            cat_index = category_options.index(category)
+    # ---- map (per-session, no sport colouring needed within a single leg) ---
+    if not points_df.empty and ss.coordinates:
+        activity_map = create_activity_map(points_df, fullscreen=True)
+        if map_col is not None:
+            with map_col:
+                st_folium(
+                    activity_map, width="stretch", key=f"map_{session_key_suffix}"
+                )
         else:
-            cat_index = 0  # Fallback to the first option
+            st_folium(activity_map, width="stretch", key=f"map_{session_key_suffix}")
 
-        updated_category = st.selectbox(
-            "---",
-            options=category_options,
-            index=cat_index,
-            key=f"category_select_{activity_id}",
-        )
-    with nav_col:
-        back_col, forward_col = st.columns(2, gap=None)
-        idx = ss.activities_df.index[ss.activities_df["activity_id"] == activity_id][0]
-        with back_col:
-            if st.button("<", key="prev_activity"):
-                if idx < len(ss.activities_df) - 1:
-                    prev_id = int(ss.activities_df.iloc[idx + 1]["activity_id"])
-                    ss.selected_activity_id = prev_id
-                    ss.activity_details = fetch_activity_details(conn, prev_id)
-                    ss.points_df = fetch_activity_points(conn, prev_id)
-                    st.rerun()
-        with forward_col:
-            if st.button("\>", key="next_activity"):
-                if idx > 0:
-                    next_id = int(ss.activities_df.iloc[idx - 1]["activity_id"])
-                    ss.selected_activity_id = next_id
-                    ss.activity_details = fetch_activity_details(conn, next_id)
-                    ss.points_df = fetch_activity_points(conn, next_id)
-                    st.rerun()
+    # ---- performance graphs -------------------------------------------------
+    st.subheader("📈 Performance Graphs")
 
-    metrics_col, white_space_col = st.columns([0.7, 0.3])
-    # different columns so I can alilgn the values to the top of the columns.
-    # So the map and description can be vertically aligned
-    map_col, description_col = st.columns([0.7, 0.3])
-
-    if "activity_details" in ss:
-        with metrics_col:
-            miles = distance_m * 1 / ss.meters_to_miles
-            duration_td = timedelta(seconds=int(duration_s))
-            duration_hr = duration_s / 3600
-            pace_sec_per_mile = duration_s / miles if miles > 0 else 0
-            pace_min, pace_sec = divmod(int(pace_sec_per_mile), 60)
-            mph = miles / duration_hr if duration_hr > 0 else 0
-
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Distance", f"{miles:.2f} mi")
-            col2.metric("Duration", str(duration_td))
-            if sport == "cycling":
-                if avg_power:
-                    col3.metric("Power", f"{avg_power} watts")
-                else:
-                    col3.metric("Speed", f"{mph:.2f} mph")
-            else:
-                col3.metric("Pace", f"{pace_min}:{pace_sec:02d} /mi")
-
-    if "points_df" in ss and not ss.points_df.empty:
-        with map_col:
-            activity_map = create_activity_map(ss.points_df, fullscreen=True)
-            st_folium(activity_map, width="stretch")
-
-    with description_col:
-        if ss.activity_details and ss.activity_details[3]:
-            description = ss.activity_details[3]
-        else:
-            description = ""
-
-        updated_description = st.text_area(
-            "Description",
-            description,
-            width="stretch",
-            height=200,
-            key=f"desc_input_{activity_id}",
-        )
-
-    # -------------------------------------------------------------------------
-    # PERFORMANCE GRAPHS
-    # -------------------------------------------------------------------------
-    st.header("📈 Performance Graphs")
-    point_df = ss.points_df
+    point_df = points_df.copy() if not points_df.empty else pd.DataFrame()
 
     if point_df is not None and not point_df.empty:
-
-        # --- Derive speed columns for both sports ---
         if (
             "enhanced_speed" in point_df.columns
             and point_df["enhanced_speed"].notnull().any()
@@ -217,6 +183,7 @@ else:
             ("Distance", "Time"),
             horizontal=True,
             label_visibility="collapsed",
+            key=f"x_axis_{session_key_suffix}",
         )
 
         if x_axis_choice == "Distance":
@@ -236,7 +203,6 @@ else:
             # CYCLING GRAPHS: Speed, HR, Altitude, Cadence (RPM)
             # -----------------------------------------------------------------
             if sport == "cycling":
-
                 # Speed
                 if (
                     "speed_mph" in point_df.columns
@@ -252,8 +218,7 @@ else:
                         color="blue",
                     )
                     if speed_fig:
-                        speed_series = point_df["speed_mph"].dropna()
-                        avg_spd = speed_series.mean()
+                        avg_spd = point_df["speed_mph"].dropna().mean()
                         speed_fig.update_traces(
                             hovertemplate=(
                                 "Distance: %{x:.2f} mi<br>"
@@ -419,12 +384,20 @@ else:
     else:
         st.info("No point-by-point data available to generate graphs.")
 
-    # -------------------------------------------------------------------------
-    # LAP TABLE + TABS
-    # -------------------------------------------------------------------------
+    # ---- lap table + sub-tabs -----------------------------------------------
     st.markdown("You can edit values in the table below.")
 
-    raw_laps_df = fetch_lap_data(conn, activity_id)
+    if session_row is not None:
+        # Fetch only the laps belonging to this session
+        raw_laps_df = fetch_lap_data_for_session(
+            conn,
+            activity_id,
+            int(session_row["first_lap_index"]),
+            int(session_row["num_laps"]),
+        )
+    else:
+        raw_laps_df = fetch_lap_data(conn, activity_id)
+
     if sport == "cycling":
         processed_laps_df = process_cycling_laps(raw_laps_df.copy())
     elif sport == "running":
@@ -432,14 +405,18 @@ else:
     else:
         processed_laps_df = pd.DataFrame()
 
+    filtered_df = processed_laps_df  # default; overwritten below by pill filter
+
     if processed_laps_df.empty:
-        st.info("No lap data found for this activity.")
+        st.info("No lap data found for this session.")
     else:
         laps_tab, details_tab, auto_laps_tab = st.tabs(
             ["↩  Laps", "📊 Activity Details", "↻ Auto Laps"]
         )
 
-        st.session_state.processed_laps_df = processed_laps_df.copy()
+        st.session_state[f"processed_laps_df_{session_key_suffix}"] = (
+            processed_laps_df.copy()
+        )
 
         # -----------------------------------------------------------------
         # LAPS TAB
@@ -451,17 +428,26 @@ else:
 
             # st.pills returns the selected string, or None if deselected
             selected_intensity = st.pills(
-                "Filter by Intensity", options=intensity_options, default=None
+                "Filter by Intensity",
+                options=intensity_options,
+                default=None,
+                key=f"intensity_pills_{session_key_suffix}",
             )
 
             # 3. If a pill is selected, filter. If None, show all.
             if selected_intensity:
-                filtered_df = st.session_state.processed_laps_df[
-                    st.session_state.processed_laps_df["Intensity"]
+                filtered_df = st.session_state[
+                    f"processed_laps_df_{session_key_suffix}"
+                ][
+                    st.session_state[f"processed_laps_df_{session_key_suffix}"][
+                        "Intensity"
+                    ]
                     == selected_intensity
                 ]
             else:
-                filtered_df = st.session_state.processed_laps_df
+                filtered_df = st.session_state[
+                    f"processed_laps_df_{session_key_suffix}"
+                ]
 
             if sport == "cycling":
                 column_config = {
@@ -506,16 +492,19 @@ else:
                 }
                 disabled_cols = ["Lap", "Pace (min/mile)"]
 
+            # TODO: Recalc pace min/mile on_callback when data is edited
             edited_df = st.data_editor(
                 filtered_df,
                 hide_index=True,
                 column_config=column_config,
                 disabled=disabled_cols,
-                key="lap_editor",
+                key=f"lap_editor_{session_key_suffix}",
             )
 
             if not edited_df.equals(filtered_df):
-                st.session_state.processed_laps_df.update(edited_df)
+                st.session_state[f"processed_laps_df_{session_key_suffix}"].update(
+                    edited_df
+                )
 
         # -----------------------------------------------------------------
         # ACTIVITY DETAILS TAB
@@ -525,23 +514,33 @@ else:
 
             c1, c2, c3, c4 = st.columns(4)
 
+            # --------------------
+            # Column 1
+            # --------------------
             with c1:
                 if miles is not None:
                     st.markdown("**Distance**")
                     st.write(f"{miles:.2f} mi")
+
+                if miles is not None:
                     st.markdown("---")
+                    st.markdown("**Avg Pace / Speed**")
+                    avg_speed = None
+                    if sport == "cycling" and mph is not None:
+                        avg_speed = f"{mph:.2f} mph"
+                    elif pace_min is not None and pace_sec is not None:
+                        avg_speed = f"{pace_min}:{pace_sec:02d} /mi"
+                    if avg_speed is not None:
+                        st.write(avg_speed)
 
-                if sport == "cycling":
-                    st.markdown("**Avg Speed**")
-                    st.write(f"{mph:.2f} mph")
-                else:
-                    st.markdown("**Avg Pace**")
-                    st.write(f"{pace_min}:{pace_sec:02d} /mi")
-
+            # --------------------
+            # Column 2
+            # --------------------
             with c2:
                 hr_valid = (
                     "hr" in ss
                     and ss.hr
+                    and not point_df.empty
                     and "heart_rate" in point_df
                     and not point_df["heart_rate"].isna().all()
                 )
@@ -549,6 +548,7 @@ else:
                 if hr_valid:
                     avg_hr = point_df["heart_rate"].mean()
                     max_hr = point_df["heart_rate"].max()
+
                     st.markdown("**Heart Rate**")
                     st.write(f"Avg HR: {avg_hr:.0f} bpm")
                     st.write(f"Max HR: {max_hr:.0f} bpm")
@@ -559,10 +559,14 @@ else:
                     st.markdown("**Duration**")
                     st.write(str(duration_td))
 
+            # --------------------
+            # Column 3
+            # --------------------
             with c3:
                 elevation_valid = (
                     "coordinates" in ss
                     and ss.coordinates
+                    and not point_df.empty
                     and "corrected_altitude" in point_df
                     and not point_df["corrected_altitude"].isna().all()
                 )
@@ -571,6 +575,7 @@ else:
                     altitude_change = point_df["corrected_altitude"].diff()
                     total_ascent = altitude_change.clip(lower=0).sum()
                     total_descent = altitude_change.clip(upper=0).abs().sum()
+
                     st.markdown("**Elevation**")
                     st.write(f"Ascent: {total_ascent:.0f} feet")
                     st.write(f"Descent: {total_descent:.0f} feet")
@@ -590,16 +595,17 @@ else:
                             f"Fastest lap: lap {fastest_lap_num} at {fastest_lap_spd:.1f} mph"
                         )
                 else:
-                    # Best lap by pace
                     pace_cols_valid = (
                         "Pace (min/mile) unformatted" in processed_laps_df
                         and not processed_laps_df["Pace (min/mile) unformatted"]
                         .isna()
                         .all()
                     )
+
                     if pace_cols_valid:
                         if elevation_valid:
                             st.markdown("---")
+
                         fastest_idx = processed_laps_df[
                             "Pace (min/mile) unformatted"
                         ].idxmin()
@@ -615,16 +621,21 @@ else:
                         else:
                             fastest_lap = 1
                             fastest_lap_pace = f"{pace_min}:{pace_sec:02d} /mi"
-                        st.markdown("**Best Pace**")
+
+                        st.markdown("**Best Pace / Speed**")
                         st.write(
-                            f"Fastest lap: lap {fastest_lap} at {fastest_lap_pace}"
+                            f"Fastest lap: lap {fastest_lap} " f"at {fastest_lap_pace}"
                         )
 
+            # --------------------
+            # Column 4
+            # --------------------
             with c4:
                 if sport == "cycling":
                     # Cadence in RPM (no doubling)
                     cadence_valid = (
-                        "cadence" in point_df.columns
+                        not point_df.empty
+                        and "cadence" in point_df.columns
                         and not point_df["cadence"].isna().all()
                     )
                     if cadence_valid:
@@ -636,7 +647,8 @@ else:
 
                     # Max speed from record data
                     if (
-                        "enhanced_speed" in point_df.columns
+                        not point_df.empty
+                        and "enhanced_speed" in point_df.columns
                         and point_df["enhanced_speed"].notnull().any()
                     ):
                         max_speed_mph = point_df["enhanced_speed"].max() * 2.23694
@@ -646,10 +658,10 @@ else:
                         st.write(f"{max_speed_mph:.1f} mph")
 
                 else:
-                    # Running dynamics
                     cadence_valid = (
                         "cadence" in ss
                         and ss.cadence
+                        and not point_df.empty
                         and "total_cadence" in point_df
                         and not point_df["total_cadence"].isna().all()
                     )
@@ -667,10 +679,12 @@ else:
                         st.markdown("**Running Dynamics**")
                         st.write(f"Avg cadence: {avg_cadence:.1f} spm")
                         st.write(f"Max cadence: {int(max_cadence)} spm")
+
                         if avg_stride_length_m is not None:
                             st.write(f"Stride length: {avg_stride_length_m:.2f} m")
 
                     distance_col = "Distance (miles)"
+
                     avg_vertical_oscillation = weighted_average_if_present(
                         processed_laps_df, "Avg Vertical Oscillation", distance_col
                     )
@@ -697,14 +711,17 @@ else:
                     if dynamics_present:
                         if avg_vertical_ratio is not None:
                             st.write(f"Vertical ratio: {avg_vertical_ratio:.1f}%")
+
                         if avg_stance_time_balance is not None:
                             st.write(
                                 f"Stance time balance: {avg_stance_time_balance:.2f}"
                             )
+
                         if avg_stance_time is not None:
                             st.write(
                                 f"Average ground contact time: {avg_stance_time:.0f} ms"
                             )
+
                         if avg_vertical_oscillation is not None:
                             st.write(
                                 f"Average vertical oscillation: {avg_vertical_oscillation / 10:.1f} cm"
@@ -719,9 +736,7 @@ else:
             else:
                 auto_lap_dist = 1
 
-            auto_laps_result = create_auto_laps(
-                ss.points_df, auto_lap_dist=auto_lap_dist
-            )
+            auto_laps_result = create_auto_laps(points_df, auto_lap_dist=auto_lap_dist)
 
             # create_auto_laps now returns a tuple (laps_df, target_dists)
             if isinstance(auto_laps_result, tuple):
@@ -749,51 +764,211 @@ else:
                 # Fallback: empty or unexpected return
                 st.info("No auto lap data available.")
 
-        # -------------------------------------------------------------------------
-        # FEEL + EFFORT
-        # -------------------------------------------------------------------------
-        feel_col, effort_col = st.columns([0.3, 0.7])
+    return filtered_df  # returned so the save handler can reference edited rows
 
-        with feel_col:
-            # The widget options are the raw integers (Values from the db)
-            feel_options = list(ss.feel_map.keys())
-            if feel is not None:
-                current_feel_index = feel_options.index(feel)
+
+def _render_single_sport(
+    conn, activity_id, sport, sessions_df, updated_category, feel, effort
+):
+    """Renders the standard single-sport detail page (description box + session content + save)."""
+    session_row = (
+        sessions_df.iloc[0]
+        if sessions_df is not None and not sessions_df.empty
+        else None
+    )
+    points_df = ss.points_df if "points_df" in ss else pd.DataFrame()
+
+    # different columns so I can alilgn the values to the top of the columns.
+    # So the map and description can be vertically aligned
+    map_col, description_col = st.columns([0.7, 0.3])
+    with description_col:
+        if ss.activity_details and ss.activity_details[3]:
+            description = ss.activity_details[3]
+        else:
+            description = ""
+        updated_description = st.text_area(
+            "Description",
+            description,
+            width="stretch",
+            height=200,
+            key=f"desc_input_{activity_id}",
+        )
+
+    filtered_df = _render_session_content(
+        conn=conn,
+        activity_id=activity_id,
+        session_row=session_row,
+        points_df=points_df,
+        updated_category=updated_category,
+        session_key_suffix=str(activity_id),
+        map_col=map_col,
+    )
+
+    _render_feel_effort_save(
+        conn=conn,
+        activity_id=activity_id,
+        feel=feel,
+        effort=effort,
+        filtered_df=filtered_df,
+        updated_description=updated_description,
+        updated_category=updated_category,
+        session_key_suffix=str(activity_id),
+    )
+
+
+def _render_multisport(
+    conn, activity_id, sessions_df, full_points_df, updated_category, feel, effort
+):
+    """
+    Renders the multisport detail page.
+
+    Top section: colour-coded full-activity map + description + total summary metrics.
+    Below: one st.tab per session, each delegating to _render_session_content.
+    """
+    map_col, description_col = st.columns([0.7, 0.3])
+
+    # Colour-coded overview map — segments coloured by sport
+    if not full_points_df.empty and ss.coordinates:
+        with map_col:
+            full_map = create_activity_map(
+                full_points_df, fullscreen=True, sessions_df=sessions_df
+            )
+            st_folium(full_map, width="stretch", key=f"full_map_{activity_id}")
+
+    with description_col:
+        if ss.activity_details and ss.activity_details[3]:
+            description = ss.activity_details[3]
+        else:
+            description = ""
+        updated_description = st.text_area(
+            "Description",
+            description,
+            width="stretch",
+            height=200,
+            key=f"desc_input_{activity_id}",
+        )
+
+        # Total summary metrics across all legs
+        total_distance_m = sessions_df["total_distance"].sum()
+        total_duration_s = sessions_df["total_timer_time"].sum()
+        total_miles = total_distance_m / ss.meters_to_miles
+        total_duration_td = timedelta(seconds=int(total_duration_s))
+        duration_hr = total_duration_s / 3600
+        avg_speed_mph = total_miles / duration_hr if duration_hr > 0 else 0
+
+        st.markdown("**Totals**")
+        st.metric("Distance", f"{total_miles:.2f} mi")
+        st.metric("Duration", str(total_duration_td))
+        st.metric("Avg Speed", f"{avg_speed_mph:.1f} mph")
+
+    # ---- one st.tab per session ---------------------------------------------
+    # Build labels — repeated sport names get a counter: Run, Bike, Run 2
+    tab_labels = []
+    sport_counts = {}
+    for _, row in sessions_df.iterrows():
+        sport_name = (row["sport"] or "unknown").capitalize()
+        sport_counts[sport_name] = sport_counts.get(sport_name, 0) + 1
+        count = sport_counts[sport_name]
+        label = sport_name if count == 1 else f"{sport_name} {count}"
+        tab_labels.append(label)
+
+    session_tabs = st.tabs(tab_labels)
+
+    for tab, (_, session_row) in zip(session_tabs, sessions_df.iterrows()):
+        with tab:
+            # Slice the full points_df to only this session's time window
+            seg_start = session_row["start_time"]
+            seg_end = session_row["timestamp"]  # FIT session timestamp = end of session
+            if not full_points_df.empty:
+                mask = (full_points_df["timestamp"] >= seg_start) & (
+                    full_points_df["timestamp"] <= seg_end
+                )
+                session_points_df = full_points_df[mask].copy()
+                # Re-anchor elapsed_time to the start of this leg
+                if not session_points_df.empty:
+                    session_points_df["elapsed_time"] = (
+                        session_points_df["timestamp"]
+                        - session_points_df["timestamp"].iloc[0]
+                    )
             else:
-                current_feel_index = None
+                session_points_df = pd.DataFrame()
 
-            updated_feel = st.radio(
-                label="How did you feel?",
-                options=feel_options,
-                index=current_feel_index,
-                # The format_func takes the integer, finds the string, and adds the SVG
-                format_func=lambda x: get_svg_markdown(ss.feel_map.get(x, "Unknown")),
-                # captions=list(ss.feel_map.values()),
-                key=f"feel_radio_{activity_id}",
+            # Re-evaluate ss data flags for this leg's slice
+            _set_ss_flags_for_points(session_points_df)
+
+            session_key = f"{activity_id}_{session_row['session_id']}"
+            _render_session_content(
+                conn=conn,
+                activity_id=activity_id,
+                session_row=session_row,
+                points_df=session_points_df,
+                updated_category=updated_category,
+                session_key_suffix=session_key,
             )
 
-        with effort_col:
-            effort_options = [None] + [i * 10 for i in range(1, 11)]
-            updated_effort = st.select_slider(
-                label="Perceived Effort",
-                options=effort_options,
-                value=effort,
-                # The format_func divides by 10 to fetch the correct string from the dictionary
-                format_func=format_effort,
-                key=f"effort_slider_{activity_id}",
-            )
+    _render_feel_effort_save(
+        conn=conn,
+        activity_id=activity_id,
+        feel=feel,
+        effort=effort,
+        filtered_df=pd.DataFrame(),  # lap edits handled per-tab via keyed editors
+        updated_description=updated_description,
+        updated_category=updated_category,
+        session_key_suffix=str(activity_id),
+    )
 
-    # -------------------------------------------------------------------------
-    # SAVE BUTTON
-    # -------------------------------------------------------------------------
-    if st.button("Save", shortcut="s"):
+
+def _render_feel_effort_save(
+    conn,
+    activity_id,
+    feel,
+    effort,
+    filtered_df,
+    updated_description,
+    updated_category,
+    session_key_suffix,
+):
+    """Renders the feel/effort widgets and the Save button."""
+    feel_col, effort_col = st.columns([0.3, 0.7])
+
+    with feel_col:
+        # The widget options are the raw integers (Values from the db)
+        feel_options = list(ss.feel_map.keys())
+        if feel is not None:
+            current_feel_index = feel_options.index(feel)
+        else:
+            current_feel_index = None
+
+        updated_feel = st.radio(
+            label="How did you feel?",
+            options=feel_options,
+            index=current_feel_index,
+            # The format_func takes the integer, finds the string, and adds the SVG
+            format_func=lambda x: get_svg_markdown(ss.feel_map.get(x, "Unknown")),
+            # captions=list(ss.feel_map.values()),
+            key=f"feel_radio_{session_key_suffix}",
+        )
+
+    with effort_col:
+        effort_options = [None] + [i * 10 for i in range(1, 11)]
+        updated_effort = st.select_slider(
+            label="Perceived Effort",
+            options=effort_options,
+            value=effort,
+            # The format_func divides by 10 to fetch the correct string from the dictionary
+            format_func=format_effort,
+            key=f"effort_slider_{session_key_suffix}",
+        )
+
+    if st.button("Save", shortcut="s", key=f"save_{session_key_suffix}"):
         updates = []
 
-        if "lap_editor" in ss and ss.lap_editor.get("edited_rows"):
+        lap_editor_key = f"lap_editor_{session_key_suffix}"
+        if lap_editor_key in ss and ss[lap_editor_key].get("edited_rows"):
             # st.info("Changes detected. Saving to database...")
 
             # The edited_rows dict tells us exactly what changed
-            for row_idx, changes in ss.lap_editor["edited_rows"].items():
+            for row_idx, changes in ss[lap_editor_key]["edited_rows"].items():
                 # Get the lap_id using the row index from the ORIGINAL dataframe
                 # Note: Ensure processed_laps_df aligns with the editor's data source
                 try:
@@ -813,6 +988,7 @@ else:
                             new_value = new_value * ss.meters_to_miles
                             # Swap the column name
                             db_col_name = "total_distance"
+
                         elif db_col_name == "time_formatted":
                             seconds_value = parse_hms_to_seconds(new_value)
 
@@ -834,10 +1010,13 @@ else:
 
                         # Optional: Toast per successful mapping
                         # st.toast(f"Staged update for {ui_col_name}")
+
                     else:
+                        # Handle calculated columns (like 'Pace' or 'Distance (miles)')
                         st.warning(
                             f"Skipping '{ui_col_name}': Cannot update calculated fields directly."
                         )
+            # Clear cache to force a re-fetch of data
             fetch_lap_data.clear()
 
         set_clauses = []
@@ -851,6 +1030,7 @@ else:
             query_params.append(updated_description)
 
         # Check Title (Activity Name)
+        updated_title = ss.get(f"title_input_{activity_id}", ss.activity_details[7])
         if updated_title != ss.activity_details[7]:
             if updated_title == "":
                 updated_title = None
@@ -890,6 +1070,7 @@ else:
 
         if updates:
             st.subheader("SQL to run:")
+
             for query, params in updates:
                 display_params = []
                 for p in params:
@@ -926,3 +1107,129 @@ else:
             #     del ss["activity_details"]
         else:
             st.info("No changes detected.")
+            # Rerun the script to show the latest data from the DB
+            # st.rerun()
+
+
+# --- PAGE LAYOUT ---
+st.set_page_config(page_title="Activity Details", layout="wide")
+
+# Check if an activity has been selected
+if "selected_activity_id" not in ss:
+    st.warning("Please select an activity from the calendar page first.")
+    st.page_link("calendar test 8.py", label="Back to Calendar", icon="🗓️")
+else:
+    activity_id = ss.selected_activity_id
+    sport = ss.selected_activity_sport
+    # conn = init_connection()
+    conn = get_connection(local=True)
+    if "activities_df" not in ss:
+        ss.activities_df = retrieve_monthly_data(conn)
+
+    st.title(f"Lap Data for Activity ID: {activity_id}")
+
+    if ss.activity_details:
+        # Getting activity details
+        distance_m = ss.activity_details[0]
+        duration_s = ss.activity_details[1]
+        avg_power = ss.activity_details[2]
+        description = ss.activity_details[3] if ss.activity_details[3] else ""
+        feel = ss.activity_details[4]
+        effort = ss.activity_details[5]
+        local_timestamp = ss.activity_details[6]
+
+        # day of activity
+        # TODO: It looks like the old watch? stored local timestamp at the end of the activity but new watch is beginning of activity. Activities from form are from the start of the activity
+        st.markdown(f"_{local_timestamp.strftime('%B %d, %Y @ %I:%M %p')}_")
+    else:
+        st.warning(f"No activity details for activity {activity_id}")
+
+    title_col, category_col, nav_col = st.columns(
+        [0.7, 0.25, 0.05], vertical_alignment="bottom"
+    )
+    # Title
+    with title_col:
+        title = ss.activity_details[7]
+        if title is None:
+            title = ""
+        # with title_col:
+        updated_title = st.text_input(
+            label=" ", value=title, key=f"title_input_{activity_id}"
+        )
+    with category_col:
+        # category
+        category = ss.activity_details[8]
+        if isinstance(category, str):
+            category = category.strip()
+
+        category_options = [
+            "uncategorized",
+            "training",
+            "race",
+            "transportation",
+            "recreational",
+            "touring",
+            "fitness",
+        ]
+
+        if category in category_options:
+            cat_index = category_options.index(category)
+        else:
+            cat_index = 0  # Fallback to the first option
+
+        updated_category = st.selectbox(
+            "---",
+            options=category_options,
+            index=cat_index,
+            key=f"category_select_{activity_id}",
+        )
+    with nav_col:
+        back_col, forward_col = st.columns(2, gap=None)
+        idx = ss.activities_df.index[ss.activities_df["activity_id"] == activity_id][0]
+        with back_col:
+            if st.button("<", key="prev_activity"):
+                if idx < len(ss.activities_df) - 1:
+                    prev_id = int(ss.activities_df.iloc[idx + 1]["activity_id"])
+                    ss.selected_activity_id = prev_id
+                    ss.activity_details = fetch_activity_details(conn, prev_id)
+                    ss.points_df = fetch_activity_points(conn, prev_id)
+                    st.rerun()
+        with forward_col:
+            if st.button("\>", key="next_activity"):
+                if idx > 0:
+                    next_id = int(ss.activities_df.iloc[idx - 1]["activity_id"])
+                    ss.selected_activity_id = next_id
+                    ss.activity_details = fetch_activity_details(conn, next_id)
+                    ss.points_df = fetch_activity_points(conn, next_id)
+                    st.rerun()
+
+    # -------------------------------------------------------------------------
+    # FETCH SESSIONS — determines single-sport vs multisport rendering path
+    # -------------------------------------------------------------------------
+    sessions_df = fetch_sessions_for_activity(conn, activity_id)
+    is_multisport = sport == "multisport" or (
+        sessions_df is not None and len(sessions_df) > 1
+    )
+
+    full_points_df = ss.points_df if "points_df" in ss else pd.DataFrame()
+
+    if is_multisport:
+        _render_multisport(
+            conn,
+            activity_id,
+            sessions_df,
+            full_points_df,
+            updated_category,
+            feel,
+            effort,
+        )
+    else:
+        _render_single_sport(
+            conn,
+            activity_id,
+            sport,
+            sessions_df,
+            updated_category,
+            feel,
+            effort,
+        )

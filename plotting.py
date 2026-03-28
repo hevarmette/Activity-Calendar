@@ -3,9 +3,26 @@ import branca
 import plotly.express as px
 from streamlit import session_state as ss
 
+# Sport → polyline colour for multisport maps
+SPORT_COLOR_MAP = {
+    "running": "red",
+    "cycling": "green",
+    "swimming": "blue",
+}
+SPORT_COLOR_DEFAULT = "gray"
 
-def create_activity_map(points_df, fullscreen, auto_lap_dist=1):
-    """Creates a Folium map from a DataFrame of points."""
+
+def create_activity_map(points_df, fullscreen, auto_lap_dist=1, sessions_df=None):
+    """
+    Creates a Folium map from a DataFrame of points.
+
+    For multisport activities, pass sessions_df (result of fetch_sessions_for_activity)
+    and each leg will be drawn in a sport-specific colour:
+      running  → red
+      cycling  → green
+      swimming → blue (only when GPS is present)
+      other    → gray
+    """
     laps = []
 
     # Get coordinates for map
@@ -21,13 +38,53 @@ def create_activity_map(points_df, fullscreen, auto_lap_dist=1):
     folium.TileLayer("USGS_USTopo", show=False).add_to(route_map)
     folium.TileLayer("Esri.WorldImagery", show=False).add_to(route_map)
 
-    # Make line segments
-    red_lines = folium.FeatureGroup(name="Default Line Color", show=True).add_to(
-        route_map
-    )
-    folium.PolyLine(locations=coordinates, weight=5, color="red").add_to(red_lines)
+    # -----------------------------------------------------------------------
+    # ROUTE LINE(S)
+    # -----------------------------------------------------------------------
+    if sessions_df is not None and not sessions_df.empty and len(sessions_df) > 1:
+        # Multisport: draw one coloured segment per session leg
+        multisport_lines = folium.FeatureGroup(name="Route by Sport", show=True).add_to(
+            route_map
+        )
 
-    # Colored line based on speed
+        for _, session_row in sessions_df.iterrows():
+            sport = (session_row["sport"] or "").lower()
+            color = SPORT_COLOR_MAP.get(sport, SPORT_COLOR_DEFAULT)
+
+            # Slice points that fall within this session's time window
+            seg_start = session_row["start_time"]
+            seg_end = session_row["timestamp"]  # session timestamp = end time in FIT
+            mask = (points_df["timestamp"] >= seg_start) & (
+                points_df["timestamp"] <= seg_end
+            )
+            seg_df = points_df[mask]
+
+            if seg_df.empty:
+                continue
+
+            seg_coords = list(
+                seg_df[["latitude", "longitude"]].itertuples(index=False, name=None)
+            )
+            folium.PolyLine(
+                locations=seg_coords,
+                weight=5,
+                color=color,
+                tooltip=sport.capitalize(),
+            ).add_to(multisport_lines)
+
+        # Single-colour fallback layer (hidden by default for multisport)
+        red_lines = folium.FeatureGroup(name="Default Line Color", show=False).add_to(
+            route_map
+        )
+        folium.PolyLine(locations=coordinates, weight=5, color="red").add_to(red_lines)
+    else:
+        # Make line segments
+        red_lines = folium.FeatureGroup(name="Default Line Color", show=True).add_to(
+            route_map
+        )
+        folium.PolyLine(locations=coordinates, weight=5, color="red").add_to(red_lines)
+
+    # Colored line based on speed (available for all activity types)
     if (
         "enhanced_speed" in points_df.columns
         and not points_df["enhanced_speed"].isnull().all()
@@ -42,6 +99,9 @@ def create_activity_map(points_df, fullscreen, auto_lap_dist=1):
             weight=6,
         ).add_to(colored_lines)
 
+    # -----------------------------------------------------------------------
+    # LAP MARKERS
+    # -----------------------------------------------------------------------
     # Get total number of laps
     nlaps = points_df["lap"].iloc[-1]
     # for some reason activities with latest watch that are pre defined workout has every record marked as the last lap
@@ -76,6 +136,9 @@ def create_activity_map(points_df, fullscreen, auto_lap_dist=1):
                 location=[laps[i]["latitude"], laps[i]["longitude"]], icon=icon_number
             ).add_to(icons)
 
+    # -----------------------------------------------------------------------
+    # AUTO MILE MARKERS
+    # -----------------------------------------------------------------------
     mile_markers_layer = folium.FeatureGroup(
         name="Auto Mile Markers", show=False
     ).add_to(route_map)
@@ -102,6 +165,9 @@ def create_activity_map(points_df, fullscreen, auto_lap_dist=1):
             icon=mile_icon,
         ).add_to(mile_markers_layer)
 
+    # -----------------------------------------------------------------------
+    # START / END MARKERS
+    # -----------------------------------------------------------------------
     # Get start and end points_df and plot as marker
     start = points_df[["latitude", "longitude"]].iloc[0, :]
     end = points_df[["latitude", "longitude"]].iloc[-1, :]

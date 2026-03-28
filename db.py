@@ -55,6 +55,45 @@ def fetch_lap_data(_conn, activity_id):
     return df
 
 
+@st.cache_data
+def fetch_lap_data_for_session(_conn, activity_id, first_lap_index, num_laps):
+    """Fetches lap data for a specific session within a multisport activity."""
+    sql_query = f"""
+        SELECT 
+            lap_id,
+            activity_id,
+            start_time,
+            number,
+            total_distance,
+            total_timer_time,
+            total_ascent,
+            total_descent,
+            avg_vertical_oscillation,
+            avg_stance_time,
+            avg_vertical_ratio,
+            avg_stance_time_balance,
+            avg_step_length,
+            avg_running_cadence,
+            max_heart_rate,
+            avg_heart_rate,
+            intensity,
+            (total_distance * {1 / ss.meters_to_miles}) AS distance_mi
+        FROM {ss.schema}.lap
+        WHERE activity_id = %s
+          AND number >= %s
+          AND number < %s
+        ORDER BY number ASC
+    """
+    last_lap = first_lap_index + num_laps
+    with _conn.cursor() as cursor:
+        cursor.execute(sql_query, (activity_id, first_lap_index, last_lap))
+        columns = [desc.name for desc in cursor.description]
+        data = cursor.fetchall()
+
+    df = pd.DataFrame(data, columns=columns)
+    return df
+
+
 def get_lap_update_query(lap_id, db_column, new_value):
     """
     Returns a safe (query, params) tuple for updating a single value.
@@ -73,31 +112,20 @@ def retrieve_monthly_data(_conn):  # , year, month):
     if _conn is None:
         return pd.DataFrame()
 
-    # sql_query = f"""
-    #     SELECT
-    #         a.activity_id,
-    #         a.timestamp AS activity_date,
-    #         a.activity_name,
-    #         s.sport
-    #     FROM {ss.schema}.activity a
-    #     JOIN {ss.schema}.session s ON a.activity_id = s.activity_id
-    #     WHERE
-    #         EXTRACT(YEAR FROM a.timestamp) = %s
-    #         AND EXTRACT(MONTH FROM a.timestamp) = %s
-    #     GROUP BY a.activity_id, s.sport;
-    # """
-    # try:
-    #     df = pd.read_sql_query(sql_query, _conn, params=(year, month))
-    #     return df
+    # Aggregate sessions so multisport activities appear as a single calendar row.
+    # STRING_AGG collects all sport types; SUM aggregates distance and time across legs.
     sql_query = f"""
         SELECT
             a.activity_id,
             a.timestamp AS activity_date,
             a.activity_name,
-            s.sport
+            a.num_sessions,
+            STRING_AGG(s.sport, ',' ORDER BY s.start_time) AS sport,
+            SUM(s.total_distance) AS total_distance,
+            SUM(s.total_timer_time) AS total_timer_time
         FROM {ss.schema}.activity a
         JOIN {ss.schema}.session s ON a.activity_id = s.activity_id
-        GROUP BY a.activity_id, s.sport
+        GROUP BY a.activity_id, a.timestamp, a.activity_name, a.num_sessions
         ORDER BY activity_date DESC;
     """
     try:
@@ -110,6 +138,50 @@ def retrieve_monthly_data(_conn):  # , year, month):
         return df
     except Exception as e:
         st.error(f"Error executing query: {e}")
+        return pd.DataFrame()
+
+
+@st.cache_data
+def fetch_sessions_for_activity(_conn, activity_id):
+    """
+    Fetches all sessions for an activity, ordered by start_time.
+    Returns a DataFrame with one row per session — used for multisport tab rendering.
+    """
+    if _conn is None:
+        return pd.DataFrame()
+
+    sql_query = f"""
+        SELECT
+            session_id,
+            activity_id,
+            start_time,
+            "timestamp",
+            sport,
+            sub_sport,
+            total_distance,
+            total_timer_time,
+            avg_power,
+            avg_heart_rate,
+            max_heart_rate,
+            enhanced_avg_speed,
+            avg_speed,
+            total_ascent,
+            total_descent,
+            first_lap_index,
+            num_laps
+        FROM {ss.schema}.session
+        WHERE activity_id = %s
+        ORDER BY start_time ASC
+    """
+    try:
+        with _conn.cursor() as cursor:
+            cursor.execute(sql_query, (activity_id,))
+            columns = [desc.name for desc in cursor.description]
+            data = cursor.fetchall()
+
+        return pd.DataFrame(data, columns=columns)
+    except Exception as e:
+        st.error(f"Error fetching sessions: {e}")
         return pd.DataFrame()
 
 
@@ -256,9 +328,9 @@ def fetch_activity_points(_conn, activity_id):
 
             if "cadence" in pcols and "fractional_cadence" in pcols:
                 ss.cadence = True
-                points_df["total_cadence"] = (
-                    points_df["cadence"] + points_df["fractional_cadence"]
-                )
+                points_df["total_cadence"] = points_df["cadence"] + points_df[
+                    "fractional_cadence"
+                ].astype(float)
 
             if "heart_rate" in pcols:
                 ss.hr = True
