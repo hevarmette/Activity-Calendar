@@ -9,6 +9,7 @@ from calendar_test_8 import (
 )
 from streamlit_folium import st_folium
 from db import (
+    fetch_activity_events,
     get_connection,
     fetch_lap_data,
     get_lap_update_query,
@@ -595,9 +596,9 @@ else:
             auto_laps_config = {
                 "Distance (miles)": st.column_config.NumberColumn(format="%.2f")
             }
-            auto_laps = create_auto_laps(ss.points_df)
+            event_df = fetch_activity_events(conn, activity_id)
+            auto_laps = create_auto_laps(ss.points_df, event_df)
             st.dataframe(auto_laps, column_config=auto_laps_config, hide_index=True)
-            st.dataframe(ss.points_df)
 
         feel_col, effort_col = st.columns([0.3, 0.7])
 
