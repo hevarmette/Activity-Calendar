@@ -139,8 +139,10 @@ def create_activity_map(points_df, fullscreen, auto_lap_dist=1, sessions_df=None
     # -----------------------------------------------------------------------
     # AUTO MILE MARKERS
     # -----------------------------------------------------------------------
+    show_auto_miles = len(ulaps) <= 1
+
     mile_markers_layer = folium.FeatureGroup(
-        name="Auto Mile Markers", show=False
+        name="Auto Mile Markers", show=show_auto_miles
     ).add_to(route_map)
 
     points_df["distance_auto_lap"] = (

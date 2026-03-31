@@ -105,6 +105,8 @@ def _render_session_content(
     updated_category,
     session_key_suffix,
     map_col=None,
+    show_summary_metrics=True,
+    is_multisport=False,
 ):
     """
     Renders map, graphs, lap table, auto laps, and stats for one session.
@@ -113,6 +115,8 @@ def _render_session_content(
                           (falls back to ss.activity_details)
     points_df           — already filtered to this session's time window
     session_key_suffix  — appended to all widget keys to avoid collisions
+    show_summary_metrics- toggle to show or hide the top level metrics (Distance, Duration, Pace/Speed)
+    is_multisport       — boolean flag indicating if this is part of a multisport activity
     """
     sport = (
         (session_row["sport"] or "").lower()
@@ -138,16 +142,17 @@ def _render_session_content(
     mph = miles / duration_hr if duration_hr > 0 else 0
 
     # ---- top summary metrics ------------------------------------------------
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Distance", f"{miles:.2f} mi")
-    col2.metric("Duration", str(duration_td))
-    if sport == "cycling":
-        if avg_power:
-            col3.metric("Power", f"{avg_power} watts")
+    if show_summary_metrics:
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Distance", f"{miles:.2f} mi")
+        col2.metric("Duration", str(duration_td))
+        if sport == "cycling":
+            if avg_power:
+                col3.metric("Power", f"{avg_power} watts")
+            else:
+                col3.metric("Speed", f"{mph:.2f} mph")
         else:
-            col3.metric("Speed", f"{mph:.2f} mph")
-    else:
-        col3.metric("Pace", f"{pace_min}:{pace_sec:02d} /mi")
+            col3.metric("Pace", f"{pace_min}:{pace_sec:02d} /mi")
 
     # ---- map (per-session, no sport colouring needed within a single leg) ---
     if not points_df.empty and ss.coordinates:
@@ -387,7 +392,8 @@ def _render_session_content(
     # ---- lap table + sub-tabs -----------------------------------------------
     st.markdown("You can edit values in the table below.")
 
-    if session_row is not None:
+    # ONLY fetch session-specific laps if it's explicitly a multisport session
+    if is_multisport and session_row is not None and pd.notna(session_row.get("first_lap_index")) and pd.notna(session_row.get("num_laps")):
         # Fetch only the laps belonging to this session
         raw_laps_df = fetch_lap_data_for_session(
             conn,
@@ -396,6 +402,7 @@ def _render_session_content(
             int(session_row["num_laps"]),
         )
     else:
+        # Fallback: Called if the session length is < 2 (single-sport) or missing indices
         raw_laps_df = fetch_lap_data(conn, activity_id)
 
     if sport == "cycling":
@@ -771,12 +778,34 @@ def _render_single_sport(
     conn, activity_id, sport, sessions_df, updated_category, feel, effort
 ):
     """Renders the standard single-sport detail page (description box + session content + save)."""
-    session_row = (
-        sessions_df.iloc[0]
-        if sessions_df is not None and not sessions_df.empty
-        else None
-    )
+    # Since this is single sport (len(sessions) < 2), we safely bypass the session loop
+    # and rely entirely on ss.activity_details & fetch_lap_data.
+    session_row = None
     points_df = ss.points_df if "points_df" in ss else pd.DataFrame()
+
+    # ---- derive metrics for this session to display above the map -----------
+    distance_m = ss.activity_details[0]
+    duration_s = ss.activity_details[1]
+    avg_power = ss.activity_details[2]
+
+    miles = distance_m / ss.meters_to_miles
+    duration_td = timedelta(seconds=int(duration_s))
+    duration_hr = duration_s / 3600
+    pace_sec_per_mile = duration_s / miles if miles > 0 else 0
+    pace_min, pace_sec = divmod(int(pace_sec_per_mile), 60)
+    mph = miles / duration_hr if duration_hr > 0 else 0
+
+    # ---- top summary metrics ------------------------------------------------
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Distance", f"{miles:.2f} mi")
+    col2.metric("Duration", str(duration_td))
+    if sport == "cycling":
+        if avg_power:
+            col3.metric("Power", f"{avg_power} watts")
+        else:
+            col3.metric("Speed", f"{mph:.2f} mph")
+    else:
+        col3.metric("Pace", f"{pace_min}:{pace_sec:02d} /mi")
 
     # different columns so I can alilgn the values to the top of the columns.
     # So the map and description can be vertically aligned
@@ -802,6 +831,8 @@ def _render_single_sport(
         updated_category=updated_category,
         session_key_suffix=str(activity_id),
         map_col=map_col,
+        show_summary_metrics=False,
+        is_multisport=False, # Enforces that fetch_lap_data is called
     )
 
     _render_feel_effort_save(
@@ -900,10 +931,11 @@ def _render_multisport(
             _render_session_content(
                 conn=conn,
                 activity_id=activity_id,
-                session_row=session_row,
+                session_row=session_row, # Iterated session row used here
                 points_df=session_points_df,
                 updated_category=updated_category,
                 session_key_suffix=session_key,
+                is_multisport=True, # Enforces that fetch_lap_data_for_session is called
             )
 
     _render_feel_effort_save(
