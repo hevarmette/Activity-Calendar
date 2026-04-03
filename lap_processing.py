@@ -219,7 +219,7 @@ def create_auto_laps(points_df, events_df=None, auto_lap_dist=1):
     points_df.loc[points_df["segment_speed"] < STOP_THRESHOLD_MPS, "moving_seconds"] = 0
 
     # Calculate Deltas for altitude
-    points_df["alt_diff"] = points_df["corrected_altitude"].diff().fillna(0)
+    points_df["alt_diff"] = pd.to_numeric(points_df["corrected_altitude"], errors="coerce").diff().fillna(0)
     points_df["ascent_ft"] = points_df["alt_diff"].clip(lower=0)
     points_df["descent_ft"] = points_df["alt_diff"].clip(upper=0).abs()
 

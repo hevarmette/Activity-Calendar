@@ -2,7 +2,6 @@ import streamlit as st
 import psycopg
 from streamlit import session_state as ss
 import pandas as pd
-import numpy as np
 from pyhigh import get_elevation_batch
 
 
@@ -317,12 +316,10 @@ def fetch_activity_points(_conn, activity_id):
                             points_df["altitude"] * 3.28084
                         )  # converting from meters to feet
                     else:
-                        points_df["corrected_altitude"] = 0
+                        points_df["corrected_altitude"] = 0.0
 
             # timestamp, by definition, is included in the records table.
-            points_df["elapsed_time"] = points_df["timestamp"] - np.repeat(
-                points_df["timestamp"].iloc[0], len(points_df)
-            )
+            points_df["elapsed_time"] = points_df["timestamp"] - points_df["timestamp"].iloc[0]
 
             # points_df.dropna(subset=["latitude", "longitude"], inplace=True) TODO: this was uncommented, why?
 

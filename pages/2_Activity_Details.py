@@ -1227,7 +1227,7 @@ else:
                     ss.points_df = fetch_activity_points(conn, prev_id)
                     st.rerun()
         with forward_col:
-            if st.button("\>", key="next_activity"):
+            if st.button(r"\>", key="next_activity"):
                 if idx > 0:
                     next_id = int(ss.activities_df.iloc[idx - 1]["activity_id"])
                     ss.selected_activity_id = next_id
