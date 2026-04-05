@@ -1,6 +1,7 @@
 # remove stopped time in auto laps
 # TODO: functionality to save intensity values after editing and when selecting pill values
-# subtract paused time from auto laps
+# cumulative time on auto laps
+# fix x axis of time based graphs
 
 # add functionality to see average time by set and stats like that. and summary stats on the homepage or an extra page
 import streamlit as st
