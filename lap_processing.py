@@ -224,7 +224,7 @@ def create_auto_laps(points_df, events_df=None, auto_lap_dist=1):
     points_df["descent_ft"] = points_df["alt_diff"].clip(upper=0).abs()
 
     # ---------------------------------------------------------
-    # NEW INTERPOLATION LOGIC
+    # INTERPOLATION LOGIC
     # ---------------------------------------------------------
     points_df["dist_miles_cumulative"] = points_df["distance"] / ss.meters_to_miles
 
@@ -333,6 +333,7 @@ def create_auto_laps(points_df, events_df=None, auto_lap_dist=1):
     laps_df["Total Ascent (ft)"] = laps_df["Total Ascent (ft)"].round(0)
     laps_df["Total Descent (ft)"] = laps_df["Total Descent (ft)"].round(0)
     laps_df["Time"] = laps_df["seconds_raw"].apply(convert_seconds_to_hms)
+    laps_df["Cumulative Time"] = laps_df["seconds_raw"].cumsum().apply(convert_seconds_to_hms)
 
     return laps_df, target_dists
 
@@ -352,6 +353,7 @@ def build_running_auto_laps(laps_df):
         "Time",
         "Distance (miles)",
         "Pace (min/mile)",
+        "Cumulative Time",
         "Total Ascent (ft)",
         "Total Descent (ft)",
     ]
@@ -371,11 +373,13 @@ def build_cycling_auto_laps(laps_df):
         "Lap",
         "Time",
         "Distance (miles)",
+        "Cumulative Time",
         "Total Ascent (ft)",
         "Total Descent (ft)",
     ]
     if "Avg Speed (mph)" in laps_df.columns:
-        cols_to_display += ["Avg Speed (mph)", "Max Speed (mph)"]
+        cols_to_display +=  "Max Speed (mph)"
+        cols_to_display.insert(3, "Avg Speed (mph)")
     if "Avg HR" in laps_df.columns:
         cols_to_display += ["Avg HR", "Max HR"]
     if "Avg Cadence" in laps_df.columns:
