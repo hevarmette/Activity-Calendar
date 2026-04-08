@@ -361,3 +361,37 @@ def fetch_activity_events(_conn, activity_id):
     except Exception as e:
         st.error(f"Error fetching activity events: {e}")
         return pd.DataFrame()
+
+
+@st.cache_data
+def fetch_report_data(_conn):
+    """Fetches per-session rows for the activity report page."""
+    if _conn is None:
+        return pd.DataFrame()
+
+    sql_query = f"""
+        SELECT
+            a.activity_id,
+            a.local_timestamp,
+            s.sport,
+            s.total_distance,
+            s.total_timer_time,
+            s.total_calories,
+            s.total_ascent,
+            s.total_descent,
+            s.avg_heart_rate,
+            s.max_heart_rate
+        FROM {ss.schema}.activity a
+        JOIN {ss.schema}.session s ON a.activity_id = s.activity_id
+        ORDER BY a.local_timestamp DESC;
+    """
+    try:
+        with _conn.cursor() as cursor:
+            cursor.execute(sql_query)
+            columns = [desc.name for desc in cursor.description]
+            data = cursor.fetchall()
+
+        return pd.DataFrame(data, columns=columns)
+    except Exception as e:
+        st.error(f"Error fetching report data: {e}")
+        return pd.DataFrame()
