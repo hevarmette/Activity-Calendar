@@ -199,7 +199,8 @@ def _render_session_content(
             else:
                 x_col, x_label = None, None
         else:
-            x_col, x_label = "elapsed_time", "Time"
+            point_df["plot_time"] = pd.Timestamp(0) + points_df["elapsed_time"] # this is to format the timestamp properly
+            x_col, x_label = "plot_time", "Time"
 
         if not x_col or x_col not in point_df.columns:
             st.warning(f"Data for '{x_label}' is not available.")

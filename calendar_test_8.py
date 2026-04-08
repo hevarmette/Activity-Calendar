@@ -1,7 +1,5 @@
 # remove stopped time in auto laps
 # TODO: functionality to save intensity values after editing and when selecting pill values
-# cumulative time on auto laps
-# fix x axis of time based graphs
 # make sure lap duration for auto laps match normal laps
 
 # add functionality to see average time by set and stats like that. and summary stats on the homepage or an extra page

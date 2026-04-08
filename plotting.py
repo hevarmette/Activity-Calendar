@@ -250,4 +250,8 @@ def create_plot(
     if invert_y_axis:
         fig.update_yaxes(autorange="reversed")
 
+    if x_label == "Time":
+        fig.update_xaxes(tickformat="%H:%M:%S") # timestamp is technical 1970-01-01 00:00:00, so we just show the time part
+        # this results from pd.timestamp(0). 
+
     return fig
