@@ -1,4 +1,5 @@
 import streamlit as st
+import time
 import pandas as pd
 from streamlit import session_state as ss
 from datetime import timedelta
@@ -16,6 +17,7 @@ from db import (
     retrieve_monthly_data,
 )
 from utils import (
+    convert_seconds_to_hms,
     parse_hms_to_seconds,
     weighted_average_if_present,
     get_svg_markdown,
@@ -65,6 +67,47 @@ UI_TO_DB_MAP = {v: k for k, v in LAP_COLUMN_MAPPING.items()}
 # =============================================================================
 # HELPERS
 # =============================================================================
+
+
+def _render_summary_metrics(sport, distance_m, duration_s, avg_power):
+    """Render Distance, Duration, Pace/Speed as display-only metrics."""
+    miles = distance_m / ss.meters_to_miles
+    duration_td = timedelta(seconds=int(duration_s))
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Distance", f"{miles:.2f} mi")
+    col2.metric("Duration", str(duration_td))
+
+    if sport == "cycling":
+        if avg_power:
+            col3.metric("Power", f"{avg_power} watts")
+        else:
+            duration_hr = duration_s / 3600
+            mph = miles / duration_hr if duration_hr > 0 else 0
+            col3.metric("Speed", f"{mph:.2f} mph")
+    else:
+        pace_sec_per_mile = duration_s / miles if miles > 0 else 0
+        pace_min, pace_sec = divmod(int(pace_sec_per_mile), 60)
+        col3.metric("Pace", f"{pace_min}:{pace_sec:02d} /mi")
+
+
+def _render_sidebar_adjustments(distance_m, duration_s, key_suffix):
+    """Render editable distance/duration inputs in the sidebar. Returns updated values in meters/seconds."""
+    miles = distance_m / ss.meters_to_miles
+    with st.sidebar:
+        st.subheader("Adjust Activity")
+        new_miles = st.number_input(
+            "Distance (miles)", value=round(miles, 2), step=0.01,
+            format="%.2f", key=f"edit_dist_{key_suffix}",
+        )
+        dur_str = convert_seconds_to_hms(duration_s)
+        new_dur_str = st.text_input(
+            "Duration (H:MM:SS or M:SS)", value=dur_str,
+            key=f"edit_dur_{key_suffix}",
+        )
+    parsed_dur = parse_hms_to_seconds(new_dur_str)
+    updated_duration_s = parsed_dur if parsed_dur is not None else duration_s
+    return new_miles * ss.meters_to_miles, updated_duration_s
 
 
 def _set_ss_flags_for_points(points_df):
@@ -789,24 +832,10 @@ def _render_single_sport(
     duration_s = ss.activity_details[1]
     avg_power = ss.activity_details[2]
 
-    miles = distance_m / ss.meters_to_miles
-    duration_td = timedelta(seconds=int(duration_s))
-    duration_hr = duration_s / 3600
-    pace_sec_per_mile = duration_s / miles if miles > 0 else 0
-    pace_min, pace_sec = divmod(int(pace_sec_per_mile), 60)
-    mph = miles / duration_hr if duration_hr > 0 else 0
-
-    # ---- top summary metrics ------------------------------------------------
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Distance", f"{miles:.2f} mi")
-    col2.metric("Duration", str(duration_td))
-    if sport == "cycling":
-        if avg_power:
-            col3.metric("Power", f"{avg_power} watts")
-        else:
-            col3.metric("Speed", f"{mph:.2f} mph")
-    else:
-        col3.metric("Pace", f"{pace_min}:{pace_sec:02d} /mi")
+    updated_distance_m, updated_duration_s = _render_sidebar_adjustments(
+        distance_m, duration_s, key_suffix=str(activity_id),
+    )
+    _render_summary_metrics(sport, distance_m, duration_s, avg_power)
 
     # different columns so I can alilgn the values to the top of the columns.
     # So the map and description can be vertically aligned
@@ -844,6 +873,8 @@ def _render_single_sport(
         filtered_df=filtered_df,
         updated_description=updated_description,
         updated_category=updated_category,
+        updated_distance_m=updated_distance_m,
+        updated_duration_s=updated_duration_s,
         session_key_suffix=str(activity_id),
     )
 
@@ -883,15 +914,11 @@ def _render_multisport(
         # Total summary metrics across all legs
         total_distance_m = sessions_df["total_distance"].sum()
         total_duration_s = sessions_df["total_timer_time"].sum()
-        total_miles = total_distance_m / ss.meters_to_miles
-        total_duration_td = timedelta(seconds=int(total_duration_s))
-        duration_hr = total_duration_s / 3600
-        avg_speed_mph = total_miles / duration_hr if duration_hr > 0 else 0
 
-        st.markdown("**Totals**")
-        st.metric("Distance", f"{total_miles:.2f} mi")
-        st.metric("Duration", str(total_duration_td))
-        st.metric("Avg Speed", f"{avg_speed_mph:.1f} mph")
+    updated_distance_m, updated_duration_s = _render_sidebar_adjustments(
+        total_distance_m, total_duration_s, key_suffix=f"multi_{activity_id}",
+    )
+    _render_summary_metrics("multisport", total_distance_m, total_duration_s, None)
 
     # ---- one st.tab per session ---------------------------------------------
     # Build labels — repeated sport names get a counter: Run, Bike, Run 2
@@ -947,6 +974,8 @@ def _render_multisport(
         filtered_df=pd.DataFrame(),  # lap edits handled per-tab via keyed editors
         updated_description=updated_description,
         updated_category=updated_category,
+        updated_distance_m=updated_distance_m,
+        updated_duration_s=updated_duration_s,
         session_key_suffix=str(activity_id),
     )
 
@@ -959,6 +988,8 @@ def _render_feel_effort_save(
     filtered_df,
     updated_description,
     updated_category,
+    updated_distance_m,
+    updated_duration_s,
     session_key_suffix,
 ):
     """Renders the feel/effort widgets and the Save button."""
@@ -1075,6 +1106,16 @@ def _render_feel_effort_save(
             set_clauses.append("category = %s")
             query_params.append(updated_category)
 
+        # Check adjusted distance
+        if updated_distance_m != ss.activity_details[0]:
+            set_clauses.append("adjusted_distance = %s")
+            query_params.append(updated_distance_m)
+
+        # Check adjusted duration
+        if updated_duration_s != ss.activity_details[1]:
+            set_clauses.append("adjusted_duration = %s")
+            query_params.append(updated_duration_s)
+
         # Check Feel
         if updated_feel != ss.activity_details[4]:
             set_clauses.append("workout_feel = %s")
@@ -1136,8 +1177,11 @@ def _render_feel_effort_save(
             st.cache_data.clear()
             if "activities_df" in ss:
                 del ss["activities_df"]
-            # if "activity_details" in ss:
-            #     del ss["activity_details"]
+            # Re-fetch activity details and rerun to reflect changes
+            ss.activity_details = fetch_activity_details(conn, activity_id)
+            ss.points_df = fetch_activity_points(conn, activity_id)
+            time.sleep(5)
+            st.rerun()
         else:
             st.info("No changes detected.")
             # Rerun the script to show the latest data from the DB
