@@ -15,6 +15,7 @@ from db import (
     fetch_sessions_for_activity,
     get_lap_update_query,
     retrieve_monthly_data,
+    fetch_activity_events,
 )
 from utils import (
     convert_seconds_to_hms,
@@ -787,7 +788,10 @@ def _render_session_content(
             else:
                 auto_lap_dist = 1
 
-            auto_laps_result = create_auto_laps(points_df, auto_lap_dist=auto_lap_dist)
+            auto_laps_result = create_auto_laps(
+                points_df, events_df=fetch_activity_events(conn, activity_id),
+                auto_lap_dist=auto_lap_dist,
+            )
 
             # create_auto_laps now returns a tuple (laps_df, target_dists)
             if isinstance(auto_laps_result, tuple):
