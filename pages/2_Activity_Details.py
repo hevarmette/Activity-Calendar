@@ -919,8 +919,8 @@ def _render_multisport(
                 # Re-anchor elapsed_time to the start of this leg
                 if not session_points_df.empty:
                     session_points_df["elapsed_time"] = (
-                        session_points_df["timestamp"]
-                        - session_points_df["timestamp"].iloc[0]
+                        session_points_df["elapsed_time"]
+                        - session_points_df["elapsed_time"].iloc[0]
                     )
             else:
                 session_points_df = pd.DataFrame()

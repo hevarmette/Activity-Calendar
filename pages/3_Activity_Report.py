@@ -120,10 +120,11 @@ available_sports = sorted(raw_df["sport"].unique().tolist())
 with st.sidebar:
     st.header("Report Settings")
 
+    default_sports = ["running"] if "running" in available_sports else available_sports
     selected_sports = st.multiselect(
         "Sports",
         options=available_sports,
-        default=available_sports,
+        default=default_sports,
         format_func=lambda x: x.capitalize(),
     )
 
@@ -171,7 +172,7 @@ st.subheader(f"{grouping} Summary by Sport")
 display_df = build_summary_table(agg)
 st.dataframe(
     display_df.sort_values(["Period", "Sport"], ascending=[False, True]),
-    use_container_width=True,
+    width='stretch',
     hide_index=True,
 )
 
@@ -179,6 +180,7 @@ st.divider()
 
 # --- Bar Chart ---
 chart_df = agg.copy()
+chart_df = chart_df[chart_df["period"].apply(lambda p: p.start_time) <= pd.Timestamp.now()]
 chart_df["time_hours"] = chart_df["total_time_s"] / 3600
 
 metric_map = {
@@ -215,4 +217,4 @@ fig.update_traces(
     texttemplate=None,
 )
 
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width='stretch')

@@ -321,6 +321,30 @@ def fetch_activity_points(_conn, activity_id):
             # timestamp, by definition, is included in the records table.
             points_df["elapsed_time"] = points_df["timestamp"] - points_df["timestamp"].iloc[0]
 
+            # Compute pause-removed elapsed time using timer events
+            # so time-based graphs don't show gaps during paused periods.
+            events_df = fetch_activity_events(_conn, activity_id)
+            if events_df is not None and not events_df.empty:
+                timer_events = events_df[events_df["event"] == "timer"]
+                stops = timer_events.loc[timer_events["event_type"] == "stop_all", "timestamp"].reset_index(drop=True)
+                if not stops.empty:
+                    starts = timer_events.loc[
+                        (timer_events["event_type"] == "start") & (timer_events["timestamp"] > stops.iloc[0]),
+                        "timestamp",
+                    ].reset_index(drop=True)
+                    pair_count = min(len(stops), len(starts))
+                    if pair_count > 0:
+                        # Build cumulative paused time at each point's timestamp
+                        paused_cumulative = pd.Series(pd.Timedelta(0), index=points_df.index)
+                        for i in range(pair_count):
+                            pause_duration = starts.iloc[i] - stops.iloc[i]
+                            if pause_duration > pd.Timedelta(0):
+                                paused_cumulative = paused_cumulative.where(
+                                    points_df["timestamp"] < starts.iloc[i],
+                                    paused_cumulative + pause_duration,
+                                )
+                        points_df["elapsed_time"] = points_df["elapsed_time"] - paused_cumulative
+
             # points_df.dropna(subset=["latitude", "longitude"], inplace=True) TODO: this was uncommented, why?
 
             if "cadence" in pcols and "fractional_cadence" in pcols:

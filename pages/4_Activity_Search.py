@@ -164,11 +164,28 @@ def _apply_filters(raw_df, f):
     return activities
 
 
-def _render_results(activities, conn):
-    """Render activity result cards."""
-    st.caption(f"{len(activities)} activities found")
+RESULTS_PER_PAGE = 20
 
-    for idx, (_, row) in enumerate(activities.iterrows()):
+
+def _render_results(activities, conn):
+    """Render activity result cards with pagination."""
+    total = len(activities)
+    total_pages = max(1, -(-total // RESULTS_PER_PAGE))  # ceil division
+
+    if "search_page" not in ss:
+        ss.search_page = 1
+    ss.search_page = min(ss.search_page, total_pages)
+
+    start = (ss.search_page - 1) * RESULTS_PER_PAGE
+    end = min(start + RESULTS_PER_PAGE, total)
+    page_df = activities.iloc[start:end]
+
+    st.caption(f"{total} activities found — showing {start + 1}–{end}")
+
+    # Pagination controls (top)
+    _render_pagination(total_pages, position="top")
+
+    for _, row in page_df.iterrows():
         activity_id = row["activity_id"]
         name = row["activity_name"]
         timestamp = row["local_timestamp"]
@@ -184,7 +201,7 @@ def _render_results(activities, conn):
         avg_hr = row["avg_heart_rate"]
         pace_speed = _format_pace_speed(canonical_sport, distance_m, time_s)
 
-        with st.container():
+        with st.container(border=True):
             header_col, btn_col = st.columns([5, 1])
             with header_col:
                 st.markdown(f"**{name}** &nbsp;·&nbsp; {sport_label} &nbsp;·&nbsp; {date_str}")
@@ -204,8 +221,30 @@ def _render_results(activities, conn):
             m5.metric("Elevation", f"{int(ascent_ft)} ft")
             m6.metric("Avg HR", f"{int(avg_hr)}" if pd.notna(avg_hr) and avg_hr > 0 else "—")
 
-        if idx < len(activities) - 1:
-            st.divider()
+    # Pagination controls (bottom)
+    _render_pagination(total_pages, position="bottom")
+
+
+def _render_pagination(total_pages, position="bottom"):
+    """Render prev/page/next pagination controls."""
+    if total_pages <= 1:
+        return
+    prev_col, info_col, next_col = st.columns([1, 2, 1])
+    with prev_col:
+        if st.button("← Previous", key=f"prev_{position}", disabled=ss.search_page <= 1,
+                      width='stretch'):
+            ss.search_page -= 1
+            st.rerun()
+    with info_col:
+        st.markdown(
+            f"<div style='text-align:center;padding-top:6px'>Page {ss.search_page} of {total_pages}</div>",
+            unsafe_allow_html=True,
+        )
+    with next_col:
+        if st.button("Next →", key=f"next_{position}", disabled=ss.search_page >= total_pages,
+                      width='stretch'):
+            ss.search_page += 1
+            st.rerun()
 
 
 # --- Page Config ---
@@ -244,6 +283,7 @@ if not ss.search_submitted:
 
     if st.button("Search", type="primary"):
         ss.search_submitted = True
+        ss.search_page = 1
         st.rerun()
 
 else:
@@ -256,10 +296,11 @@ else:
         st.divider()
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("Update Results", type="primary", use_container_width=True):
+            if st.button("Update Results", type="primary", width='stretch'):
+                ss.search_page = 1
                 st.rerun()
         with col2:
-            if st.button("Clear Results", use_container_width=True):
+            if st.button("Clear Results", width='stretch'):
                 ss.search_submitted = False
                 st.rerun()
 
