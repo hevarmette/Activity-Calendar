@@ -16,9 +16,9 @@ SPORT_COLORS = {
 
 GROUPING_OPTIONS = {
     "Daily": "D",
-    "Weekly": "W",
-    "Monthly": "MS",
-    "Yearly": "YS",
+    "Weekly": "W-SAT", # week ends on saturday, so aggregates activities sun-sat
+    "Monthly": "M",
+    "Yearly": "Y",
 }
 
 
@@ -29,7 +29,8 @@ def aggregate_data(df, freq, sports):
         return pd.DataFrame()
 
     filtered["period"] = filtered["local_timestamp"].dt.to_period(
-        {"D": "D", "W": "W", "MS": "M", "YS": "Y"}[freq]
+        # {"D": "D", "W": "W-SAT", "MS": "M", "YS": "Y"}[freq] # if the app works, this can be deleted
+        freq
     )
 
     agg = (

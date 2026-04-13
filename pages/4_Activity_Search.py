@@ -164,7 +164,7 @@ def _apply_filters(raw_df, f):
     return activities
 
 
-RESULTS_PER_PAGE = 20
+RESULTS_PER_PAGE = 100
 
 
 def _render_results(activities, conn):
