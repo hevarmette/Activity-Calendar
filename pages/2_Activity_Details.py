@@ -32,6 +32,7 @@ from lap_processing import (
     create_auto_laps,
     build_running_auto_laps,
     build_cycling_auto_laps,
+    compute_interval_summary,
 )
 
 init_session_state()
@@ -517,8 +518,9 @@ def _render_session_content(
                     "Max Heart Rate": st.column_config.NumberColumn(
                         step=1, format="%d"
                     ),
+                    "Cumulative Distance": st.column_config.NumberColumn(format="%.2f"),
                 }
-                disabled_cols = ["Lap", "Avg Speed (mph)"]
+                disabled_cols = ["Lap", "Avg Speed (mph)", "Cumulative Distance", "Cumulative Time"]
             else:
                 column_config = {
                     "Intensity": st.column_config.SelectboxColumn(
@@ -541,8 +543,9 @@ def _render_session_content(
                     "Max Heart Rate": st.column_config.NumberColumn(
                         "Max Heart Rate", step=1, format="%d"
                     ),
+                    "Cumulative Distance": st.column_config.NumberColumn(format="%.2f"),
                 }
-                disabled_cols = ["Lap", "Pace (min/mile)"]
+                disabled_cols = ["Lap", "Pace (min/mile)", "Cumulative Distance", "Cumulative Time"]
 
             # TODO: Recalc pace min/mile on_callback when data is edited
             edited_df = st.data_editor(
@@ -557,6 +560,37 @@ def _render_session_content(
                 st.session_state[f"processed_laps_df_{session_key_suffix}"].update(
                     edited_df
                 )
+
+            # Interval summary for training activities
+            if updated_category == "training" and (ss[f"processed_laps_df_{session_key_suffix}"]["Intensity"] == "active").sum() >= 2:
+                group_by = st.pills(
+                    "Group intervals by",
+                    options=["Distance", "Time"],
+                    default="Distance",
+                    key=f"interval_group_by_{session_key_suffix}",
+                )
+                interval_sets = compute_interval_summary(
+                    ss[f"processed_laps_df_{session_key_suffix}"],
+                    sport,
+                    group_by=(group_by or "Distance").lower(),
+                )
+                if interval_sets:
+                    by_time = (group_by or "Distance").lower() == "time"
+                    for s in interval_sets:
+                        st.header(f"{s['count']}×{s['label']}")
+                        has_hr = s.get("avg_hr")
+                        cols = st.columns(4 if has_hr else 3)
+                        if by_time:
+                            cols[0].metric("Avg Distance (mi)", s['avg_dist_label'], delta=s.get("dist_drift"))
+                            cols[1].metric("Avg Pace (min/mi)", s.get("avg_pace_label", "—"))
+                            cols[2].metric("Farthest Split (mi)", s['farthest_split'])
+                        else:
+                            cols[0].metric("Avg Time", s['avg_duration'], delta=s.get("time_drift"), delta_color="inverse")
+                            cols[1].metric("Avg Pace (min/mi)", s.get("avg_pace_label", "—"))
+                            cols[2].metric("Fastest Split", s['fastest_split'])
+                        if has_hr:
+                            cols[3].metric("Avg HR (bpm)", s['avg_hr'])
+
 
         # -----------------------------------------------------------------
         # ACTIVITY DETAILS TAB

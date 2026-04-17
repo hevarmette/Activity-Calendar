@@ -1,7 +1,7 @@
 import pandas as pd
 from datetime import timedelta
 from streamlit import session_state as ss
-from utils import format_pace, convert_seconds_to_hms
+from utils import format_pace, convert_seconds_to_hms, parse_hms_to_seconds
 import numpy as np
 
 # Keys = Database Column Names
@@ -50,12 +50,18 @@ def process_lap_data(df):
 
     df["Time (formatted)"] = df["Time"].apply(convert_seconds_to_hms)
 
+    # Cumulative columns
+    df["Cumulative Distance"] = df["Distance (miles)"].cumsum()
+    df["Cumulative Time"] = df["Time"].cumsum().apply(convert_seconds_to_hms)
+
     # Select and reorder columns for display
     display_cols = [
         "Lap",
         "Distance (miles)",
         "Time (formatted)",
         "Pace (min/mile)",
+        "Cumulative Distance",
+        "Cumulative Time",
         "Avg Heart Rate",
         "Max Heart Rate",
         "Total Ascent",
@@ -114,12 +120,20 @@ def process_cycling_laps(df):
     df["Lap"] = df["number"]
     df["Intensity"] = df["intensity"] if "intensity" in df.columns else None
 
+    # --- Cumulative columns ---
+    df["Cumulative Distance"] = df["Distance (miles)"].cumsum()
+    df["Cumulative Time"] = df["total_timer_time"].cumsum().apply(
+        lambda s: str(timedelta(seconds=int(s))) if pd.notna(s) else None
+    )
+
     # Define columns relevant to cycling
     display_cols = [
         "Lap",
         "Distance (miles)",
         "Time (formatted)",
         "Avg Speed (mph)",
+        "Cumulative Distance",
+        "Cumulative Time",
         "Avg Heart Rate",
         "Max Heart Rate",
         "Total Ascent",
@@ -390,3 +404,136 @@ def build_cycling_auto_laps(laps_df):
         cols_to_display += ["Avg Cadence", "Max Cadence"]
 
     return laps_df[cols_to_display]
+
+
+# Standard track distances in miles for labeling interval sets
+TRACK_DISTANCES = [
+    (0.0621, "100m"), (0.1243, "200m"), (0.1864, "300m"),
+    (0.2485, "400m"), (0.3107, "500m"), (0.3728, "600m"),
+    (0.4971, "800m"), (0.6214, "1000m"), (0.7456, "1200m"),
+    (1.0, "1 mi"), (1.2427, "2000m"), (1.8641, "3000m"),
+]
+
+
+def _scaling_tolerance(distance_mi):
+    """Tolerance that starts at 10% for 100m and shrinks proportionally with distance."""
+    return max(0.02, 0.10 * (0.0621 / distance_mi))
+
+
+def _distance_label(mean_dist_mi):
+    """Map a mean distance to the nearest standard track label, or fall back to miles."""
+    tol = _scaling_tolerance(mean_dist_mi)
+    for ref, label in TRACK_DISTANCES:
+        if abs(mean_dist_mi - ref) / ref <= tol:
+            return label
+    return f"{mean_dist_mi:.2f} mi"
+
+
+def _time_label(mean_secs):
+    """Format a mean duration as a human-readable rep label (e.g., '1:30')."""
+    mins, secs = divmod(int(round(mean_secs)), 60)
+    if mins > 0:
+        return f"{mins}:{secs:02d}"
+    return f"0:{secs:02d}"
+
+
+def compute_interval_summary(processed_laps_df, sport, group_by="distance"):
+    """
+    Group 'active' laps by similar distance or time and return per-set stats.
+    group_by: 'distance' or 'time'.
+    Only sets with >= 2 reps are included. Returns a list of dicts sorted by workout order.
+    """
+    df = processed_laps_df.copy()
+    df = df[df["Intensity"] == "active"]
+    if len(df) < 2:
+        return []
+
+    df["_dist"] = pd.to_numeric(df["Distance (miles)"], errors="coerce")
+    df["_seconds"] = df["Time (formatted)"].apply(parse_hms_to_seconds)
+    df = df.dropna(subset=["_dist", "_seconds"])
+
+    if df.empty:
+        return []
+
+    if group_by == "time":
+        cluster_col = "_seconds"
+    else:
+        cluster_col = "_dist"
+
+    df = df.sort_values(cluster_col).reset_index(drop=True)
+
+    # Cluster laps by similar values using scaling tolerance
+    groups = []
+    current = [0]
+    for i in range(1, len(df)):
+        group_mean = df.loc[current, cluster_col].mean()
+        tol = _scaling_tolerance(group_mean) if group_by == "distance" else max(0.05, 0.15 * (15 / group_mean))
+        if abs(df.loc[i, cluster_col] - group_mean) / group_mean <= tol:
+            current.append(i)
+        else:
+            groups.append(current)
+            current = [i]
+    groups.append(current)
+
+    results = []
+    for idxs in groups:
+        if len(idxs) < 2:
+            continue
+        subset = df.loc[idxs]
+        mean_dist = subset["_dist"].mean()
+        avg_secs = subset["_seconds"].mean()
+
+        if group_by == "time":
+            label = _time_label(subset["_seconds"].mean())
+        else:
+            label = _distance_label(mean_dist)
+
+        entry = {
+            "count": len(subset),
+            "label": label,
+            "avg_duration": convert_seconds_to_hms(int(avg_secs)),
+            "avg_dist_label": f"{mean_dist:.2f}",
+            "mean_dist": mean_dist,
+            "first_lap": int(subset["Lap"].min()),
+        }
+
+        fastest_idx = subset["_seconds"].idxmin()
+        entry["fastest_split"] = convert_seconds_to_hms(int(subset.loc[fastest_idx, "_seconds"]))
+        entry["fastest_lap"] = int(subset.loc[fastest_idx, "Lap"])
+
+        farthest_idx = subset["_dist"].idxmax()
+        entry["farthest_split"] = f"{subset.loc[farthest_idx, '_dist']:.2f}"
+        entry["farthest_lap"] = int(subset.loc[farthest_idx, "Lap"])
+
+        # Time drift: last rep minus first rep (by lap order). Negative = got faster.
+        by_lap = subset.sort_values("Lap")
+        drift_secs = by_lap["_seconds"].iloc[-1] - by_lap["_seconds"].iloc[0]
+        entry["time_drift"] = convert_seconds_to_hms(abs(int(drift_secs)))
+        if drift_secs < 0:
+            entry["time_drift"] = f"-{entry['time_drift']}"
+
+        # Distance drift: last rep minus first rep (by lap order). Positive = went farther.
+        drift_dist = by_lap["_dist"].iloc[-1] - by_lap["_dist"].iloc[0]
+        entry["dist_drift"] = f"{abs(drift_dist):.2f}"
+        if drift_dist < 0:
+            entry["dist_drift"] = f"-{entry['dist_drift']}"
+
+        if sport == "cycling" and "Avg Speed (mph)" in subset.columns:
+            speeds = pd.to_numeric(subset["Avg Speed (mph)"], errors="coerce").dropna()
+            if not speeds.empty:
+                entry["avg_pace_label"] = f"{speeds.mean():.1f}"
+        else:
+            paces = pd.to_numeric(
+                subset.get("Pace (min/mile) unformatted"), errors="coerce"
+            ).dropna()
+            if not paces.empty:
+                entry["avg_pace_label"] = f"{format_pace(paces.mean())}"
+
+        hr = pd.to_numeric(subset.get("Avg Heart Rate"), errors="coerce").dropna()
+        if not hr.empty:
+            entry["avg_hr"] = int(hr.mean())
+
+        results.append(entry)
+
+    results.sort(key=lambda s: s["first_lap"])
+    return results
