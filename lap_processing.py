@@ -207,16 +207,20 @@ def create_auto_laps(points_df, events_df=None, auto_lap_dist=1):
     points_df["dist_diff_meters"] = points_df["distance"].diff().fillna(0)
 
     # 2. Identify "Stopped" time
-    STOP_THRESHOLD_MPS = 0.00001
-    points_df["segment_speed"] = 0.0
-    mask_moving = points_df["time_diff"] > 0
-    points_df.loc[mask_moving, "segment_speed"] = (
-        points_df.loc[mask_moving, "dist_diff_meters"]
-        / points_df.loc[mask_moving, "time_diff"]
-    )
+    # The speed-based filter below zeros out moving_seconds for points where
+    # segment speed falls below STOP_THRESHOLD_MPS, excluding near-stationary
+    # time (e.g., waiting at a light) from auto lap split times and pace.
+    # Disabled so that only explicit device pauses (handled above) are removed.
+    # STOP_THRESHOLD_MPS = 0.00001
+    # points_df["segment_speed"] = 0.0
+    # mask_moving = points_df["time_diff"] > 0
+    # points_df.loc[mask_moving, "segment_speed"] = (
+    #     points_df.loc[mask_moving, "dist_diff_meters"]
+    #     / points_df.loc[mask_moving, "time_diff"]
+    # )
 
     points_df["moving_seconds"] = points_df["time_diff"]
-    points_df.loc[points_df["segment_speed"] < STOP_THRESHOLD_MPS, "moving_seconds"] = 0
+    # points_df.loc[points_df["segment_speed"] < STOP_THRESHOLD_MPS, "moving_seconds"] = 0
 
     # Calculate Deltas for altitude
     points_df["alt_diff"] = pd.to_numeric(points_df["corrected_altitude"], errors="coerce").diff().fillna(0)

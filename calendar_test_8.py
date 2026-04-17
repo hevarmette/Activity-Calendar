@@ -2,7 +2,7 @@
 # TODO: functionality to save intensity values after editing and when selecting pill values
 # make sure lap duration for auto laps match normal laps
 
-# add functionality to see average time by set and stats like that. and summary stats on the homepage or an extra page
+# add functionality to see average time by set and stats like that
 import streamlit as st
 from datetime import datetime
 from streamlit_folium import st_folium
