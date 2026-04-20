@@ -563,10 +563,20 @@ def _render_session_content(
 
             # Interval summary for training activities
             if updated_category == "training" and (ss[f"processed_laps_df_{session_key_suffix}"]["Intensity"] == "active").sum() >= 2:
+                active_laps = ss[f"processed_laps_df_{session_key_suffix}"][
+                    ss[f"processed_laps_df_{session_key_suffix}"]["Intensity"] == "active"
+                ]
+                dist_mean = active_laps["Distance (miles)"].mean()
+                time_secs = active_laps["Time (formatted)"].apply(parse_hms_to_seconds)
+                time_mean = time_secs.mean()
+                dist_cv = active_laps["Distance (miles)"].std() / dist_mean if dist_mean else 1
+                time_cv = time_secs.std() / time_mean if time_mean else 1
+                default_group = "Time" if time_cv < dist_cv else "Distance"
+
                 group_by = st.pills(
                     "Group intervals by",
                     options=["Distance", "Time"],
-                    default="Distance",
+                    default=default_group,
                     key=f"interval_group_by_{session_key_suffix}",
                 )
                 interval_sets = compute_interval_summary(
