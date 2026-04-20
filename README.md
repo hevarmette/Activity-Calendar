@@ -1,6 +1,6 @@
 # Activity Calendar
 
-A Streamlit-based fitness activity dashboard for visualizing, analyzing, and managing workout data stored in a PostgreSQL database (I have my own files to get the info I want [file-parser](https://github.com/hevarmette/Fitness-File-Parser), so make sure your schema has the required columns and tables). It renders activities on an interactive calendar and provides deep drill-down into lap data, GPS routes, performance graphs, and training metrics.
+A Streamlit-based fitness activity dashboard for visualizing, analyzing, and managing workout data stored in a PostgreSQL database (I have my own files to parse the info I want in a sister repository [file-parser](https://github.com/hevarmette/Fitness-File-Parser), so make sure your schema has the required columns and tables). It renders activities on an interactive calendar and provides deep drill-down into lap data, GPS routes, performance graphs, and training metrics.
 
 > **Note:** This app has only been tested with `.fit` files downloaded from [Garmin Connect](https://connect.garmin.com/). Database setup and FIT file parsing are handled by a separate companion repository.
 
@@ -88,7 +88,7 @@ Activity-Calendar/
 ### Installation
 
 ```bash
-git clone https://github.com/<your-username>/Activity-Calendar.git
+git clone https://github.com/hevarmette/Activity-Calendar.git
 cd Activity-Calendar
 python -m venv venv
 source venv/bin/activate
@@ -97,14 +97,14 @@ pip install -r requirements.txt
 
 ### Configuration
 
-Create `.streamlit/secrets.toml` with your database credentials:
+Create `.streamlit/secrets.toml` with your database credentials. I just have a local copy for testing and on online database provider I use for real:
 
 ```toml
 schema = "your_schema_name"
 
 [postgresql]
 host = "localhost"
-port = 5432
+port = "your_port"
 database = "your_database"
 username = "your_user"
 password = "your_password"
