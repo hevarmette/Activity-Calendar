@@ -146,13 +146,13 @@ def process_cycling_laps(df):
     return df_display
 
 
-def create_auto_laps(points_df, events_df=None, auto_lap_dist=1):
+def create_auto_laps(points_df, events_df=None, auto_lap_dist=1.0):
     """
     Create a new dataframe with laps at the defined auto_lap_dist argument. Event and point dfs are sorted when queried and original dataframes are not altered
 
     :param points_df pandas.DataFrame: GPS coordinates; matches record FIT Frame
     :param events_df pandas.DataFrame: Event log during activity; matches event FIT Frame
-    :param auto_lap_dist int: distance in miles to create laps for
+    :param auto_lap_dist float: distance in miles to create laps for
     """
     if not ss.coordinates:
         return pd.DataFrame()

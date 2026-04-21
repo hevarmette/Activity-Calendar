@@ -1,7 +1,9 @@
 # remove stopped time in auto laps
 # TODO: functionality to save intensity values after editing and when selecting pill values
 # make sure lap duration for auto laps match normal laps
-
+# interval statistics does not handle sets of different distance: fix it
+# add the up or down for the time metric to be the distance away from average time or distance instead of sum of difference between reps
+# auto lap variable should be used for auto lap tab and in the create_activity_map function
 # add functionality to see average time by set and stats like that
 import streamlit as st
 from datetime import datetime

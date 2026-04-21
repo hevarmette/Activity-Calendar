@@ -830,7 +830,7 @@ def _render_session_content(
             if sport == "cycling":
                 auto_lap_dist = 5
             else:
-                auto_lap_dist = 1
+                auto_lap_dist = 0.25
 
             auto_laps_result = create_auto_laps(
                 points_df, events_df=fetch_activity_events(conn, activity_id),
