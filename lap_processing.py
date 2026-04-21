@@ -505,18 +505,23 @@ def compute_interval_summary(processed_laps_df, sport, group_by="distance"):
         entry["farthest_split"] = f"{subset.loc[farthest_idx, '_dist']:.2f}"
         entry["farthest_lap"] = int(subset.loc[farthest_idx, "Lap"])
 
-        # Time drift: last rep minus first rep (by lap order). Negative = got faster.
+        # Deviation trend: each rep's deviation from the median, then
+        # last deviation minus first deviation (by lap order).
         by_lap = subset.sort_values("Lap")
-        drift_secs = by_lap["_seconds"].iloc[-1] - by_lap["_seconds"].iloc[0]
-        entry["time_drift"] = convert_seconds_to_hms(abs(int(drift_secs)))
-        if drift_secs < 0:
-            entry["time_drift"] = f"-{entry['time_drift']}"
 
-        # Distance drift: last rep minus first rep (by lap order). Positive = went farther.
-        drift_dist = by_lap["_dist"].iloc[-1] - by_lap["_dist"].iloc[0]
-        entry["dist_drift"] = f"{abs(drift_dist):.2f}"
-        if drift_dist < 0:
-            entry["dist_drift"] = f"-{entry['dist_drift']}"
+        med_secs = by_lap["_seconds"].median()
+        time_devs = by_lap["_seconds"] - med_secs
+        time_trend = time_devs.iloc[-1] - time_devs.iloc[0]
+        entry["time_dev_trend"] = convert_seconds_to_hms(abs(int(time_trend)))
+        if time_trend < 0:
+            entry["time_dev_trend"] = f"-{entry['time_dev_trend']}"
+
+        med_dist = by_lap["_dist"].median()
+        dist_devs = by_lap["_dist"] - med_dist
+        dist_trend = dist_devs.iloc[-1] - dist_devs.iloc[0]
+        entry["dist_dev_trend"] = f"{abs(dist_trend):.2f}"
+        if dist_trend < 0:
+            entry["dist_dev_trend"] = f"-{entry['dist_dev_trend']}"
 
         if sport == "cycling" and "Avg Speed (mph)" in subset.columns:
             speeds = pd.to_numeric(subset["Avg Speed (mph)"], errors="coerce").dropna()

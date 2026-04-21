@@ -591,11 +591,11 @@ def _render_session_content(
                         has_hr = s.get("avg_hr")
                         cols = st.columns(4 if has_hr else 3)
                         if by_time:
-                            cols[0].metric("Avg Distance (mi)", s['avg_dist_label'], delta=s.get("dist_drift"))
+                            cols[0].metric("Avg Distance (mi)", s['avg_dist_label'], delta=s.get("dist_dev_trend"))
                             cols[1].metric("Avg Pace (min/mi)", s.get("avg_pace_label", "—"))
                             cols[2].metric("Farthest Split (mi)", s['farthest_split'])
                         else:
-                            cols[0].metric("Avg Time", s['avg_duration'], delta=s.get("time_drift"), delta_color="inverse")
+                            cols[0].metric("Avg Time", s['avg_duration'], delta=s.get("time_dev_trend"), delta_color="inverse")
                             cols[1].metric("Avg Pace (min/mi)", s.get("avg_pace_label", "—"))
                             cols[2].metric("Fastest Split", s['fastest_split'])
                         if has_hr:
