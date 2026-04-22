@@ -1,5 +1,4 @@
 import pandas as pd
-from datetime import timedelta
 from streamlit import session_state as ss
 from utils import format_pace, convert_seconds_to_hms, parse_hms_to_seconds
 import numpy as np
@@ -91,9 +90,7 @@ def process_cycling_laps(df):
     df["Distance (miles)"] = round(df["total_distance"] / ss.meters_to_miles, 2)
 
     # --- Time ---
-    df["Time (formatted)"] = df["total_timer_time"].apply(
-        lambda s: str(timedelta(seconds=int(s))) if pd.notna(s) else None
-    )
+    df["Time (formatted)"] = df["total_timer_time"].apply(convert_seconds_to_hms)
 
     # --- Average Speed in MPH ---
     non_zero_time = df["total_timer_time"] > 0
@@ -122,9 +119,7 @@ def process_cycling_laps(df):
 
     # --- Cumulative columns ---
     df["Cumulative Distance"] = df["Distance (miles)"].cumsum()
-    df["Cumulative Time"] = df["total_timer_time"].cumsum().apply(
-        lambda s: str(timedelta(seconds=int(s))) if pd.notna(s) else None
-    )
+    df["Cumulative Time"] = df["total_timer_time"].cumsum().apply(convert_seconds_to_hms)
 
     # Define columns relevant to cycling
     display_cols = [
@@ -396,7 +391,7 @@ def build_cycling_auto_laps(laps_df):
         "Total Descent (ft)",
     ]
     if "Avg Speed (mph)" in laps_df.columns:
-        cols_to_display +=  "Max Speed (mph)"
+        cols_to_display += ["Max Speed (mph)"]
         cols_to_display.insert(3, "Avg Speed (mph)")
     if "Avg HR" in laps_df.columns:
         cols_to_display += ["Avg HR", "Max HR"]

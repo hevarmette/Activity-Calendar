@@ -201,7 +201,7 @@ def _render_session_content(
 
     # ---- map (per-session, no sport colouring needed within a single leg) ---
     if not points_df.empty and ss.coordinates:
-        activity_map = create_activity_map(points_df, fullscreen=True)
+        activity_map = create_activity_map(points_df, fullscreen=True, auto_lap_dist=ss.auto_lap_distances.get(sport, ss.auto_lap_distances["default"]))
         if map_col is not None:
             with map_col:
                 st_folium(
@@ -827,10 +827,7 @@ def _render_session_content(
         # AUTO LAPS TAB
         # -----------------------------------------------------------------
         with auto_laps_tab:
-            if sport == "cycling":
-                auto_lap_dist = 5
-            else:
-                auto_lap_dist = 0.25
+            auto_lap_dist = ss.auto_lap_distances.get(sport, ss.auto_lap_distances["default"])
 
             auto_laps_result = create_auto_laps(
                 points_df, events_df=fetch_activity_events(conn, activity_id),

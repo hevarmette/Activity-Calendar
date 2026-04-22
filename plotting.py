@@ -146,7 +146,7 @@ def create_activity_map(points_df, fullscreen, auto_lap_dist=1, sessions_df=None
     ).add_to(route_map)
 
     points_df["distance_auto_lap"] = (
-        points_df["distance"] / ss.meters_to_miles * auto_lap_dist
+        points_df["distance"] / ss.meters_to_miles / auto_lap_dist
     )
     max_miles = int(points_df["distance_auto_lap"].max())
 

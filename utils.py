@@ -18,6 +18,12 @@ def init_session_state():
             75: "strong",
             100: "very strong",
         }
+    if "auto_lap_distances" not in ss:
+        ss.auto_lap_distances = {
+            "cycling": 5,
+            "running": 0.25,
+            "default": 1,
+        }
     if "effort_labels" not in ss:
         ss.effort_labels = {
             1: "very light",
