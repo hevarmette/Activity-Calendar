@@ -40,7 +40,9 @@ def fetch_lap_data(_conn, activity_id):
             max_heart_rate,
             avg_heart_rate,
             intensity,
-            (total_distance * {1 / ss.meters_to_miles}) AS distance_mi
+            (total_distance * {1 / ss.meters_to_miles}) AS distance_mi,
+            avg_power,
+            max_power
         FROM {ss.schema}.lap
         WHERE activity_id = %s
         ORDER BY number ASC
@@ -76,7 +78,9 @@ def fetch_lap_data_for_session(_conn, activity_id, first_lap_index, num_laps):
             max_heart_rate,
             avg_heart_rate,
             intensity,
-            (total_distance * {1 / ss.meters_to_miles}) AS distance_mi
+            (total_distance * {1 / ss.meters_to_miles}) AS distance_mi,
+            avg_power,
+            max_power
         FROM {ss.schema}.lap
         WHERE activity_id = %s
           AND number >= %s

@@ -114,7 +114,7 @@ def process_cycling_laps(df):
         df["Total Descent"] = df["total_descent"]
 
     # --- Lap number and intensity ---
-    df["Lap"] = df["number"]
+    df["Lap"] = df["number"] # instead of making a new column, why not just use config dictionary to rename? 
     df["Intensity"] = df["intensity"] if "intensity" in df.columns else None
 
     # --- Cumulative columns ---
@@ -127,6 +127,8 @@ def process_cycling_laps(df):
         "Distance (miles)",
         "Time (formatted)",
         "Avg Speed (mph)",
+        "avg_power",
+        "max_power",
         "Cumulative Distance",
         "Cumulative Time",
         "Avg Heart Rate",

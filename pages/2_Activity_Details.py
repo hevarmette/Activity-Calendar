@@ -512,6 +512,8 @@ def _render_session_content(
                     "Lap Id": None,
                     "Distance (miles)": st.column_config.NumberColumn(format="%.2f"),
                     "Avg Speed (mph)": st.column_config.NumberColumn(format="%.1f"),
+                    "avg_power": "Avg Power",
+                    "max_power": "Max Power",
                     "Avg Heart Rate": st.column_config.NumberColumn(
                         step=1, format="%d"
                     ),
@@ -982,7 +984,7 @@ def _render_multisport(
         with tab:
             # Slice the full points_df to only this session's time window
             seg_start = session_row["start_time"]
-            seg_end = session_row["timestamp"]  # FIT session timestamp = end of session
+            seg_end = seg_start + timedelta(seconds=float(session_row["total_timer_time"] or 0))
             if not full_points_df.empty:
                 mask = (full_points_df["timestamp"] >= seg_start) & (
                     full_points_df["timestamp"] <= seg_end

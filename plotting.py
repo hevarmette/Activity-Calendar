@@ -1,6 +1,7 @@
 import folium
 import branca
 import plotly.express as px
+from datetime import timedelta
 from streamlit import session_state as ss
 
 # Sport → polyline colour for multisport maps
@@ -53,7 +54,7 @@ def create_activity_map(points_df, fullscreen, auto_lap_dist=1, sessions_df=None
 
             # Slice points that fall within this session's time window
             seg_start = session_row["start_time"]
-            seg_end = session_row["timestamp"]  # session timestamp = end time in FIT
+            seg_end = seg_start + timedelta(seconds=float(session_row["total_timer_time"] or 0))
             mask = (points_df["timestamp"] >= seg_start) & (
                 points_df["timestamp"] <= seg_end
             )
