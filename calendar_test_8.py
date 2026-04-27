@@ -5,6 +5,10 @@
 # add the up or down for the time metric to be the distance away from average time or distance instead of sum of difference between reps
 # auto lap variable should be used for auto lap tab and in the create_activity_map function
 # add functionality to see average time by set and stats like that
+# activity summary should group sport types togther and highlight current period
+# interval stats should be to hundredths of seconds
+# add total elapsed time in activity details section
+# add sorting options to calendar search page
 import streamlit as st
 from datetime import datetime
 from streamlit_folium import st_folium
@@ -49,14 +53,22 @@ def show_activity_dialog(
         and activity_row.get("num_sessions", 1) > 1
     )
 
+    if ss.activity_details:
+        distance_m = ss.activity_details[0]
+        duration_s = ss.activity_details[1]
+        avg_power = ss.activity_details[2]
+        description = ss.activity_details[3] if ss.activity_details[3] else ""
+        feel = ss.activity_details[4]
+        effort = ss.activity_details[5]
+        local_timestamp = ss.activity_details[6]
+
+        # Time since activity
+        time_ago = datetime.now() - local_timestamp
+        st.markdown(f"_{time_ago.days} days ago_")
+
     if is_multisport:
         # --- Multisport summary popup ---
         sessions_df = fetch_sessions_for_activity(conn, activity_id)
-
-        if ss.activity_details:
-            local_timestamp = ss.activity_details[6]
-            time_ago = datetime.now() - local_timestamp
-            st.markdown(f"_{time_ago.days} days ago_")
 
         if not sessions_df.empty:
             # Total distance and duration across all legs
@@ -99,18 +111,6 @@ def show_activity_dialog(
     else:
         # --- Single-sport popup (original logic) ---
         if ss.activity_details:
-            distance_m = ss.activity_details[0]
-            duration_s = ss.activity_details[1]
-            avg_power = ss.activity_details[2]
-            description = ss.activity_details[3] if ss.activity_details[3] else ""
-            feel = ss.activity_details[4]
-            effort = ss.activity_details[5]
-            local_timestamp = ss.activity_details[6]
-
-            # Time since activity
-            time_ago = datetime.now() - local_timestamp
-            st.markdown(f"_{time_ago.days} days ago_")
-
             # --- Stats ---
             miles = distance_m / ss.meters_to_miles
             duration_td = timedelta(seconds=int(duration_s))
@@ -141,44 +141,44 @@ def show_activity_dialog(
             # else:
             #     st.warning("No GPS data found for this activity.")
 
-            # --- Description ---
-            if description not in [None, "0", ""]:
-                st.markdown(f"**Description:** *{description}*")
+    # --- Description ---
+    if description not in [None, "0", ""]:
+        st.markdown(f"**Description:** *{description}*")
 
-            subcol1, subcol2, subcol3 = st.columns(
-                [0.08, 0.65, 0.27], vertical_alignment="center"
+    subcol1, subcol2, subcol3 = st.columns(
+        [0.08, 0.65, 0.27], vertical_alignment="center"
+    )
+    # --- Workout Feel + Effort --
+    # Converting feel from db value to label
+    if feel is not None:
+        # Load the SVG file not used rn
+        with open(r"assets/normal.svg", "r") as f:
+            svg = f.read()
+        feel_label = ss.feel_map.get(feel, "Unknown")
+        feel_string = f"{svg} "
+        with subcol1:
+            st.image(
+                f"assets/{feel_label.replace(' ', '-')}.svg", width="stretch"
             )
-            # --- Workout Feel + Effort --
-            # Converting feel from db value to label
-            if feel is not None:
-                # Load the SVG file not used rn
-                with open(r"assets/normal.svg", "r") as f:
-                    svg = f.read()
-                feel_label = ss.feel_map.get(feel, "Unknown")
-                feel_string = f"{svg} "
-                with subcol1:
-                    st.image(
-                        f"assets/{feel_label.replace(' ', '-')}.svg", width="stretch"
-                    )
-            else:
-                feel_string = ""  # not used rn. might display the label with the image
+    else:
+        feel_string = ""  # not used rn. might display the label with the image
 
-            # converting effort from db value to label
-            if effort is not None:
-                effort_index = int(effort / 10)
-                effort_label = ss.effort_labels.get(effort_index, "Unknown")
-                effort_string = f"| **Effort:** {effort_index} – {effort_label}"
-                with subcol2:
-                    st.markdown(f"{effort_string}", unsafe_allow_html=True)
-            else:
-                effort_string = ""
+    # converting effort from db value to label
+    if effort is not None:
+        effort_index = int(effort / 10)
+        effort_label = ss.effort_labels.get(effort_index, "Unknown")
+        effort_string = f"| **Effort:** {effort_index} – {effort_label}"
+        with subcol2:
+            st.markdown(f"{effort_string}", unsafe_allow_html=True)
+    else:
+        effort_string = ""
 
-            with subcol3:
-                # --- View Details Button ---
-                if st.button("View Lap Details 📈"):
-                    ss.selected_activity_id = activity_id
-                    ss.selected_activity_sport = activity_sport
-                    st.switch_page("pages/2_Activity_Details.py")
+    with subcol3:
+        # --- View Details Button ---
+        if st.button("View Lap Details 📈"):
+            ss.selected_activity_id = activity_id
+            ss.selected_activity_sport = activity_sport
+            st.switch_page("pages/2_Activity_Details.py")
 
 
 # --- Callbacks ---

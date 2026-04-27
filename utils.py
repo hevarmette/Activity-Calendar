@@ -21,7 +21,7 @@ def init_session_state():
     if "auto_lap_distances" not in ss:
         ss.auto_lap_distances = {
             "cycling": 5,
-            "running": 0.25,
+            "running": 1,
             "default": 1,
         }
     if "effort_labels" not in ss:
