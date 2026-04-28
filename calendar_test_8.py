@@ -1,4 +1,3 @@
-# remove stopped time in auto laps
 # TODO: functionality to save intensity values after editing and when selecting pill values
 # make sure lap duration for auto laps match normal laps
 # interval statistics does not handle sets of different distance: fix it
@@ -10,6 +9,7 @@
 # add total elapsed time in activity details section
 # add sorting options to calendar search page
 # make sure adjusted distance is only sent back if changed, so don't round prematurely in the sidebar. also do not round interval stats
+# swimming support
 import streamlit as st
 from datetime import datetime
 from streamlit_folium import st_folium

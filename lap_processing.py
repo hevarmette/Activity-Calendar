@@ -311,12 +311,14 @@ def create_auto_laps(points_df, events_df=None, auto_lap_dist=1.0):
     if agg_dict:
         laps_grouped = points_df.groupby("exact_lap_no", observed=True).agg(agg_dict)
         laps_grouped.index = laps_grouped.index.astype(int)
+        # Reindex to align with laps_df in case some bins are empty
+        laps_grouped = laps_grouped.reindex(laps_df["Lap"])
 
         if "heart_rate" in agg_dict:
             # Force numeric, turning any weird values or empty bins into safe NaNs
             hr_mean = pd.to_numeric(laps_grouped["heart_rate"]["mean"], errors="coerce")
             hr_max = pd.to_numeric(laps_grouped["heart_rate"]["max"], errors="coerce")
-            laps_df["Avg HR"] = hr_mean.round(0).values
+            laps_df["Avg HR"] = hr_mean.values
             laps_df["Max HR"] = hr_max.values
 
         if "total_cadence" in agg_dict:
@@ -327,7 +329,7 @@ def create_auto_laps(points_df, events_df=None, auto_lap_dist=1.0):
             cad_max = pd.to_numeric(
                 laps_grouped["total_cadence"]["max"], errors="coerce"
             )
-            laps_df["Avg Cadence"] = cad_mean.round(0).values
+            laps_df["Avg Cadence"] = cad_mean.values
             laps_df["Max Cadence"] = cad_max.values
 
         if "enhanced_speed" in agg_dict:

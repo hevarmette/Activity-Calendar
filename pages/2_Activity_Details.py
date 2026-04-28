@@ -202,13 +202,7 @@ def _render_session_content(
     # ---- map (per-session, no sport colouring needed within a single leg) ---
     if not points_df.empty and ss.coordinates:
         activity_map = create_activity_map(points_df, fullscreen=True, auto_lap_dist=ss.auto_lap_distances.get(sport, ss.auto_lap_distances["default"]))
-        if map_col is not None:
-            with map_col:
-                st_folium(
-                    activity_map, width="stretch", key=f"map_{session_key_suffix}"
-                )
-        else:
-            st_folium(activity_map, width="stretch", key=f"map_{session_key_suffix}")
+        st_folium(activity_map, width="stretch", key=f"map_{session_key_suffix}")
 
     # ---- performance graphs -------------------------------------------------
     st.subheader("📈 Performance Graphs")
@@ -935,6 +929,14 @@ def _render_multisport(
     Top section: colour-coded full-activity map + description + total summary metrics.
     Below: one st.tab per session, each delegating to _render_session_content.
     """
+    # Total summary metrics across all legs — rendered above the map
+    total_distance_m = sessions_df["total_distance"].sum()
+    total_duration_s = sessions_df["total_timer_time"].sum()
+    updated_distance_m, updated_duration_s = _render_sidebar_adjustments(
+        total_distance_m, total_duration_s, key_suffix=f"multi_{activity_id}",
+    )
+    _render_summary_metrics("multisport", total_distance_m, total_duration_s, None)
+
     map_col, description_col = st.columns([0.7, 0.3])
 
     # Colour-coded overview map — segments coloured by sport
@@ -958,15 +960,6 @@ def _render_multisport(
             key=f"desc_input_{activity_id}",
         )
 
-        # Total summary metrics across all legs
-        total_distance_m = sessions_df["total_distance"].sum()
-        total_duration_s = sessions_df["total_timer_time"].sum()
-
-    updated_distance_m, updated_duration_s = _render_sidebar_adjustments(
-        total_distance_m, total_duration_s, key_suffix=f"multi_{activity_id}",
-    )
-    _render_summary_metrics("multisport", total_distance_m, total_duration_s, None)
-
     # ---- one st.tab per session ---------------------------------------------
     # Build labels — repeated sport names get a counter: Run, Bike, Run 2
     tab_labels = []
@@ -986,9 +979,16 @@ def _render_multisport(
             seg_start = session_row["start_time"]
             seg_end = seg_start + timedelta(seconds=float(session_row["total_timer_time"] or 0))
             if not full_points_df.empty:
-                mask = (full_points_df["timestamp"] >= seg_start) & (
-                    full_points_df["timestamp"] <= seg_end
-                )
+                # Normalize tz-awareness so the comparison doesn't silently
+                # produce an all-False mask when one side is tz-aware and the
+                # other is tz-naive.
+                ts_col = full_points_df["timestamp"]
+                if ts_col.dt.tz is not None and seg_start.tzinfo is None:
+                    ts_col = ts_col.dt.tz_localize(None)
+                elif ts_col.dt.tz is None and getattr(seg_start, "tzinfo", None) is not None:
+                    seg_start = seg_start.replace(tzinfo=None)
+                    seg_end = seg_end.replace(tzinfo=None)
+                mask = (ts_col >= seg_start) & (ts_col <= seg_end)
                 session_points_df = full_points_df[mask].copy()
                 # Re-anchor elapsed_time to the start of this leg
                 if not session_points_df.empty:
