@@ -99,7 +99,7 @@ def _render_sidebar_adjustments(distance_m, duration_s, key_suffix):
     with st.sidebar:
         st.subheader("Adjust Activity")
         new_miles = st.number_input(
-            "Distance (miles)", value=round(miles, 2), step=0.01,
+            "Distance (miles)", value=miles, step=0.01,
             format="%.2f", key=f"edit_dist_{key_suffix}",
         )
         dur_str = convert_seconds_to_hms(duration_s)

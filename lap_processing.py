@@ -1,6 +1,6 @@
 import pandas as pd
 from streamlit import session_state as ss
-from utils import format_pace, convert_seconds_to_hms, parse_hms_to_seconds
+from utils import format_pace, format_pace_precise, convert_seconds_to_hms, parse_hms_to_seconds
 import numpy as np
 
 # Keys = Database Column Names
@@ -490,14 +490,14 @@ def compute_interval_summary(processed_laps_df, sport, group_by="distance"):
         entry = {
             "count": len(subset),
             "label": label,
-            "avg_duration": convert_seconds_to_hms(int(avg_secs)),
+            "avg_duration": convert_seconds_to_hms(avg_secs),
             "avg_dist_label": f"{mean_dist:.2f}",
             "mean_dist": mean_dist,
             "first_lap": int(subset["Lap"].min()),
         }
 
         fastest_idx = subset["_seconds"].idxmin()
-        entry["fastest_split"] = convert_seconds_to_hms(int(subset.loc[fastest_idx, "_seconds"]))
+        entry["fastest_split"] = convert_seconds_to_hms(subset.loc[fastest_idx, "_seconds"])
         entry["fastest_lap"] = int(subset.loc[fastest_idx, "Lap"])
 
         farthest_idx = subset["_dist"].idxmax()
@@ -511,7 +511,7 @@ def compute_interval_summary(processed_laps_df, sport, group_by="distance"):
         med_secs = by_lap["_seconds"].median()
         time_devs = by_lap["_seconds"] - med_secs
         time_trend = time_devs.iloc[-1] - time_devs.iloc[0]
-        entry["time_dev_trend"] = convert_seconds_to_hms(abs(int(time_trend)))
+        entry["time_dev_trend"] = convert_seconds_to_hms(abs(round(time_trend)))
         if time_trend < 0:
             entry["time_dev_trend"] = f"-{entry['time_dev_trend']}"
 
@@ -531,11 +531,11 @@ def compute_interval_summary(processed_laps_df, sport, group_by="distance"):
                 subset.get("Pace (min/mile) unformatted"), errors="coerce"
             ).dropna()
             if not paces.empty:
-                entry["avg_pace_label"] = f"{format_pace(paces.mean())}"
+                entry["avg_pace_label"] = f"{format_pace_precise(paces.mean())}"
 
         hr = pd.to_numeric(subset.get("Avg Heart Rate"), errors="coerce").dropna()
         if not hr.empty:
-            entry["avg_hr"] = int(hr.mean())
+            entry["avg_hr"] = round(hr.mean())
 
         results.append(entry)
 

@@ -119,6 +119,16 @@ def format_pace(x):
     return None
 
 
+def format_pace_precise(x):
+    """Pace formatting to hundredths of a second."""
+    if pd.notna(x):
+        total_secs = x * 60
+        m = int(total_secs // 60)
+        s = total_secs % 60
+        return f"{m}:{s:05.2f}"
+    return None
+
+
 def get_svg_markdown(label):
     """Reads an SVG and converts it to a markdown image string."""
     filename = f"assets/{label.replace(' ', '-')}.svg"
