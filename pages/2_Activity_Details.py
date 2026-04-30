@@ -201,8 +201,15 @@ def _render_session_content(
 
     # ---- map (per-session, no sport colouring needed within a single leg) ---
     if not points_df.empty and ss.coordinates:
-        activity_map = create_activity_map(points_df, fullscreen=True, auto_lap_dist=ss.auto_lap_distances.get(sport, ss.auto_lap_distances["default"]))
-        st_folium(activity_map, width="stretch", key=f"map_{session_key_suffix}")
+        if map_col is not None:
+            with map_col:
+                activity_map = create_activity_map(points_df, fullscreen=True, auto_lap_dist=ss.auto_lap_distances.get(sport, ss.auto_lap_distances["default"]))
+                st_folium(activity_map, width="stretch", key=f"map_{session_key_suffix}")
+        else:
+            activity_map = create_activity_map(points_df, fullscreen=True, auto_lap_dist=ss.auto_lap_distances.get(sport, ss.auto_lap_distances["default"]))
+            st_folium(activity_map, width="stretch", key=f"map_{session_key_suffix}")
+
+
 
     # ---- performance graphs -------------------------------------------------
     st.subheader("📈 Performance Graphs")
