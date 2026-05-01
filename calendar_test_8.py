@@ -10,6 +10,7 @@
 # add sorting options to calendar search page
 # make sure adjusted distance is only sent back if changed, so don't round prematurely in the sidebar. also do not round interval stats
 # swimming support
+# interval stats for biking should be power then speed
 import streamlit as st
 from datetime import datetime
 from streamlit_folium import st_folium

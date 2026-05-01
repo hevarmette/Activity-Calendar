@@ -832,10 +832,14 @@ def _render_session_content(
         with auto_laps_tab:
             auto_lap_dist = ss.auto_lap_distances.get(sport, ss.auto_lap_distances["default"])
 
-            auto_laps_result = create_auto_laps(
-                points_df, events_df=fetch_activity_events(conn, activity_id),
-                auto_lap_dist=auto_lap_dist,
-            )
+            auto_laps_result = None
+            try:
+                auto_laps_result = create_auto_laps(
+                    points_df, events_df=fetch_activity_events(conn, activity_id),
+                    auto_lap_dist=auto_lap_dist,
+                )
+            except AttributeError:
+                st.error("Make sure timestamps are in datetime format before trying to convert")
 
             # create_auto_laps now returns a tuple (laps_df, target_dists)
             if isinstance(auto_laps_result, tuple):

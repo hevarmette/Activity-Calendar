@@ -194,7 +194,7 @@ def fetch_activity_details(_conn, activity_id):
     if _conn is None:
         return None
     sql_query = f"""
-        SELECT adjusted_distance, adjusted_duration, CAST(avg_power AS INTEGER), description, workout_feel, effort, COALESCE(local_timestamp, activity.timestamp), activity_name, category
+        SELECT adjusted_distance, adjusted_duration, CAST(avg_power AS INTEGER), description, workout_feel, effort, COALESCE(local_timestamp, activity.timestamp AT TIME ZONE 'America/Chicago'), activity_name, category
         FROM {ss.schema}.activity JOIN {ss.schema}.session ON activity.activity_id = session.activity_id WHERE activity.activity_id = %s
     """
     try:
