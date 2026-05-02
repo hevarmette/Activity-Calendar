@@ -257,21 +257,9 @@ with title_col:
     st.title("Activity Search")
 with secondary_col:
     with st.popover("Sort Options", width="stretch"):
-        sort_options = ["total_distance", "total_timer_time"]
-        sort_selection = st.segmented_control("Values to sort by", sort_options, selection_mode="multi")
-        # sort_direction = [False] * len(sort_selection)
-        # order = st.segmented_control(
-        #     "Sort order",
-        #     options=["Ascending", "Ascending"],
-        # )
-        # st.write(order)
-        # if isinstance(order, list):
-        #     for item in list(order):
-        #         sort_direction.append(item == "Ascending")
-        # elif order is not None:
-        #     sort_direction = [order == "Ascending"]
-        #
-        # st.write(sort_direction)
+        sort_options = {"Distance": "total_distance", "Duration": "total_timer_time"}
+        sort_keys = st.segmented_control("Values to sort by", sort_options.keys(), selection_mode="multi")
+        sort_selection = [sort_options[key] for key in sort_keys] if sort_keys else []
         sort_direction = st.pills(
             "Sort direction — selected = ascending, unselected = descending",
             options=sort_selection,

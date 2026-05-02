@@ -22,16 +22,22 @@ GROUPING_OPTIONS = {
 }
 
 
-def aggregate_data(df, freq, sports):
+def aggregate_data(df, freq, sports, group_by_sport):
     """Group raw session rows by time period and sport."""
     filtered = df[df["sport"].isin(sports)].copy()
     if filtered.empty:
         return pd.DataFrame()
 
     filtered["period"] = filtered["local_timestamp"].dt.to_period(
-        # {"D": "D", "W": "W-SAT", "MS": "M", "YS": "Y"}[freq] # if the app works, this can be deleted
         freq
     )
+
+    # Filter out future periods
+    current_period = pd.Timestamp.now().to_period(freq)
+    filtered = filtered[filtered["period"] <= current_period]
+
+    if group_by_sport and len(sports) > 1:
+        filtered["sport"] = "All Sports"
 
     agg = (
         filtered.groupby(["period", "sport"])
@@ -82,7 +88,7 @@ def _format_pace_speed(row):
     return f"{format_pace(pace_min_per_mile)} /mi"
 
 
-def build_summary_table(agg):
+def build_summary_table(agg, group_by_sport):
     """Format the aggregated dataframe for display."""
     display = pd.DataFrame()
     display["Period"] = agg["period_label"]
@@ -90,7 +96,7 @@ def build_summary_table(agg):
     display["Activities"] = agg["activities"]
     display["Distance (mi)"] = agg["distance_mi"].round(2)
     display["Total Time"] = agg["total_time_s"].apply(convert_seconds_to_hms)
-    display["Avg Pace / Speed"] = agg.apply(_format_pace_speed, axis=1)
+    display["Avg Pace / Speed"] = "-" if group_by_sport else agg.apply(_format_pace_speed, axis=1)
     display["Avg Distance (mi)"] = agg["avg_distance_mi"].round(2)
     display["Avg Time"] = agg["avg_time_s"].apply(convert_seconds_to_hms)
     display["Calories"] = agg["total_calories"].fillna(0).astype(int)
@@ -129,7 +135,11 @@ with st.sidebar:
         format_func=lambda x: x.capitalize(),
     )
 
-    grouping = st.selectbox("Group By", options=list(GROUPING_OPTIONS.keys()), index=2)
+    scol1, scol2 = st.columns(2, vertical_alignment="bottom")
+    with scol1:
+        grouping = st.selectbox("Group By", options=list(GROUPING_OPTIONS.keys()), index=2)
+    with scol2:
+        group_by_sport = st.toggle("Sport", value=True)
 
     chart_metric = st.selectbox(
         "Chart Metric",
@@ -146,7 +156,7 @@ if not selected_sports:
     st.stop()
 
 freq = GROUPING_OPTIONS[grouping]
-agg = aggregate_data(raw_df, freq, selected_sports)
+agg = aggregate_data(raw_df, freq, selected_sports, group_by_sport=group_by_sport)
 
 if agg.empty:
     st.info("No data for the selected filters.")
@@ -170,19 +180,27 @@ st.divider()
 
 # --- Aggregated Table (primary focus) ---
 st.subheader(f"{grouping} Summary by Sport")
-display_df = build_summary_table(agg)
+display_df = build_summary_table(agg, group_by_sport=group_by_sport)
+summary_table_config = {}
+if group_by_sport:
+    summary_table_config = {
+            "Sport": None,
+            "Avg Pace / Speed": None
+            }
 st.dataframe(
     display_df.sort_values(["Period", "Sport"], ascending=[False, True]),
     width='stretch',
     hide_index=True,
+    column_config=summary_table_config,
 )
 
 st.divider()
 
 # --- Bar Chart ---
 chart_df = agg.copy()
-chart_df = chart_df[chart_df["period"].apply(lambda p: p.start_time) <= pd.Timestamp.now()]
+chart_df = chart_df[chart_df["period"] <= pd.Timestamp.now().to_period(freq)]
 chart_df["time_hours"] = chart_df["total_time_s"] / 3600
+years_to_go_back = 6
 
 metric_map = {
     "Distance (mi)": "distance_mi",
@@ -207,8 +225,10 @@ fig = px.bar(
     },
     title=f"{chart_metric} by {grouping} Period",
 )
+x_axis_start = (pd.Timestamp.now() - pd.DateOffset(years=years_to_go_back)).to_period(freq)
 fig.update_layout(
     xaxis_tickangle=-45,
+    xaxis_range=[str(x_axis_start), str(pd.Timestamp.now().to_period(freq))],
     plot_bgcolor="rgba(0,0,0,0)",
     paper_bgcolor="rgba(0,0,0,0)",
     font_color="white",
