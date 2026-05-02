@@ -1,14 +1,8 @@
 # TODO: functionality to save intensity values after editing and when selecting pill values
-# make sure lap duration for auto laps match normal laps
-# interval statistics does not handle sets of different distance: fix it
-# add the up or down for the time metric to be the distance away from average time or distance instead of sum of difference between reps
 # auto lap variable should be used for auto lap tab and in the create_activity_map function
-# add functionality to see average time by set and stats like that
 # activity summary should group sport types togther and highlight current period
-# interval stats should be to hundredths of seconds
 # add total elapsed time in activity details section
 # add sorting options to calendar search page
-# make sure adjusted distance is only sent back if changed, so don't round prematurely in the sidebar. also do not round interval stats
 # swimming support
 # interval stats for biking should be power then speed
 import streamlit as st
