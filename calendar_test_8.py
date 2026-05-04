@@ -2,9 +2,9 @@
 # auto lap variable should be used for auto lap tab and in the create_activity_map function
 # activity summary should group sport types togther and highlight current period
 # add total elapsed time in activity details section
-# add sorting options to calendar search page
 # swimming support
 # interval stats for biking should be power then speed
+# search for activities of same name or similar activities
 import streamlit as st
 from datetime import datetime
 from streamlit_folium import st_folium
