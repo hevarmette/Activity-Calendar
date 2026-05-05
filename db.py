@@ -462,3 +462,37 @@ def fetch_search_data(_conn):
     except Exception as e:
         st.error(f"Error fetching search data: {e}")
         return pd.DataFrame()
+
+
+@st.cache_data
+def fetch_similar_activities(_conn, activity_id, activity_name, sport, category):
+    """Fetches similar activities by same name or same sport+category, excluding current."""
+    if _conn is None:
+        return pd.DataFrame()
+
+    sql_query = f"""
+        SELECT
+            a.activity_id,
+            a.activity_name,
+            COALESCE(a.local_timestamp, a.timestamp AT TIME ZONE 'America/Chicago') AS local_timestamp,
+            s.total_distance,
+            s.total_timer_time,
+            s.avg_heart_rate,
+            s.total_ascent
+        FROM {ss.schema}.activity a
+        JOIN {ss.schema}.session s ON a.activity_id = s.activity_id
+        WHERE a.activity_id != %s
+          AND s.sport = %s
+          AND (LOWER(TRIM(regexp_replace(a.activity_name, '\\s+', ' ', 'g'))) = LOWER(TRIM(regexp_replace(%s, '\\s+', ' ', 'g'))) OR a.category = %s)
+        ORDER BY a.local_timestamp DESC
+        LIMIT 20;
+    """
+    try:
+        with _conn.cursor() as cursor:
+            cursor.execute(sql_query, (activity_id, sport, activity_name, category))
+            columns = [desc.name for desc in cursor.description]
+            data = cursor.fetchall()
+        return pd.DataFrame(data, columns=columns)
+    except Exception as e:
+        st.error(f"Error fetching similar activities: {e}")
+        return pd.DataFrame()

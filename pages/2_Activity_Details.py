@@ -16,6 +16,7 @@ from db import (
     get_lap_update_query,
     retrieve_monthly_data,
     fetch_activity_events,
+    fetch_similar_activities,
 )
 from utils import (
     convert_seconds_to_hms,
@@ -1368,3 +1369,39 @@ else:
             feel,
             effort,
         )
+
+    # -------------------------------------------------------------------------
+    # SIMILAR ACTIVITIES — shown for training activities with a name
+    # -------------------------------------------------------------------------
+    if updated_category == "training" and ss.activity_details[7]:
+        similar_df = fetch_similar_activities(
+            conn, activity_id, ss.activity_details[7], sport, category
+        )
+        if not similar_df.empty:
+            st.divider()
+            st.subheader("🔁 Similar Activities")
+
+            display_df = similar_df.copy()
+            display_df["Date"] = pd.to_datetime(display_df["local_timestamp"]).dt.strftime("%b %d, %Y")
+            display_df["Distance (mi)"] = (display_df["total_distance"] / ss.meters_to_miles).round(2)
+            display_df["Duration"] = display_df["total_timer_time"].apply(
+                lambda s: convert_seconds_to_hms(int(s)) if pd.notna(s) else "—"
+            )
+            display_df["Pace"] = display_df.apply(
+                lambda r: (
+                    f"{int(r['total_timer_time'] / (r['total_distance'] / ss.meters_to_miles)) // 60}:"
+                    f"{int(r['total_timer_time'] / (r['total_distance'] / ss.meters_to_miles)) % 60:02d} /mi"
+                ) if r["total_distance"] and r["total_distance"] > 0 else "—",
+                axis=1,
+            )
+            display_df["Avg HR"] = display_df["avg_heart_rate"].apply(
+                lambda x: f"{int(x)} bpm" if pd.notna(x) else "—"
+            )
+
+            st.dataframe(
+                display_df[["Date", "activity_name", "Distance (mi)", "Duration", "Pace", "Avg HR"]].rename(
+                    columns={"activity_name": "Name"}
+                ),
+                hide_index=True,
+                use_container_width=True,
+            )
