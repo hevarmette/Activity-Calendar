@@ -32,6 +32,7 @@ from lap_processing import (
     create_auto_laps,
     build_running_auto_laps,
     build_cycling_auto_laps,
+    compute_interval_summary,
 )
 
 init_session_state()
@@ -98,7 +99,7 @@ def _render_sidebar_adjustments(distance_m, duration_s, key_suffix):
     with st.sidebar:
         st.subheader("Adjust Activity")
         new_miles = st.number_input(
-            "Distance (miles)", value=round(miles, 2), step=0.01,
+            "Distance (miles)", value=miles, step=0.01,
             format="%.2f", key=f"edit_dist_{key_suffix}",
         )
         dur_str = convert_seconds_to_hms(duration_s)
@@ -200,14 +201,15 @@ def _render_session_content(
 
     # ---- map (per-session, no sport colouring needed within a single leg) ---
     if not points_df.empty and ss.coordinates:
-        activity_map = create_activity_map(points_df, fullscreen=True)
         if map_col is not None:
             with map_col:
-                st_folium(
-                    activity_map, width="stretch", key=f"map_{session_key_suffix}"
-                )
+                activity_map = create_activity_map(points_df, fullscreen=True, auto_lap_dist=ss.auto_lap_distances.get(sport, ss.auto_lap_distances["default"]))
+                st_folium(activity_map, width="stretch", key=f"map_{session_key_suffix}")
         else:
+            activity_map = create_activity_map(points_df, fullscreen=True, auto_lap_dist=ss.auto_lap_distances.get(sport, ss.auto_lap_distances["default"]))
             st_folium(activity_map, width="stretch", key=f"map_{session_key_suffix}")
+
+
 
     # ---- performance graphs -------------------------------------------------
     st.subheader("📈 Performance Graphs")
@@ -511,14 +513,17 @@ def _render_session_content(
                     "Lap Id": None,
                     "Distance (miles)": st.column_config.NumberColumn(format="%.2f"),
                     "Avg Speed (mph)": st.column_config.NumberColumn(format="%.1f"),
+                    "avg_power": "Avg Power",
+                    "max_power": "Max Power",
                     "Avg Heart Rate": st.column_config.NumberColumn(
                         step=1, format="%d"
                     ),
                     "Max Heart Rate": st.column_config.NumberColumn(
                         step=1, format="%d"
                     ),
+                    "Cumulative Distance": st.column_config.NumberColumn(format="%.2f"),
                 }
-                disabled_cols = ["Lap", "Avg Speed (mph)"]
+                disabled_cols = ["Lap", "Avg Speed (mph)", "Cumulative Distance", "Cumulative Time"]
             else:
                 column_config = {
                     "Intensity": st.column_config.SelectboxColumn(
@@ -541,8 +546,9 @@ def _render_session_content(
                     "Max Heart Rate": st.column_config.NumberColumn(
                         "Max Heart Rate", step=1, format="%d"
                     ),
+                    "Cumulative Distance": st.column_config.NumberColumn(format="%.2f"),
                 }
-                disabled_cols = ["Lap", "Pace (min/mile)"]
+                disabled_cols = ["Lap", "Pace (min/mile)", "Cumulative Distance", "Cumulative Time"]
 
             # TODO: Recalc pace min/mile on_callback when data is edited
             edited_df = st.data_editor(
@@ -557,6 +563,47 @@ def _render_session_content(
                 st.session_state[f"processed_laps_df_{session_key_suffix}"].update(
                     edited_df
                 )
+
+            # Interval summary for training activities
+            if updated_category == "training" and (ss[f"processed_laps_df_{session_key_suffix}"]["Intensity"] == "active").sum() >= 2:
+                active_laps = ss[f"processed_laps_df_{session_key_suffix}"][
+                    ss[f"processed_laps_df_{session_key_suffix}"]["Intensity"] == "active"
+                ]
+                dist_mean = active_laps["Distance (miles)"].mean()
+                time_secs = active_laps["Time (formatted)"].apply(parse_hms_to_seconds)
+                time_mean = time_secs.mean()
+                dist_cv = active_laps["Distance (miles)"].std() / dist_mean if dist_mean else 1
+                time_cv = time_secs.std() / time_mean if time_mean else 1
+                default_group = "Time" if time_cv < dist_cv else "Distance"
+
+                group_by = st.pills(
+                    "Group intervals by",
+                    options=["Distance", "Time"],
+                    default=default_group,
+                    key=f"interval_group_by_{session_key_suffix}",
+                )
+                interval_sets = compute_interval_summary(
+                    ss[f"processed_laps_df_{session_key_suffix}"],
+                    sport,
+                    group_by=(group_by or "Distance").lower(),
+                )
+                if interval_sets:
+                    by_time = (group_by or "Distance").lower() == "time"
+                    for s in interval_sets:
+                        st.header(f"{s['count']}×{s['label']}")
+                        has_hr = s.get("avg_hr")
+                        cols = st.columns(4 if has_hr else 3)
+                        if by_time:
+                            cols[0].metric("Avg Distance (mi)", s['avg_dist_label'], delta=s.get("dist_dev_trend"))
+                            cols[1].metric("Avg Pace (min/mi)", s.get("avg_pace_label", "—"))
+                            cols[2].metric("Farthest Split (mi)", s['farthest_split'])
+                        else:
+                            cols[0].metric("Avg Time", s['avg_duration'], delta=s.get("time_dev_trend"), delta_color="inverse")
+                            cols[1].metric("Avg Pace (min/mi)", s.get("avg_pace_label", "—"))
+                            cols[2].metric("Fastest Split", s['fastest_split'])
+                        if has_hr:
+                            cols[3].metric("Avg HR (bpm)", s['avg_hr'])
+
 
         # -----------------------------------------------------------------
         # ACTIVITY DETAILS TAB
@@ -783,15 +830,16 @@ def _render_session_content(
         # AUTO LAPS TAB
         # -----------------------------------------------------------------
         with auto_laps_tab:
-            if sport == "cycling":
-                auto_lap_dist = 5
-            else:
-                auto_lap_dist = 1
+            auto_lap_dist = ss.auto_lap_distances.get(sport, ss.auto_lap_distances["default"])
 
-            auto_laps_result = create_auto_laps(
-                points_df, events_df=fetch_activity_events(conn, activity_id),
-                auto_lap_dist=auto_lap_dist,
-            )
+            auto_laps_result = None
+            try:
+                auto_laps_result = create_auto_laps(
+                    points_df, events_df=fetch_activity_events(conn, activity_id),
+                    auto_lap_dist=auto_lap_dist,
+                )
+            except AttributeError:
+                st.error("Make sure timestamps are in datetime format before trying to convert")
 
             # create_auto_laps now returns a tuple (laps_df, target_dists)
             if isinstance(auto_laps_result, tuple):
@@ -892,6 +940,14 @@ def _render_multisport(
     Top section: colour-coded full-activity map + description + total summary metrics.
     Below: one st.tab per session, each delegating to _render_session_content.
     """
+    # Total summary metrics across all legs — rendered above the map
+    total_distance_m = sessions_df["total_distance"].sum()
+    total_duration_s = sessions_df["total_timer_time"].sum()
+    updated_distance_m, updated_duration_s = _render_sidebar_adjustments(
+        total_distance_m, total_duration_s, key_suffix=f"multi_{activity_id}",
+    )
+    _render_summary_metrics("multisport", total_distance_m, total_duration_s, None)
+
     map_col, description_col = st.columns([0.7, 0.3])
 
     # Colour-coded overview map — segments coloured by sport
@@ -915,15 +971,6 @@ def _render_multisport(
             key=f"desc_input_{activity_id}",
         )
 
-        # Total summary metrics across all legs
-        total_distance_m = sessions_df["total_distance"].sum()
-        total_duration_s = sessions_df["total_timer_time"].sum()
-
-    updated_distance_m, updated_duration_s = _render_sidebar_adjustments(
-        total_distance_m, total_duration_s, key_suffix=f"multi_{activity_id}",
-    )
-    _render_summary_metrics("multisport", total_distance_m, total_duration_s, None)
-
     # ---- one st.tab per session ---------------------------------------------
     # Build labels — repeated sport names get a counter: Run, Bike, Run 2
     tab_labels = []
@@ -941,11 +988,18 @@ def _render_multisport(
         with tab:
             # Slice the full points_df to only this session's time window
             seg_start = session_row["start_time"]
-            seg_end = session_row["timestamp"]  # FIT session timestamp = end of session
+            seg_end = seg_start + timedelta(seconds=float(session_row["total_timer_time"] or 0))
             if not full_points_df.empty:
-                mask = (full_points_df["timestamp"] >= seg_start) & (
-                    full_points_df["timestamp"] <= seg_end
-                )
+                # Normalize tz-awareness so the comparison doesn't silently
+                # produce an all-False mask when one side is tz-aware and the
+                # other is tz-naive.
+                ts_col = full_points_df["timestamp"]
+                if ts_col.dt.tz is not None and seg_start.tzinfo is None:
+                    ts_col = ts_col.dt.tz_localize(None)
+                elif ts_col.dt.tz is None and getattr(seg_start, "tzinfo", None) is not None:
+                    seg_start = seg_start.replace(tzinfo=None)
+                    seg_end = seg_end.replace(tzinfo=None)
+                mask = (ts_col >= seg_start) & (ts_col <= seg_end)
                 session_points_df = full_points_df[mask].copy()
                 # Re-anchor elapsed_time to the start of this leg
                 if not session_points_df.empty:

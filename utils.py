@@ -18,6 +18,12 @@ def init_session_state():
             75: "strong",
             100: "very strong",
         }
+    if "auto_lap_distances" not in ss:
+        ss.auto_lap_distances = {
+            "cycling": 5,
+            "running": 1,
+            "default": 1,
+        }
     if "effort_labels" not in ss:
         ss.effort_labels = {
             1: "very light",
@@ -110,6 +116,16 @@ def format_pace(x):
     """pace formatting logic."""
     if pd.notna(x):
         return "{:d}:{:02d}".format(*divmod(int(round(x * 60)), 60))
+    return None
+
+
+def format_pace_precise(x):
+    """Pace formatting to hundredths of a second."""
+    if pd.notna(x):
+        total_secs = x * 60
+        m = int(total_secs // 60)
+        s = total_secs % 60
+        return f"{m}:{s:05.2f}"
     return None
 
 

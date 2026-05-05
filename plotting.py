@@ -1,6 +1,7 @@
 import folium
 import branca
 import plotly.express as px
+from datetime import timedelta
 from streamlit import session_state as ss
 
 # Sport → polyline colour for multisport maps
@@ -53,7 +54,7 @@ def create_activity_map(points_df, fullscreen, auto_lap_dist=1, sessions_df=None
 
             # Slice points that fall within this session's time window
             seg_start = session_row["start_time"]
-            seg_end = session_row["timestamp"]  # session timestamp = end time in FIT
+            seg_end = seg_start + timedelta(seconds=float(session_row["total_timer_time"] or 0))
             mask = (points_df["timestamp"] >= seg_start) & (
                 points_df["timestamp"] <= seg_end
             )
@@ -112,17 +113,38 @@ def create_activity_map(points_df, fullscreen, auto_lap_dist=1, sessions_df=None
     # Find the coordinates of the first occurance of a lap i.e. the end of previous lap. markers = nlaps - 1
     # (first lap will be the start button and stop button will be lap end of final lap)
     # iterating backwards because last laps are first: i think?
+    # if len(ulaps) > 1:
+    #     while nlaps > 1:  # exclude first marker (start)
+    #         print(f"Lap number {nlaps}")
+    #         print(points_df["lap"]
+    #                 .where(points_df["lap"] == nlaps)
+    #                 .first_valid_index())
+    #         laps.append(
+    #             points_df[["latitude", "longitude"]].iloc[
+    #                 points_df["lap"]
+    #                 .where(points_df["lap"] == nlaps)
+    #                 .first_valid_index(),
+    #                 :,
+    #             ]
+    #         )
+    #         nlaps = nlaps - 1
     if len(ulaps) > 1:
-        while nlaps > 1:  # exclude first marker (start)
+        while nlaps > 1:
+
+            mask = points_df["lap"] == nlaps
+
+            if not mask.any():
+                print(f"Skipping missing lap {nlaps}")
+                nlaps -= 1
+                continue
+
+            idx = points_df.index[mask][0]
+
             laps.append(
-                points_df[["latitude", "longitude"]].iloc[
-                    points_df["lap"]
-                    .where(points_df["lap"] == nlaps)
-                    .first_valid_index(),
-                    :,
-                ]
+                points_df.loc[idx, ["latitude", "longitude"]]
             )
-            nlaps = nlaps - 1
+
+            nlaps -= 1
 
         # Make the lap markers
         icons = folium.FeatureGroup(name="Laps", show=True).add_to(route_map)
@@ -146,7 +168,7 @@ def create_activity_map(points_df, fullscreen, auto_lap_dist=1, sessions_df=None
     ).add_to(route_map)
 
     points_df["distance_auto_lap"] = (
-        points_df["distance"] / ss.meters_to_miles * auto_lap_dist
+        points_df["distance"] / ss.meters_to_miles / auto_lap_dist
     )
     max_miles = int(points_df["distance_auto_lap"].max())
 

@@ -64,11 +64,14 @@ def _canonical_sport(sport_str, num_sessions):
 def _render_filters(container, available_sports, available_sub_sports, available_categories,
                     min_date, max_date):
     """Render all search filter widgets into the given container. Returns filter values."""
+
+    default_sport = 'running' if 'running' in available_sports else available_sports
+
     with container:
         selected_sports = st.multiselect(
             "Sport",
             options=available_sports,
-            default=available_sports,
+            default=default_sport,
             format_func=lambda x: x.capitalize(),
             key="filter_sport",
         )
@@ -249,7 +252,22 @@ def _render_pagination(total_pages, position="bottom"):
 
 # --- Page Config ---
 st.set_page_config(page_title="Activity Search", layout="wide")
-st.title("Activity Search")
+title_col, secondary_col = st.columns([0.8, 0.2], vertical_alignment='bottom', gap="xxlarge")
+with title_col:
+    st.title("Activity Search")
+with secondary_col:
+    with st.popover("Sort Options", width="stretch"):
+        sort_options = {"Distance": "total_distance", "Duration": "total_timer_time"}
+        sort_keys = st.segmented_control("Values to sort by", sort_options.keys(), selection_mode="multi")
+        sort_selection = [sort_options[key] for key in sort_keys] if sort_keys else []
+        sort_direction = st.pills(
+            "Sort direction — selected = ascending, unselected = descending",
+            options=sort_selection,
+            selection_mode="multi",
+        )
+
+        # Build the boolean list aligned with sort_columns
+        sort_direction = [col in sort_direction for col in sort_selection]
 
 conn = get_connection(local=True)
 raw_df = fetch_search_data(conn)
@@ -311,6 +329,9 @@ else:
 
     # Apply filters and show results
     activities = _apply_filters(raw_df, filters)
+
+    # Sort activities
+    activities = activities.sort_values(by=sort_selection, ascending=sort_direction)
 
     if activities.empty:
         st.info("No activities match the current filters.")
