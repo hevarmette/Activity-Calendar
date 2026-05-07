@@ -97,6 +97,30 @@ def fetch_lap_data_for_session(_conn, activity_id, first_lap_index, num_laps):
     return df
 
 
+@st.cache_data
+def fetch_length_data(_conn, activity_id):
+    """Fetches length data for a pool swimming activity."""
+    sql_query = f"""
+        SELECT
+            length_id,
+            activity_id,
+            message_index,
+            total_timer_time,
+            total_strokes,
+            avg_speed,
+            swim_stroke,
+            length_type
+        FROM {ss.schema}.length
+        WHERE activity_id = %s
+        ORDER BY message_index ASC
+    """
+    with _conn.cursor() as cursor:
+        cursor.execute(sql_query, (activity_id,))
+        columns = [desc.name for desc in cursor.description]
+        data = cursor.fetchall()
+    return pd.DataFrame(data, columns=columns)
+
+
 def get_lap_update_query(lap_id, db_column, new_value):
     """
     Returns a safe (query, params) tuple for updating a single value.
@@ -105,6 +129,13 @@ def get_lap_update_query(lap_id, db_column, new_value):
     # We inject db_column directly because we validate it against our map first (safe whitelist)
     query = f"UPDATE {ss.schema}.lap SET {db_column} = %s WHERE lap_id = %s;"
     params = (new_value, lap_id)
+    return query, params
+
+
+def get_length_update_query(length_id, db_column, new_value):
+    """Returns a (query, params) tuple for updating a single length value."""
+    query = f"UPDATE {ss.schema}.length SET {db_column} = %s WHERE length_id = %s;"
+    params = (new_value, length_id)
     return query, params
 
 
@@ -171,7 +202,8 @@ def fetch_sessions_for_activity(_conn, activity_id):
             total_ascent,
             total_descent,
             first_lap_index,
-            num_laps
+            num_laps,
+            pool_length
         FROM {ss.schema}.session
         WHERE activity_id = %s
         ORDER BY start_time ASC

@@ -14,9 +14,11 @@ from db import (
     fetch_lap_data_for_session,
     fetch_sessions_for_activity,
     get_lap_update_query,
+    get_length_update_query,
     retrieve_monthly_data,
     fetch_activity_events,
     fetch_similar_activities,
+    fetch_length_data,
 )
 from utils import (
     convert_seconds_to_hms,
@@ -34,6 +36,7 @@ from lap_processing import (
     build_running_auto_laps,
     build_cycling_auto_laps,
     compute_interval_summary,
+    process_swimming_lengths,
 )
 
 init_session_state()
@@ -171,7 +174,7 @@ def _render_session_content(
     )
 
     # ---- derive metrics for this session ------------------------------------
-    if session_row is not None:
+    if is_multisport and session_row is not None:
         distance_m = session_row["total_distance"] or 0
         duration_s = session_row["total_timer_time"] or 0
         avg_power = session_row.get("avg_power")
@@ -438,6 +441,38 @@ def _render_session_content(
         st.info("No point-by-point data available to generate graphs.")
 
     # ---- lap table + sub-tabs -----------------------------------------------
+    # Detect pool swimming — show length data instead of standard laps
+    sub_sport = (session_row["sub_sport"] or "").lower() if session_row is not None else ""
+    is_pool_swimming = sub_sport == "lap_swimming"
+
+    if is_pool_swimming:
+        pool_length_m = session_row.get("pool_length") or 25
+        raw_lengths_df = fetch_length_data(conn, activity_id)
+        lengths_df = process_swimming_lengths(raw_lengths_df, pool_length_m=pool_length_m)
+
+        if lengths_df.empty:
+            st.info("No length data found for this pool swim.")
+        else:
+            st.subheader("🏊 Lengths")
+            stroke_options = ["Freestyle", "Backstroke", "Breaststroke", "Butterfly", "Mixed", "Drill"]
+            column_config = {
+                "length_id": None,
+                "Stroke": st.column_config.SelectboxColumn("Stroke", options=stroke_options),
+                "SWOLF": st.column_config.NumberColumn(format="%.0f"),
+            }
+            disabled_cols = ["Length", "Type", "Distance (m)", "Pace /100m", "SWOLF"]
+            st.data_editor(
+                lengths_df,
+                hide_index=True,
+                use_container_width=True,
+                column_config=column_config,
+                disabled=disabled_cols,
+                key=f"length_editor_{session_key_suffix}",
+            )
+            st.session_state[f"lengths_df_{session_key_suffix}"] = lengths_df
+
+        return pd.DataFrame()
+
     st.markdown("You can edit values in the table below.")
 
     # ONLY fetch session-specific laps if it's explicitly a multisport session
@@ -875,9 +910,8 @@ def _render_single_sport(
     conn, activity_id, sport, sessions_df, updated_category, feel, effort
 ):
     """Renders the standard single-sport detail page (description box + session content + save)."""
-    # Since this is single sport (len(sessions) < 2), we safely bypass the session loop
-    # and rely entirely on ss.activity_details & fetch_lap_data.
-    session_row = None
+    # Use the first session row so sub_sport/pool_length are available downstream
+    session_row = sessions_df.iloc[0] if sessions_df is not None and not sessions_df.empty else None
     points_df = ss.points_df if "points_df" in ss else pd.DataFrame()
 
     # ---- derive metrics for this session to display above the map -----------
@@ -1141,6 +1175,36 @@ def _render_feel_effort_save(
                         )
             # Clear cache to force a re-fetch of data
             fetch_lap_data.clear()
+
+        # --- Length editor (pool swimming) ---
+        length_editor_key = f"length_editor_{session_key_suffix}"
+        if length_editor_key in ss and ss[length_editor_key].get("edited_rows"):
+            lengths_df = st.session_state.get(f"lengths_df_{session_key_suffix}")
+            if lengths_df is not None:
+                LENGTH_UI_TO_DB = {
+                    "Time": "total_timer_time",
+                    "Strokes": "total_strokes",
+                    "Stroke": "swim_stroke",
+                }
+                for row_idx, changes in ss[length_editor_key]["edited_rows"].items():
+                    try:
+                        length_id = lengths_df.iloc[int(row_idx)]["length_id"]
+                    except IndexError:
+                        st.error("Could not find length ID.")
+                        continue
+                    for ui_col, new_value in changes.items():
+                        if ui_col in LENGTH_UI_TO_DB:
+                            db_col = LENGTH_UI_TO_DB[ui_col]
+                            if db_col == "total_timer_time":
+                                seconds_value = parse_hms_to_seconds(new_value)
+                                if seconds_value is None:
+                                    st.error(f"Invalid time format '{new_value}'.")
+                                    continue
+                                new_value = seconds_value
+                            elif db_col == "swim_stroke":
+                                new_value = new_value.lower().replace(" ", "_")
+                            updates.append(get_length_update_query(length_id, db_col, new_value))
+                fetch_length_data.clear()
 
         set_clauses = []
         query_params = []

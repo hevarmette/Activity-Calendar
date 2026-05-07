@@ -405,6 +405,60 @@ def build_cycling_auto_laps(laps_df):
     return laps_df[cols_to_display]
 
 
+def process_swimming_lengths(df, pool_length_m=25):
+    """Processes length table data for pool swimming display."""
+    if df.empty:
+        return pd.DataFrame()
+
+    df = df.copy()
+
+    # Filter to active lengths only (exclude rest intervals)
+    df["Length"] = range(1, len(df) + 1)
+
+    # Distance per length based on pool size
+    df["Distance (m)"] = pool_length_m
+    df["Distance (m)"] = df.apply(
+        lambda r: pool_length_m if r["length_type"] == "active" else 0, axis=1
+    )
+
+    # Time formatting
+    df["Time"] = df["total_timer_time"].apply(convert_seconds_to_hms)
+
+    # Stroke count
+    df["Strokes"] = df["total_strokes"]
+
+    # Pace per 100m (seconds per 100m)
+    active_mask = (df["length_type"] == "active") & (df["total_timer_time"] > 0)
+    df["Pace /100m"] = None
+    df.loc[active_mask, "Pace /100m"] = (
+        df.loc[active_mask, "total_timer_time"] / pool_length_m * 100
+    ).apply(convert_seconds_to_hms)
+
+    # SWOLF = time + strokes for one pool length
+    df["SWOLF"] = None
+    df.loc[active_mask, "SWOLF"] = (
+        df.loc[active_mask, "total_timer_time"] + df.loc[active_mask, "total_strokes"]
+    )
+
+    # Stroke type
+    df["Stroke"] = df["swim_stroke"].str.replace("_", " ").str.title()
+
+    # Type (active vs rest)
+    df["Type"] = df["length_type"].str.title()
+
+    display_cols = [
+        "Length",
+        "Type",
+        "Distance (m)",
+        "Time",
+        "Strokes",
+        "Stroke",
+        "Pace /100m",
+        "SWOLF",
+    ]
+    return df[["length_id"] + [c for c in display_cols if c in df.columns]]
+
+
 # Standard track distances in miles for labeling interval sets
 TRACK_DISTANCES = [
     (0.0621, "100m"), (0.1243, "200m"), (0.1864, "300m"),
