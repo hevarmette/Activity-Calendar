@@ -145,7 +145,7 @@ def show_activity_dialog(
 
     with subcol3:
         # --- View Details Button ---
-        if st.button("View Lap Details 📈"):
+        if st.button("View Lap Details"):
             ss.selected_activity_id = activity_id
             ss.selected_activity_sport = activity_sport
             st.switch_page("pages/2_Activity_Details.py")

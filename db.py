@@ -139,6 +139,39 @@ def get_length_update_query(length_id, db_column, new_value):
     return query, params
 
 
+def combine_lengths(_conn, length_ids):
+    """Combine multiple lengths: sum time/strokes into the first, delete the rest."""
+    if _conn is None or len(length_ids) < 2:
+        return False
+    keep_id = length_ids[0]
+    delete_ids = length_ids[1:]
+    try:
+        with _conn.cursor() as cur:
+            placeholders = ",".join(["%s"] * len(length_ids))
+            cur.execute(
+                f"SELECT COALESCE(SUM(total_timer_time),0), COALESCE(SUM(total_strokes),0) "
+                f"FROM {ss.schema}.length WHERE length_id IN ({placeholders})",
+                length_ids,
+            )
+            total_time, total_strokes = cur.fetchone()
+            cur.execute(
+                f"UPDATE {ss.schema}.length SET total_timer_time = %s, total_strokes = %s WHERE length_id = %s",
+                (total_time, total_strokes, keep_id),
+            )
+            del_placeholders = ",".join(["%s"] * len(delete_ids))
+            cur.execute(
+                f"DELETE FROM {ss.schema}.length WHERE length_id IN ({del_placeholders})",
+                delete_ids,
+            )
+        _conn.commit()
+        fetch_length_data.clear()
+        return True
+    except Exception as e:
+        _conn.rollback()
+        st.error(f"Error combining lengths: {e}")
+        return False
+
+
 # --- 2. DATA RETRIEVAL (Same as before) ---
 @st.cache_data
 def retrieve_monthly_data(_conn):  # , year, month):
@@ -497,8 +530,8 @@ def fetch_search_data(_conn):
 
 
 @st.cache_data
-def fetch_similar_activities(_conn, activity_id, activity_name, sport, category):
-    """Fetches similar activities by same name or same sport+category, excluding current."""
+def fetch_similar_activities(_conn, activity_id, activity_name, sport):
+    """Fetches similar activities by same name, excluding current."""
     if _conn is None:
         return pd.DataFrame()
 
@@ -508,20 +541,18 @@ def fetch_similar_activities(_conn, activity_id, activity_name, sport, category)
             a.activity_name,
             COALESCE(a.local_timestamp, a.timestamp AT TIME ZONE 'America/Chicago') AS local_timestamp,
             s.total_distance,
-            s.total_timer_time,
-            s.avg_heart_rate,
-            s.total_ascent
+            s.total_timer_time
         FROM {ss.schema}.activity a
         JOIN {ss.schema}.session s ON a.activity_id = s.activity_id
         WHERE a.activity_id != %s
           AND s.sport = %s
-          AND (LOWER(TRIM(regexp_replace(a.activity_name, '\\s+', ' ', 'g'))) = LOWER(TRIM(regexp_replace(%s, '\\s+', ' ', 'g'))) OR a.category = %s)
+          AND LOWER(TRIM(regexp_replace(a.activity_name, '\\s+', ' ', 'g'))) = LOWER(TRIM(regexp_replace(%s, '\\s+', ' ', 'g')))
         ORDER BY a.local_timestamp DESC
         LIMIT 20;
     """
     try:
         with _conn.cursor() as cursor:
-            cursor.execute(sql_query, (activity_id, sport, activity_name, category))
+            cursor.execute(sql_query, (activity_id, sport, activity_name))
             columns = [desc.name for desc in cursor.description]
             data = cursor.fetchall()
         return pd.DataFrame(data, columns=columns)

@@ -15,6 +15,7 @@ from db import (
     fetch_sessions_for_activity,
     get_lap_update_query,
     get_length_update_query,
+    combine_lengths,
     retrieve_monthly_data,
     fetch_activity_events,
     fetch_similar_activities,
@@ -453,7 +454,7 @@ def _render_session_content(
         if lengths_df.empty:
             st.info("No length data found for this pool swim.")
         else:
-            st.subheader("🏊 Lengths")
+            st.subheader("Lengths")
             stroke_options = ["Freestyle", "Backstroke", "Breaststroke", "Butterfly", "Mixed", "Drill"]
             column_config = {
                 "length_id": None,
@@ -470,6 +471,28 @@ def _render_session_content(
                 key=f"length_editor_{session_key_suffix}",
             )
             st.session_state[f"lengths_df_{session_key_suffix}"] = lengths_df
+
+            # --- Combine Lengths ---
+            active_lengths = lengths_df[lengths_df["Type"] == "Active"]
+            length_numbers = active_lengths["Length"].tolist()
+            selected = st.multiselect(
+                "Select consecutive lengths to combine",
+                options=length_numbers,
+                key=f"combine_select_{session_key_suffix}",
+            )
+            if selected and len(selected) >= 2:
+                sorted_sel = sorted(selected)
+                is_consecutive = all(
+                    sorted_sel[i + 1] - sorted_sel[i] == 1
+                    for i in range(len(sorted_sel) - 1)
+                )
+                if not is_consecutive:
+                    st.warning("Selected lengths must be consecutive.")
+                elif st.button("Combine Selected Lengths", key=f"combine_btn_{session_key_suffix}"):
+                    ids_to_combine = active_lengths[active_lengths["Length"].isin(sorted_sel)]["length_id"].tolist()
+                    if combine_lengths(conn, ids_to_combine):
+                        st.success("Lengths combined.")
+                        st.rerun()
 
         return pd.DataFrame()
 
@@ -1317,7 +1340,7 @@ st.set_page_config(page_title="Activity Details", layout="wide")
 # Check if an activity has been selected
 if "selected_activity_id" not in ss:
     st.warning("Please select an activity from the calendar page first.")
-    st.page_link("calendar test 8.py", label="Back to Calendar", icon="🗓️")
+    st.page_link("calendar test 8.py", label="Back to Calendar")
 else:
     activity_id = ss.selected_activity_id
     sport = ss.selected_activity_sport
@@ -1439,11 +1462,11 @@ else:
     # -------------------------------------------------------------------------
     if updated_category == "training" and ss.activity_details[7]:
         similar_df = fetch_similar_activities(
-            conn, activity_id, ss.activity_details[7], sport, category
+            conn, activity_id, ss.activity_details[7], sport
         )
         if not similar_df.empty:
             st.divider()
-            st.subheader("🔁 Similar Activities")
+            st.subheader("Similar Activities")
 
             display_df = similar_df.copy()
             display_df["Date"] = pd.to_datetime(display_df["local_timestamp"]).dt.strftime("%b %d, %Y")
@@ -1451,19 +1474,9 @@ else:
             display_df["Duration"] = display_df["total_timer_time"].apply(
                 lambda s: convert_seconds_to_hms(int(s)) if pd.notna(s) else "—"
             )
-            display_df["Pace"] = display_df.apply(
-                lambda r: (
-                    f"{int(r['total_timer_time'] / (r['total_distance'] / ss.meters_to_miles)) // 60}:"
-                    f"{int(r['total_timer_time'] / (r['total_distance'] / ss.meters_to_miles)) % 60:02d} /mi"
-                ) if r["total_distance"] and r["total_distance"] > 0 else "—",
-                axis=1,
-            )
-            display_df["Avg HR"] = display_df["avg_heart_rate"].apply(
-                lambda x: f"{int(x)} bpm" if pd.notna(x) else "—"
-            )
 
             st.dataframe(
-                display_df[["Date", "activity_name", "Distance (mi)", "Duration", "Pace", "Avg HR"]].rename(
+                display_df[["Date", "activity_name", "Distance (mi)", "Duration"]].rename(
                     columns={"activity_name": "Name"}
                 ),
                 hide_index=True,
