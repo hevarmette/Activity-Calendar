@@ -536,23 +536,33 @@ def fetch_similar_activities(_conn, activity_id, activity_name, sport):
         return pd.DataFrame()
 
     sql_query = f"""
-        SELECT
+        WITH normalized AS (
+          SELECT
             a.activity_id,
             a.activity_name,
             COALESCE(a.local_timestamp, a.timestamp AT TIME ZONE 'America/Chicago') AS local_timestamp,
             s.total_distance,
-            s.total_timer_time
-        FROM {ss.schema}.activity a
-        JOIN {ss.schema}.session s ON a.activity_id = s.activity_id
-        WHERE a.activity_id != %s
-          AND s.sport = %s
-          AND LOWER(TRIM(regexp_replace(a.activity_name, '\\s+', ' ', 'g'))) = LOWER(TRIM(regexp_replace(%s, '\\s+', ' ', 'g')))
-        ORDER BY a.local_timestamp DESC
-        LIMIT 20;
+            s.total_timer_time,
+            LOWER(TRIM(regexp_replace(a.activity_name, '\s+', ' ', 'g'))) AS norm_name
+          FROM {ss.schema}.activity a
+          JOIN {ss.schema}.session s ON a.activity_id = s.activity_id
+          WHERE a.activity_id != %s
+            AND s.sport = %s
+        )
+        SELECT
+          activity_id,
+          activity_name,
+          local_timestamp,
+          total_distance,
+          total_timer_time,
+          similarity(norm_name, LOWER(TRIM(regexp_replace(%s, '\s+', ' ', 'g')))) AS name_similarity
+        FROM normalized
+        WHERE similarity(norm_name, LOWER(TRIM(regexp_replace(%s, '\s+', ' ', 'g')))) > 0.3
+        ORDER BY name_similarity DESC;
     """
     try:
         with _conn.cursor() as cursor:
-            cursor.execute(sql_query, (activity_id, sport, activity_name))
+            cursor.execute(sql_query, (activity_id, sport, activity_name, activity_name))
             columns = [desc.name for desc in cursor.description]
             data = cursor.fetchall()
         return pd.DataFrame(data, columns=columns)

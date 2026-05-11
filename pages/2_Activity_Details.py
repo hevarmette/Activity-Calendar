@@ -1460,9 +1460,9 @@ else:
     # -------------------------------------------------------------------------
     # SIMILAR ACTIVITIES — shown for training activities with a name
     # -------------------------------------------------------------------------
-    if updated_category == "training" and ss.activity_details[7]:
+    if updated_category == "training" and updated_title: # category is training and has a title
         similar_df = fetch_similar_activities(
-            conn, activity_id, ss.activity_details[7], sport
+            conn, activity_id, updated_title, sport
         )
         if not similar_df.empty:
             st.divider()
