@@ -717,6 +717,12 @@ def _render_session_content(
                     st.markdown("**Duration**")
                     st.write(str(duration_td))
 
+                    elapsed_s = session_row["total_elapsed_time"] if session_row is not None else None
+                    if elapsed_s:
+                        elapsed_td = timedelta(seconds=int(elapsed_s))
+                        st.markdown("**Elapsed Time**")
+                        st.write(str(elapsed_td))
+
             # --------------------
             # Column 3
             # --------------------

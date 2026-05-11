@@ -227,6 +227,7 @@ def fetch_sessions_for_activity(_conn, activity_id):
             sub_sport,
             total_distance,
             total_timer_time,
+            total_elapsed_time,
             avg_power,
             avg_heart_rate,
             max_heart_rate,
