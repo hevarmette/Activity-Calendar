@@ -145,3 +145,49 @@ def format_effort(val):
     if val is None:
         return "None"
     return ss.effort_labels.get(int(val / 10), "Unknown")
+
+
+def _format_pace_speed(sport, distance_m, time_s):
+    """Return a sport-appropriate pace or speed string."""
+    if distance_m <= 0 or time_s <= 0:
+        return "—"
+    if sport == "cycling":
+        return f"{(distance_m / ss.meters_to_miles) / (time_s / 3600):.1f} mph"
+    if sport == "swimming":
+        mins, secs = divmod(int(round(time_s / (distance_m / 100))), 60)
+        return f"{mins}:{secs:02d} /100m"
+    pace = (time_s / 60) / (distance_m / ss.meters_to_miles)
+    return f"{format_pace(pace)} /mi"
+
+
+def render_activity_card(row, sport, conn, key_prefix, on_same_page=False):
+    """Render a bordered activity card with distance, duration, and pace/speed."""
+    from db import fetch_activity_details, fetch_activity_points
+
+    activity_id = row["activity_id"]
+    distance_m = row.get("total_distance") or 0
+    time_s = row.get("total_timer_time") or 0
+    miles = distance_m / ss.meters_to_miles
+    timestamp = row.get("local_timestamp")
+    date_str = pd.to_datetime(timestamp).strftime("%b %d, %Y") if pd.notna(timestamp) else ""
+    pace_speed = _format_pace_speed(sport, distance_m, time_s)
+
+    with st.container(border=True):
+        header_col, btn_col = st.columns([5, 1])
+        with header_col:
+            st.markdown(f"**{row.get('activity_name', 'Untitled')}** &nbsp;·&nbsp; {sport.capitalize()} &nbsp;·&nbsp; {date_str}")
+        with btn_col:
+            if st.button("View", key=f"{key_prefix}_{activity_id}"):
+                ss.selected_activity_id = activity_id
+                ss.selected_activity_sport = sport
+                ss.activity_details = fetch_activity_details(conn, activity_id)
+                ss.points_df = fetch_activity_points(conn, activity_id)
+                if on_same_page:
+                    st.rerun()
+                else:
+                    st.switch_page("pages/2_Activity_Details.py")
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Distance", f"{miles:.2f} mi")
+        m2.metric("Duration", convert_seconds_to_hms(int(time_s)) if time_s else "—")
+        m3.metric("Pace / Speed", pace_speed)

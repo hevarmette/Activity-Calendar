@@ -28,6 +28,7 @@ from utils import (
     get_svg_markdown,
     format_effort,
     init_session_state,
+    render_activity_card,
 )
 from plotting import create_activity_map, create_plot
 from lap_processing import (
@@ -1474,17 +1475,5 @@ else:
             st.divider()
             st.subheader("Similar Activities")
 
-            display_df = similar_df.copy()
-            display_df["Date"] = pd.to_datetime(display_df["local_timestamp"]).dt.strftime("%b %d, %Y")
-            display_df["Distance (mi)"] = (display_df["total_distance"] / ss.meters_to_miles).round(2)
-            display_df["Duration"] = display_df["total_timer_time"].apply(
-                lambda s: convert_seconds_to_hms(int(s)) if pd.notna(s) else "—"
-            )
-
-            st.dataframe(
-                display_df[["Date", "activity_name", "Distance (mi)", "Duration"]].rename(
-                    columns={"activity_name": "Name"}
-                ),
-                hide_index=True,
-                use_container_width=True,
-            )
+            for _, row in similar_df.iterrows():
+                render_activity_card(row, sport, conn, key_prefix="sim", on_same_page=True)

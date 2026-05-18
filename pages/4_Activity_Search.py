@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 from streamlit import session_state as ss
-from db import get_connection, fetch_search_data, fetch_activity_details, fetch_activity_points
-from utils import init_session_state, convert_seconds_to_hms, format_pace
+from db import get_connection, fetch_search_data
+from utils import init_session_state, convert_seconds_to_hms, render_activity_card
 
 init_session_state()
 
@@ -11,22 +11,7 @@ if "search_submitted" not in ss:
     ss.search_submitted = False
 
 
-def _format_pace_speed(sport, distance_m, time_s):
-    """Return a sport-appropriate pace or speed string."""
-    if distance_m <= 0 or time_s <= 0:
-        return ""
-    if sport == "cycling":
-        miles = distance_m / ss.meters_to_miles
-        hours = time_s / 3600
-        return f"{miles / hours:.1f} mph"
-    if sport == "swimming":
-        pace_s_per_100m = time_s / (distance_m / 100)
-        mins, secs = divmod(int(round(pace_s_per_100m)), 60)
-        return f"{mins}:{secs:02d} /100m"
-    # running and everything else
-    miles = distance_m / ss.meters_to_miles
-    pace_min_per_mile = (time_s / 60) / miles
-    return f"{format_pace(pace_min_per_mile)} /mi"
+
 
 
 def _aggregate_activities(df):
@@ -189,40 +174,8 @@ def _render_results(activities, conn):
     _render_pagination(total_pages, position="top")
 
     for _, row in page_df.iterrows():
-        activity_id = row["activity_id"]
-        name = row["activity_name"]
-        timestamp = row["local_timestamp"]
-        date_str = timestamp.strftime("%B %d, %Y") if pd.notna(timestamp) else ""
         canonical_sport = _canonical_sport(row["sport"], row["num_sessions"])
-        sport_label = canonical_sport.capitalize()
-
-        distance_m = row["total_distance"] or 0
-        time_s = row["total_timer_time"] or 0
-        miles = distance_m / ss.meters_to_miles
-        calories = row["total_calories"] or 0
-        ascent_ft = (row["total_ascent"] or 0) * 3.28084
-        avg_hr = row["avg_heart_rate"]
-        pace_speed = _format_pace_speed(canonical_sport, distance_m, time_s)
-
-        with st.container(border=True):
-            header_col, btn_col = st.columns([5, 1])
-            with header_col:
-                st.markdown(f"**{name}** &nbsp;·&nbsp; {sport_label} &nbsp;·&nbsp; {date_str}")
-            with btn_col:
-                if st.button("View Details", key=f"view_{activity_id}"):
-                    ss.selected_activity_id = activity_id
-                    ss.selected_activity_sport = canonical_sport
-                    ss.activity_details = fetch_activity_details(conn, activity_id)
-                    ss.points_df = fetch_activity_points(conn, activity_id)
-                    st.switch_page("pages/2_Activity_Details.py")
-
-            m1, m2, m3, m4, m5, m6 = st.columns(6)
-            m1.metric("Distance", f"{miles:.2f} mi")
-            m2.metric("Duration", convert_seconds_to_hms(time_s))
-            m3.metric("Pace / Speed", pace_speed if pace_speed else "—")
-            m4.metric("Calories", f"{int(calories)}")
-            m5.metric("Elevation", f"{int(ascent_ft)} ft")
-            m6.metric("Avg HR", f"{int(avg_hr)}" if pd.notna(avg_hr) and avg_hr > 0 else "—")
+        render_activity_card(row, canonical_sport, conn, key_prefix="search")
 
     # Pagination controls (bottom)
     _render_pagination(total_pages, position="bottom")
