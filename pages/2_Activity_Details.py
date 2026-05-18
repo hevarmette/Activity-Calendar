@@ -1416,7 +1416,7 @@ else:
         back_col, forward_col = st.columns(2, gap=None)
         idx = ss.activities_df.index[ss.activities_df["activity_id"] == activity_id][0]
         with back_col:
-            if st.button("<", key="prev_activity"):
+            if st.button(r"\<", key="prev_activity"):
                 if idx < len(ss.activities_df) - 1:
                     prev_id = int(ss.activities_df.iloc[idx + 1]["activity_id"])
                     ss.selected_activity_id = prev_id

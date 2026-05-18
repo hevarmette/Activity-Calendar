@@ -5,6 +5,7 @@
 # swimming support
 # interval stats for biking should be power then speed
 # search for activities of same name or similar activities
+# instead of displaying a dataframe, i want to display it in a more appealing format that includes a button to ideally open the matching activity in another tab in the browser. If that can't be done, then it should simply load that activity's details on the page. 
 import streamlit as st
 from datetime import datetime
 from streamlit_folium import st_folium
