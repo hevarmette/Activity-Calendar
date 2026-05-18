@@ -576,6 +576,10 @@ def compute_interval_summary(processed_laps_df, sport, group_by="distance"):
         if dist_trend < 0:
             entry["dist_dev_trend"] = f"-{entry['dist_dev_trend']}"
 
+        if sport == "cycling" and "avg_power" in subset.columns:
+            power = pd.to_numeric(subset["avg_power"], errors="coerce").dropna()
+            if not power.empty:
+                entry["avg_power"] = round(power.mean())
         if sport == "cycling" and "Avg Speed (mph)" in subset.columns:
             speeds = pd.to_numeric(subset["Avg Speed (mph)"], errors="coerce").dropna()
             if not speeds.empty:

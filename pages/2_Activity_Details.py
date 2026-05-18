@@ -652,14 +652,21 @@ def _render_session_content(
                     for s in interval_sets:
                         st.header(f"{s['count']}×{s['label']}")
                         has_hr = s.get("avg_hr")
+                        has_power = s.get("avg_power")
                         cols = st.columns(4 if has_hr else 3)
                         if by_time:
                             cols[0].metric("Avg Distance (mi)", s['avg_dist_label'], delta=s.get("dist_dev_trend"))
-                            cols[1].metric("Avg Pace (min/mi)", s.get("avg_pace_label", "—"))
+                            if has_power:
+                                cols[1].metric("Avg Power (W)", s['avg_power'])
+                            else:
+                                cols[1].metric("Avg Speed (mph)" if sport == "cycling" else "Avg Pace (min/mi)", s.get("avg_pace_label", "—"))
                             cols[2].metric("Farthest Split (mi)", s['farthest_split'])
                         else:
                             cols[0].metric("Avg Time", s['avg_duration'], delta=s.get("time_dev_trend"), delta_color="inverse")
-                            cols[1].metric("Avg Pace (min/mi)", s.get("avg_pace_label", "—"))
+                            if has_power:
+                                cols[1].metric("Avg Power (W)", s['avg_power'])
+                            else:
+                                cols[1].metric("Avg Speed (mph)" if sport == "cycling" else "Avg Pace (min/mi)", s.get("avg_pace_label", "—"))
                             cols[2].metric("Fastest Split", s['fastest_split'])
                         if has_hr:
                             cols[3].metric("Avg HR (bpm)", s['avg_hr'])
@@ -1419,16 +1426,20 @@ else:
         with back_col:
             if st.button(r"\<", key="prev_activity"):
                 if idx < len(ss.activities_df) - 1:
-                    prev_id = int(ss.activities_df.iloc[idx + 1]["activity_id"])
+                    prev_row = ss.activities_df.iloc[idx + 1]
+                    prev_id = int(prev_row["activity_id"])
                     ss.selected_activity_id = prev_id
+                    ss.selected_activity_sport = prev_row["sport"].split(",")[0]
                     ss.activity_details = fetch_activity_details(conn, prev_id)
                     ss.points_df = fetch_activity_points(conn, prev_id)
                     st.rerun()
         with forward_col:
             if st.button(r"\>", key="next_activity"):
                 if idx > 0:
-                    next_id = int(ss.activities_df.iloc[idx - 1]["activity_id"])
+                    next_row = ss.activities_df.iloc[idx - 1]
+                    next_id = int(next_row["activity_id"])
                     ss.selected_activity_id = next_id
+                    ss.selected_activity_sport = next_row["sport"].split(",")[0]
                     ss.activity_details = fetch_activity_details(conn, next_id)
                     ss.points_df = fetch_activity_points(conn, next_id)
                     st.rerun()
