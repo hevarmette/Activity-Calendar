@@ -173,7 +173,7 @@ def render_activity_card(row, sport, conn, key_prefix, on_same_page=False):
     pace_speed = _format_pace_speed(sport, distance_m, time_s)
 
     with st.container(border=True):
-        header_col, btn_col = st.columns([5, 1])
+        header_col, btn_col = st.columns([5, 1], vertical_alignment='center')
         with header_col:
             st.markdown(f"**{row.get('activity_name', 'Untitled')}** &nbsp;·&nbsp; {sport.capitalize()} &nbsp;·&nbsp; {date_str}")
         with btn_col:

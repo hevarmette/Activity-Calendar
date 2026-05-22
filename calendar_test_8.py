@@ -1,11 +1,5 @@
-# TODO: functionality to save intensity values after editing and when selecting pill values
-# auto lap variable should be used for auto lap tab and in the create_activity_map function
+# TODO:
 # activity summary should group sport types togther and highlight current period
-# add total elapsed time in activity details section
-# swimming support
-# interval stats for biking should be power then speed
-# search for activities of same name or similar activities
-# instead of displaying a dataframe, i want to display it in a more appealing format that includes a button to ideally open the matching activity in another tab in the browser. If that can't be done, then it should simply load that activity's details on the page. 
 import streamlit as st
 from datetime import datetime
 from streamlit_folium import st_folium
@@ -116,7 +110,8 @@ def show_activity_dialog(
     # --- Map ---
     if not points_df.empty:
         activity_map = create_activity_map(
-            points_df, fullscreen=False, sessions_df=sessions_df
+            points_df, fullscreen=False, sessions_df=sessions_df,
+            auto_lap_dist=ss.auto_lap_distances.get(activity_sport, ss.auto_lap_distances["default"]),
         )
         st_folium(activity_map, width=700, height=500)
 
