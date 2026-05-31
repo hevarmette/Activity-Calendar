@@ -176,6 +176,11 @@ def render_activity_card(row, sport, conn, key_prefix, on_same_page=False):
         header_col, btn_col = st.columns([5, 1], vertical_alignment='center')
         with header_col:
             st.markdown(f"**{row.get('activity_name', 'Untitled')}** &nbsp;·&nbsp; {sport.capitalize()} &nbsp;·&nbsp; {date_str}")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Distance", f"{miles:.2f} mi")
+            m2.metric("Duration", convert_seconds_to_hms(int(time_s)) if time_s else "—")
+            m3.metric("Pace / Speed", pace_speed)
+
         with btn_col:
             if st.button("View", key=f"{key_prefix}_{activity_id}"):
                 ss.selected_activity_id = activity_id
@@ -186,8 +191,3 @@ def render_activity_card(row, sport, conn, key_prefix, on_same_page=False):
                     st.rerun()
                 else:
                     st.switch_page("pages/2_Activity_Details.py")
-
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Distance", f"{miles:.2f} mi")
-        m2.metric("Duration", convert_seconds_to_hms(int(time_s)) if time_s else "—")
-        m3.metric("Pace / Speed", pace_speed)

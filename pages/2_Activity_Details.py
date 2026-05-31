@@ -1478,7 +1478,7 @@ else:
     # -------------------------------------------------------------------------
     # SIMILAR ACTIVITIES — shown for training activities with a name
     # -------------------------------------------------------------------------
-    if updated_category == "training" and updated_title: # category is training and has a title
+    if (updated_category == "training" or updated_category == 'race') and updated_title: # category is training and has a title
         similar_df = fetch_similar_activities(
             conn, activity_id, updated_title, sport
         )
