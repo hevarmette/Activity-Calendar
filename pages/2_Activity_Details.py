@@ -1310,28 +1310,27 @@ def _render_feel_effort_save(
                 display_params = []
                 for p in params:
                     if isinstance(p, str):
-                        # Escape existing apostrophes and wrap the whole thing in quotes
                         clean_p = p.replace("'", "''")
                         display_params.append(f"'{clean_p}'")
                     elif p is None:
                         display_params.append("NULL")
                     else:
-                        # Numbers don't get quotes
                         display_params.append(str(p))
 
-                # Python's % operator replaces the %s placeholders with our formatted list
                 try:
                     readable_sql = query % tuple(display_params)
                     st.code(readable_sql, language="sql")
                 except TypeError:
-                    # Fallback if something goes wrong (e.g., if you have % symbols in your text)
                     st.warning(
                         "Could not format perfectly, showing raw query and params:"
                     )
                     st.text(f"Query: {query}")
                     st.text(f"Params: {params}")
-                with conn.transaction():
-                    conn.execute(readable_sql)
+
+            with conn.transaction():
+                for query, params in updates:
+                    conn.execute(query, params)
+
             st.toast("Updates have been saved!")
             # deleting the info to requery from the database. because this is quicker to code
             # than updating the existing variables
