@@ -40,37 +40,10 @@ from lap_processing import (
     build_cycling_auto_laps,
     compute_interval_summary,
     process_swimming_lengths,
+    UI_TO_DB_MAP,
 )
 
 init_session_state()
-
-# Keys = Database Column Names
-# Values = UI Display Names
-# This is used to map database column names with display column names
-LAP_COLUMN_MAPPING = {
-    "lap_id": "Lap Id",
-    "activity_id": "Activity Id",
-    "start_time": "Start Time",
-    "number": "Lap",
-    "total_distance": "Distance",
-    "total_timer_time": "Time",
-    "total_ascent": "Total Ascent",
-    "total_descent": "Total Descent",
-    "avg_vertical_oscillation": "Avg Vertical Oscillation",
-    "avg_stance_time": "Avg Stance Time",
-    "avg_vertical_ratio": "Avg Vertical Ratio",
-    "avg_stance_time_balance": "Avg Stance Time Balance",
-    "avg_step_length": "Avg Stride Length",
-    "avg_running_cadence": "Avg Running Cadence",
-    "max_heart_rate": "Max Heart Rate",
-    "avg_heart_rate": "Avg Heart Rate",
-    "intensity": "Intensity",
-    "distance_mi": "Distance (miles)",
-    "time_formatted": "Time (formatted)",
-}
-# Create a reverse map for fast lookups: { 'Avg Heart Rate': 'avg_heart_rate' }
-# This is to convert edited columns to db name
-UI_TO_DB_MAP = {v: k for k, v in LAP_COLUMN_MAPPING.items()}
 
 
 # =============================================================================
