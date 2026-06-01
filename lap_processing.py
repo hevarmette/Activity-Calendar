@@ -5,7 +5,7 @@ import numpy as np
 
 # Keys = Database Column Names
 # Values = UI Display Names
-LAP_COLUMN_MAPPING = {
+LAP_COLUMN_MAPPING: dict[str, str] = {
     "lap_id": "Lap Id",
     "activity_id": "Activity Id",
     "start_time": "Start Time",
@@ -27,11 +27,11 @@ LAP_COLUMN_MAPPING = {
     "time_formatted": "Time (formatted)",
 }
 # Create a reverse map for fast lookups: { 'Avg Heart Rate': 'avg_heart_rate' }
-UI_TO_DB_MAP = {v: k for k, v in LAP_COLUMN_MAPPING.items()}
+UI_TO_DB_MAP: dict[str, str] = {v: k for k, v in LAP_COLUMN_MAPPING.items()}
 
 
 # --- 2. DATA PROCESSING FUNCTION ---
-def process_lap_data(df):
+def process_lap_data(df: pd.DataFrame) -> pd.DataFrame:
     """Applies all the transformations from your original code."""
     if df.empty:
         return pd.DataFrame()
@@ -81,7 +81,7 @@ def process_lap_data(df):
     return df_display
 
 
-def process_cycling_laps(df):
+def process_cycling_laps(df: pd.DataFrame) -> pd.DataFrame:
     """Processes lap data with cycling-specific metrics like speed and HR."""
     if df.empty:
         return pd.DataFrame()
@@ -143,7 +143,7 @@ def process_cycling_laps(df):
     return df_display
 
 
-def create_auto_laps(points_df, events_df=None, auto_lap_dist=1.0):
+def create_auto_laps(points_df: pd.DataFrame, events_df: pd.DataFrame | None = None, auto_lap_dist: float = 1.0) -> tuple[pd.DataFrame, list[float]]:
     """
     Create a new dataframe with laps at the defined auto_lap_dist argument. Event and point dfs are sorted when queried and original dataframes are not altered
 
@@ -295,7 +295,7 @@ def create_auto_laps(points_df, events_df=None, auto_lap_dist=1.0):
         include_lowest=True,
     )
 
-    agg_dict = {}
+    agg_dict: dict[str, list[str]] = {}
     if ss.hr and points_df["heart_rate"].notna().any():
         agg_dict["heart_rate"] = ["mean", "max"]
     if ss.cadence and points_df["total_cadence"].notna().any():
@@ -355,7 +355,7 @@ def create_auto_laps(points_df, events_df=None, auto_lap_dist=1.0):
     return laps_df, target_dists
 
 
-def build_running_auto_laps(laps_df):
+def build_running_auto_laps(laps_df: pd.DataFrame) -> pd.DataFrame:
     """Format auto laps dataframe for running display (pace-based)."""
     laps_df = laps_df.copy()
     laps_df["Pace (min/mile) unformatted"] = (laps_df["seconds_raw"] / 60) / laps_df[
@@ -382,7 +382,7 @@ def build_running_auto_laps(laps_df):
     return laps_df[cols_to_display]
 
 
-def build_cycling_auto_laps(laps_df):
+def build_cycling_auto_laps(laps_df: pd.DataFrame) -> pd.DataFrame:
     """Format auto laps dataframe for cycling display (speed-based)."""
     laps_df = laps_df.copy()
 
@@ -405,7 +405,7 @@ def build_cycling_auto_laps(laps_df):
     return laps_df[cols_to_display]
 
 
-def process_swimming_lengths(df, pool_length_m=25):
+def process_swimming_lengths(df: pd.DataFrame, pool_length_m: float = 25) -> pd.DataFrame:
     """Processes length table data for pool swimming display."""
     if df.empty:
         return pd.DataFrame()
@@ -460,7 +460,7 @@ def process_swimming_lengths(df, pool_length_m=25):
 
 
 # Standard track distances in miles for labeling interval sets
-TRACK_DISTANCES = [
+TRACK_DISTANCES: list[tuple[float, str]] = [
     (0.0621, "100m"), (0.1243, "200m"), (0.1864, "300m"),
     (0.2485, "400m"), (0.3107, "500m"), (0.3728, "600m"),
     (0.4971, "800m"), (0.6214, "1000m"), (0.7456, "1200m"),
@@ -468,12 +468,12 @@ TRACK_DISTANCES = [
 ]
 
 
-def _scaling_tolerance(distance_mi):
+def _scaling_tolerance(distance_mi: float) -> float:
     """Tolerance that starts at 10% for 100m and shrinks proportionally with distance."""
     return max(0.02, 0.10 * (0.0621 / distance_mi))
 
 
-def _distance_label(mean_dist_mi):
+def _distance_label(mean_dist_mi: float) -> str:
     """Map a mean distance to the nearest standard track label, or fall back to miles."""
     tol = _scaling_tolerance(mean_dist_mi)
     for ref, label in TRACK_DISTANCES:
@@ -482,7 +482,7 @@ def _distance_label(mean_dist_mi):
     return f"{mean_dist_mi:.2f} mi"
 
 
-def _time_label(mean_secs):
+def _time_label(mean_secs: float) -> str:
     """Format a mean duration as a human-readable rep label (e.g., '1:30')."""
     mins, secs = divmod(int(round(mean_secs)), 60)
     if mins > 0:
@@ -490,7 +490,7 @@ def _time_label(mean_secs):
     return f"0:{secs:02d}"
 
 
-def compute_interval_summary(processed_laps_df, sport, group_by="distance"):
+def compute_interval_summary(processed_laps_df: pd.DataFrame, sport: str, group_by: str = "distance") -> list[dict]:
     """
     Group 'active' laps by similar distance or time and return per-set stats.
     group_by: 'distance' or 'time'.
@@ -516,8 +516,8 @@ def compute_interval_summary(processed_laps_df, sport, group_by="distance"):
     df = df.sort_values(cluster_col).reset_index(drop=True)
 
     # Cluster laps by similar values using scaling tolerance
-    groups = []
-    current = [0]
+    groups: list[list[int]] = []
+    current: list[int] = [0]
     for i in range(1, len(df)):
         group_mean = df.loc[current, cluster_col].mean()
         tol = _scaling_tolerance(group_mean) if group_by == "distance" else max(0.05, 0.15 * (15 / group_mean))
@@ -528,7 +528,7 @@ def compute_interval_summary(processed_laps_df, sport, group_by="distance"):
             current = [i]
     groups.append(current)
 
-    results = []
+    results: list[dict] = []
     for idxs in groups:
         if len(idxs) < 2:
             continue
@@ -541,7 +541,7 @@ def compute_interval_summary(processed_laps_df, sport, group_by="distance"):
         else:
             label = _distance_label(mean_dist)
 
-        entry = {
+        entry: dict = {
             "count": len(subset),
             "label": label,
             "avg_duration": convert_seconds_to_hms(avg_secs),

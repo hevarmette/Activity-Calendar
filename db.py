@@ -5,7 +5,10 @@ import pandas as pd
 from pyhigh import get_elevation_batch
 
 
-def get_connection(local=True):
+from utils import ActivityDetails
+
+
+def get_connection(local: bool = True) -> psycopg.Connection:
     if local:
         return psycopg.connect(
             host=st.secrets["postgresql"]["host"],
@@ -19,7 +22,7 @@ def get_connection(local=True):
 
 
 @st.cache_data
-def fetch_lap_data(_conn, activity_id):
+def fetch_lap_data(_conn: psycopg.Connection, activity_id: int) -> pd.DataFrame:
     """Fetches lap data for a specific activity."""
     sql_query = f"""
         SELECT 
@@ -57,7 +60,7 @@ def fetch_lap_data(_conn, activity_id):
 
 
 @st.cache_data
-def fetch_lap_data_for_session(_conn, activity_id, first_lap_index, num_laps):
+def fetch_lap_data_for_session(_conn: psycopg.Connection, activity_id: int, first_lap_index: int, num_laps: int) -> pd.DataFrame:
     """Fetches lap data for a specific session within a multisport activity."""
     sql_query = f"""
         SELECT 
@@ -98,7 +101,7 @@ def fetch_lap_data_for_session(_conn, activity_id, first_lap_index, num_laps):
 
 
 @st.cache_data
-def fetch_length_data(_conn, activity_id):
+def fetch_length_data(_conn: psycopg.Connection, activity_id: int) -> pd.DataFrame:
     """Fetches length data for a pool swimming activity."""
     sql_query = f"""
         SELECT
@@ -121,7 +124,7 @@ def fetch_length_data(_conn, activity_id):
     return pd.DataFrame(data, columns=columns)
 
 
-def get_lap_update_query(lap_id, db_column, new_value):
+def get_lap_update_query(lap_id: int, db_column: str, new_value: object) -> tuple[str, tuple]:
     """
     Returns a safe (query, params) tuple for updating a single value.
     """
@@ -132,14 +135,14 @@ def get_lap_update_query(lap_id, db_column, new_value):
     return query, params
 
 
-def get_length_update_query(length_id, db_column, new_value):
+def get_length_update_query(length_id: int, db_column: str, new_value: object) -> tuple[str, tuple]:
     """Returns a (query, params) tuple for updating a single length value."""
     query = f"UPDATE {ss.schema}.length SET {db_column} = %s WHERE length_id = %s;"
     params = (new_value, length_id)
     return query, params
 
 
-def combine_lengths(_conn, length_ids):
+def combine_lengths(_conn: psycopg.Connection, length_ids: list[int]) -> bool:
     """Combine multiple lengths: sum time/strokes into the first, delete the rest."""
     if _conn is None or len(length_ids) < 2:
         return False
@@ -174,11 +177,8 @@ def combine_lengths(_conn, length_ids):
 
 # --- 2. DATA RETRIEVAL (Same as before) ---
 @st.cache_data
-def retrieve_monthly_data(_conn):  # , year, month):
+def retrieve_monthly_data(_conn: psycopg.Connection) -> pd.DataFrame:
     """Fetches activity data for a given month and year from the database."""
-    if _conn is None:
-        return pd.DataFrame()
-
     # Aggregate sessions so multisport activities appear as a single calendar row.
     # STRING_AGG collects all sport types; SUM aggregates distance and time across legs.
     sql_query = f"""
@@ -209,14 +209,11 @@ def retrieve_monthly_data(_conn):  # , year, month):
 
 
 @st.cache_data
-def fetch_sessions_for_activity(_conn, activity_id):
+def fetch_sessions_for_activity(_conn: psycopg.Connection, activity_id: int) -> pd.DataFrame:
     """
     Fetches all sessions for an activity, ordered by start_time.
     Returns a DataFrame with one row per session — used for multisport tab rendering.
     """
-    if _conn is None:
-        return pd.DataFrame()
-
     sql_query = f"""
         SELECT
             session_id,
@@ -255,10 +252,8 @@ def fetch_sessions_for_activity(_conn, activity_id):
 
 
 @st.cache_data
-def fetch_activity_details(_conn, activity_id):
+def fetch_activity_details(_conn: psycopg.Connection, activity_id: int) -> ActivityDetails | None:
     """Fetches main details for a specific activity from the database."""
-    if _conn is None:
-        return None
     sql_query = f"""
         SELECT adjusted_distance, adjusted_duration, CAST(avg_power AS INTEGER), description, workout_feel, effort, COALESCE(local_timestamp, activity.timestamp AT TIME ZONE 'America/Chicago'), activity_name, category
         FROM {ss.schema}.activity JOIN {ss.schema}.session ON activity.activity_id = session.activity_id WHERE activity.activity_id = %s
@@ -266,9 +261,20 @@ def fetch_activity_details(_conn, activity_id):
     try:
         with _conn.cursor() as cursor:
             cursor.execute(sql_query, (activity_id,))
-            activity_data = cursor.fetchone()  # won't cause trouble with multisport
-        # ss.activity_details = activity_data
-        return activity_data
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return ActivityDetails(
+            distance=row[0] or 0,
+            duration=row[1] or 0,
+            avg_power=row[2],
+            description=row[3],
+            feel=row[4],
+            effort=row[5],
+            local_timestamp=row[6],
+            name=row[7],
+            category=row[8],
+        )
     except Exception as e:
         st.error(f"Error fetching activity details: {e}")
         return None
@@ -276,14 +282,11 @@ def fetch_activity_details(_conn, activity_id):
 
 # --- 2. DATA FETCHING FOR MAP ---
 @st.cache_data
-def fetch_activity_points(_conn, activity_id):
+def fetch_activity_points(_conn: psycopg.Connection, activity_id: int) -> pd.DataFrame:
     """Fetches GPS and other record data for a specific activity from the database."""
     ss.hr = False
     ss.coordinates = False
     ss.cadence = False
-
-    if _conn is None:
-        return pd.DataFrame()
 
     # In rare cases, I was receiving an NA error when plotting some maps, so
     # this query will impute missing values by taking the next available, and
@@ -434,11 +437,8 @@ def fetch_activity_points(_conn, activity_id):
 
 
 @st.cache_data
-def fetch_activity_events(_conn, activity_id):
+def fetch_activity_events(_conn: psycopg.Connection, activity_id: int) -> pd.DataFrame:
     """Fetches timer events to calculate paused time."""
-    if _conn is None:
-        return pd.DataFrame()
-
     sql_query = f"""
         SELECT timestamp, event, event_type
         FROM {ss.schema}.event
@@ -458,11 +458,8 @@ def fetch_activity_events(_conn, activity_id):
 
 
 @st.cache_data
-def fetch_report_data(_conn):
+def fetch_report_data(_conn: psycopg.Connection) -> pd.DataFrame:
     """Fetches per-session rows for the activity report page."""
-    if _conn is None:
-        return pd.DataFrame()
-
     sql_query = f"""
         SELECT
             a.activity_id,
@@ -492,11 +489,8 @@ def fetch_report_data(_conn):
 
 
 @st.cache_data
-def fetch_search_data(_conn):
+def fetch_search_data(_conn: psycopg.Connection) -> pd.DataFrame:
     """Fetches per-session rows for the activity search page."""
-    if _conn is None:
-        return pd.DataFrame()
-
     sql_query = f"""
         SELECT
             a.activity_id,
@@ -531,11 +525,8 @@ def fetch_search_data(_conn):
 
 
 @st.cache_data
-def fetch_similar_activities(_conn, activity_id, activity_name, sport):
+def fetch_similar_activities(_conn: psycopg.Connection, activity_id: int, activity_name: str, sport: str) -> pd.DataFrame:
     """Fetches similar activities by same name, excluding current."""
-    if _conn is None:
-        return pd.DataFrame()
-
     sql_query = f"""
         WITH normalized AS (
           SELECT

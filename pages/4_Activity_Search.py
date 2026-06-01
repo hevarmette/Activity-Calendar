@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import psycopg
 from streamlit import session_state as ss
 from db import get_connection, fetch_search_data
 from utils import init_session_state, convert_seconds_to_hms, render_activity_card
@@ -14,7 +15,7 @@ if "search_submitted" not in ss:
 
 
 
-def _aggregate_activities(df):
+def _aggregate_activities(df: pd.DataFrame) -> pd.DataFrame:
     """Aggregate session-level rows into one row per activity."""
     agg = (
         df.groupby("activity_id")
@@ -38,7 +39,7 @@ def _aggregate_activities(df):
     return agg.sort_values("local_timestamp", ascending=False)
 
 
-def _canonical_sport(sport_str, num_sessions):
+def _canonical_sport(sport_str: str, num_sessions: int | None) -> str:
     """Determine canonical sport label from comma-separated sport string."""
     sports = [s.strip() for s in sport_str.split(",")]
     if (num_sessions or 1) > 1 or len(set(sports)) > 1:
@@ -46,8 +47,8 @@ def _canonical_sport(sport_str, num_sessions):
     return sports[0] if sports else "other"
 
 
-def _render_filters(container, available_sports, available_sub_sports, available_categories,
-                    min_date, max_date):
+def _render_filters(container, available_sports: list[str], available_sub_sports: list[str], available_categories: list[str],
+                    min_date, max_date) -> dict:
     """Render all search filter widgets into the given container. Returns filter values."""
 
     default_sport = 'running' if 'running' in available_sports else available_sports
@@ -115,7 +116,7 @@ def _render_filters(container, available_sports, available_sub_sports, available
     }
 
 
-def _apply_filters(raw_df, f):
+def _apply_filters(raw_df: pd.DataFrame, f: dict) -> pd.DataFrame:
     """Apply all filters and return aggregated activity-level DataFrame."""
     filtered = raw_df.copy()
 
@@ -155,7 +156,7 @@ def _apply_filters(raw_df, f):
 RESULTS_PER_PAGE = 100
 
 
-def _render_results(activities, conn):
+def _render_results(activities: pd.DataFrame, conn: psycopg.Connection) -> None:
     """Render activity result cards with pagination."""
     total = len(activities)
     total_pages = max(1, -(-total // RESULTS_PER_PAGE))  # ceil division
@@ -181,7 +182,7 @@ def _render_results(activities, conn):
     _render_pagination(total_pages, position="bottom")
 
 
-def _render_pagination(total_pages, position="bottom"):
+def _render_pagination(total_pages: int, position: str = "bottom") -> None:
     """Render prev/page/next pagination controls."""
     if total_pages <= 1:
         return

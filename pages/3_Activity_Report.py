@@ -7,14 +7,14 @@ from utils import init_session_state, convert_seconds_to_hms, format_pace
 
 init_session_state()
 
-SPORT_COLORS = {
+SPORT_COLORS: dict[str, str] = {
     "running": "#FF4B4B",
     "cycling": "#2CA02C",
     "swimming": "#1F77B4",
     "multisport": "#FF8C00",
 }
 
-GROUPING_OPTIONS = {
+GROUPING_OPTIONS: dict[str, str] = {
     "Daily": "D",
     "Weekly": "W-SAT", # week ends on saturday, so aggregates activities sun-sat
     "Monthly": "M",
@@ -22,7 +22,7 @@ GROUPING_OPTIONS = {
 }
 
 
-def aggregate_data(df, freq, sports, group_by_sport):
+def aggregate_data(df: pd.DataFrame, freq: str, sports: list[str], group_by_sport: bool) -> pd.DataFrame:
     """Group raw session rows by time period and sport."""
     filtered = df[df["sport"].isin(sports)].copy()
     if filtered.empty:
@@ -62,7 +62,7 @@ def aggregate_data(df, freq, sports, group_by_sport):
     return agg
 
 
-def _format_pace_speed(row):
+def _format_pace_speed(row: pd.Series) -> str:
     """Return a sport-appropriate pace or speed string for an aggregated row."""
     dist_m = row["total_distance_m"]
     time_s = row["total_time_s"]
@@ -88,7 +88,7 @@ def _format_pace_speed(row):
     return f"{format_pace(pace_min_per_mile)} /mi"
 
 
-def build_summary_table(agg, group_by_sport):
+def build_summary_table(agg: pd.DataFrame, group_by_sport: bool) -> pd.DataFrame:
     """Format the aggregated dataframe for display."""
     display = pd.DataFrame()
     display["Period"] = agg["period_label"]

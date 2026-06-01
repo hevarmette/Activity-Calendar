@@ -1,10 +1,26 @@
+from dataclasses import dataclass
+from datetime import datetime
 import pandas as pd
 import streamlit as st
 from streamlit import session_state as ss
 import base64
+import psycopg
 
 
-def init_session_state():
+@dataclass
+class ActivityDetails:
+    distance: float
+    duration: float
+    avg_power: int | None
+    description: str | None
+    feel: int | None
+    effort: int | None
+    local_timestamp: datetime
+    name: str | None
+    category: str | None
+
+
+def init_session_state() -> None:
     # constants
     if "schema" not in ss:
         ss.schema = st.secrets.schema
@@ -40,7 +56,7 @@ def init_session_state():
 
 
 # --- Helper Function to format time ---
-def convert_seconds_to_hms(seconds):
+def convert_seconds_to_hms(seconds: float) -> str | None:
     if pd.isna(seconds):
         return None
     h = int(seconds // 3600)
@@ -51,7 +67,7 @@ def convert_seconds_to_hms(seconds):
     return f"{m}:{s:05.2f}"
 
 
-def parse_hms_to_seconds(time_str):
+def parse_hms_to_seconds(time_str: str) -> float | None:
     """
     Converts 'H:M:S', 'M:S', or 'S' strings back to total seconds.
     Returns None if parsing fails.
@@ -78,7 +94,7 @@ def parse_hms_to_seconds(time_str):
         return None
 
 
-def weighted_average_if_present(df, value_col, weight_col):
+def weighted_average_if_present(df: pd.DataFrame, value_col: str, weight_col: str) -> float | None:
     valid = df[[value_col, weight_col]].dropna()
 
     if valid.empty:
@@ -93,7 +109,7 @@ def weighted_average_if_present(df, value_col, weight_col):
 
 # NOTE: Not used right now
 # This is for the to do to recalculate paces as user edits data. requires processed lap data to be in the session state
-def recalculate_pace(df):
+def recalculate_pace(df: pd.DataFrame) -> None:
     non_zero_dist = df["Distance (miles)"] > 0
     # get seconds per lap
     df["Time"] = df["Time (formatted)"].apply(parse_hms_to_seconds())
@@ -112,14 +128,14 @@ def recalculate_pace(df):
     df["Time (formatted)"] = df["Time"].apply(convert_seconds_to_hms)
 
 
-def format_pace(x):
+def format_pace(x: float) -> str | None:
     """pace formatting logic."""
     if pd.notna(x):
         return "{:d}:{:02d}".format(*divmod(int(round(x * 60)), 60))
     return None
 
 
-def format_pace_precise(x):
+def format_pace_precise(x: float) -> str | None:
     """Pace formatting to hundredths of a second."""
     if pd.notna(x):
         total_secs = x * 60
@@ -129,7 +145,7 @@ def format_pace_precise(x):
     return None
 
 
-def get_svg_markdown(label):
+def get_svg_markdown(label: str) -> str:
     """Reads an SVG and converts it to a markdown image string."""
     filename = f"assets/{label.replace(' ', '-')}.svg"
     try:
@@ -141,13 +157,13 @@ def get_svg_markdown(label):
         return label  # Fallback to plain text if the SVG is missing
 
 
-def format_effort(val):
+def format_effort(val: int | None) -> str:
     if val is None:
         return "None"
     return ss.effort_labels.get(int(val / 10), "Unknown")
 
 
-def _format_pace_speed(sport, distance_m, time_s):
+def _format_pace_speed(sport: str, distance_m: float, time_s: float) -> str:
     """Return a sport-appropriate pace or speed string."""
     if distance_m <= 0 or time_s <= 0:
         return "—"
@@ -160,7 +176,7 @@ def _format_pace_speed(sport, distance_m, time_s):
     return f"{format_pace(pace)} /mi"
 
 
-def render_activity_card(row, sport, conn, key_prefix, on_same_page=False):
+def render_activity_card(row: pd.Series, sport: str, conn: psycopg.Connection, key_prefix: str, on_same_page: bool = False) -> None:
     """Render a bordered activity card with distance, duration, and pace/speed."""
     from db import fetch_activity_details, fetch_activity_points
 

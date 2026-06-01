@@ -1,19 +1,21 @@
 import folium
 import branca
+import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import timedelta
 from streamlit import session_state as ss
 
 # Sport → polyline colour for multisport maps
-SPORT_COLOR_MAP = {
+SPORT_COLOR_MAP: dict[str, str] = {
     "running": "red",
     "cycling": "green",
     "swimming": "blue",
 }
-SPORT_COLOR_DEFAULT = "gray"
+SPORT_COLOR_DEFAULT: str = "gray"
 
 
-def create_activity_map(points_df, fullscreen, auto_lap_dist=1, sessions_df=None):
+def create_activity_map(points_df: pd.DataFrame, fullscreen: bool, auto_lap_dist: float = 1, sessions_df: pd.DataFrame | None = None) -> folium.Map:
     """
     Creates a Folium map from a DataFrame of points.
 
@@ -232,16 +234,16 @@ def create_activity_map(points_df, fullscreen, auto_lap_dist=1, sessions_df=None
 
 
 def create_plot(
-    df,
-    x_col,
-    y_col,
-    x_label,
-    y_label,
-    title,
-    color,
-    is_scatter=False,
-    invert_y_axis=False,
-):
+    df: pd.DataFrame,
+    x_col: str,
+    y_col: str,
+    x_label: str,
+    y_label: str,
+    title: str,
+    color: str,
+    is_scatter: bool = False,
+    invert_y_axis: bool = False,
+) -> go.Figure | None:
     """A generalized function to create a line or scatter plot with Plotly."""
     # Gracefully handle missing data columns
     if y_col not in df.columns or df[y_col].isnull().all():

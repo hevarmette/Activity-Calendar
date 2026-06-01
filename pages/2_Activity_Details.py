@@ -1,6 +1,7 @@
 import streamlit as st
 import time
 import pandas as pd
+import psycopg
 from streamlit import session_state as ss
 from datetime import timedelta
 from calendar_test_8 import (
@@ -77,7 +78,7 @@ UI_TO_DB_MAP = {v: k for k, v in LAP_COLUMN_MAPPING.items()}
 # =============================================================================
 
 
-def _render_summary_metrics(sport, distance_m, duration_s, avg_power):
+def _render_summary_metrics(sport: str, distance_m: float, duration_s: float, avg_power: int | None) -> None:
     """Render Distance, Duration, Pace/Speed as display-only metrics."""
     miles = distance_m / ss.meters_to_miles
     duration_td = timedelta(seconds=int(duration_s))
@@ -99,7 +100,7 @@ def _render_summary_metrics(sport, distance_m, duration_s, avg_power):
         col3.metric("Pace", f"{pace_min}:{pace_sec:02d} /mi")
 
 
-def _render_sidebar_adjustments(distance_m, duration_s, key_suffix):
+def _render_sidebar_adjustments(distance_m: float, duration_s: float, key_suffix: str) -> tuple[float, float]:
     """Render editable distance/duration inputs in the sidebar. Returns updated values in meters/seconds."""
     miles = distance_m / ss.meters_to_miles
     with st.sidebar:
@@ -118,7 +119,7 @@ def _render_sidebar_adjustments(distance_m, duration_s, key_suffix):
     return new_miles * ss.meters_to_miles, updated_duration_s
 
 
-def _set_ss_flags_for_points(points_df):
+def _set_ss_flags_for_points(points_df: pd.DataFrame) -> None:
     """
     Re-evaluate ss.hr, ss.cadence, ss.coordinates for a sub-sliced points_df.
     This is needed when rendering individual legs of a multisport activity.
@@ -149,16 +150,16 @@ def _set_ss_flags_for_points(points_df):
 
 
 def _render_session_content(
-    conn,
-    activity_id,
-    session_row,
-    points_df,
-    updated_category,
-    session_key_suffix,
+    conn: psycopg.Connection,
+    activity_id: int,
+    session_row: pd.Series | None,
+    points_df: pd.DataFrame,
+    updated_category: str,
+    session_key_suffix: str,
     map_col=None,
-    show_summary_metrics=True,
-    is_multisport=False,
-):
+    show_summary_metrics: bool = True,
+    is_multisport: bool = False,
+) -> pd.DataFrame:
     """
     Renders map, graphs, lap table, auto laps, and stats for one session.
 
@@ -181,9 +182,9 @@ def _render_session_content(
         duration_s = session_row["total_timer_time"] or 0
         avg_power = session_row.get("avg_power")
     else:
-        distance_m = ss.activity_details[0]
-        duration_s = ss.activity_details[1]
-        avg_power = ss.activity_details[2]
+        distance_m = ss.activity_details.distance
+        duration_s = ss.activity_details.duration
+        avg_power = ss.activity_details.avg_power
 
     miles = distance_m / ss.meters_to_miles
     duration_td = timedelta(seconds=int(duration_s))
@@ -944,17 +945,17 @@ def _render_session_content(
 
 
 def _render_single_sport(
-    conn, activity_id, sport, sessions_df, updated_category, feel, effort
-):
+    conn: psycopg.Connection, activity_id: int, sport: str, sessions_df: pd.DataFrame, updated_category: str, feel: int | None, effort: int | None
+) -> None:
     """Renders the standard single-sport detail page (description box + session content + save)."""
     # Use the first session row so sub_sport/pool_length are available downstream
     session_row = sessions_df.iloc[0] if sessions_df is not None and not sessions_df.empty else None
     points_df = ss.points_df if "points_df" in ss else pd.DataFrame()
 
     # ---- derive metrics for this session to display above the map -----------
-    distance_m = ss.activity_details[0]
-    duration_s = ss.activity_details[1]
-    avg_power = ss.activity_details[2]
+    distance_m = ss.activity_details.distance
+    duration_s = ss.activity_details.duration
+    avg_power = ss.activity_details.avg_power
 
     updated_distance_m, updated_duration_s = _render_sidebar_adjustments(
         distance_m, duration_s, key_suffix=str(activity_id),
@@ -965,8 +966,8 @@ def _render_single_sport(
     # So the map and description can be vertically aligned
     map_col, description_col = st.columns([0.7, 0.3])
     with description_col:
-        if ss.activity_details and ss.activity_details[3]:
-            description = ss.activity_details[3]
+        if ss.activity_details and ss.activity_details.description:
+            description = ss.activity_details.description
         else:
             description = ""
         updated_description = st.text_area(
@@ -1004,8 +1005,8 @@ def _render_single_sport(
 
 
 def _render_multisport(
-    conn, activity_id, sessions_df, full_points_df, updated_category, feel, effort
-):
+    conn: psycopg.Connection, activity_id: int, sessions_df: pd.DataFrame, full_points_df: pd.DataFrame, updated_category: str, feel: int | None, effort: int | None
+) -> None:
     """
     Renders the multisport detail page.
 
@@ -1031,8 +1032,8 @@ def _render_multisport(
             st_folium(full_map, width="stretch", key=f"full_map_{activity_id}")
 
     with description_col:
-        if ss.activity_details and ss.activity_details[3]:
-            description = ss.activity_details[3]
+        if ss.activity_details and ss.activity_details.description:
+            description = ss.activity_details.description
         else:
             description = ""
         updated_description = st.text_area(
@@ -1111,17 +1112,17 @@ def _render_multisport(
 
 
 def _render_feel_effort_save(
-    conn,
-    activity_id,
-    feel,
-    effort,
-    filtered_df,
-    updated_description,
-    updated_category,
-    updated_distance_m,
-    updated_duration_s,
-    session_key_suffix,
-):
+    conn: psycopg.Connection,
+    activity_id: int,
+    feel: int | None,
+    effort: int | None,
+    filtered_df: pd.DataFrame,
+    updated_description: str,
+    updated_category: str,
+    updated_distance_m: float,
+    updated_duration_s: float,
+    session_key_suffix: str,
+) -> None:
     """Renders the feel/effort widgets and the Save button."""
     feel_col, effort_col = st.columns([0.3, 0.7])
 
@@ -1247,42 +1248,42 @@ def _render_feel_effort_save(
         query_params = []
 
         # Check Description
-        if updated_description != (ss.activity_details[3]):
+        if updated_description != ss.activity_details.description:
             if updated_description == "":
                 updated_description = None
             set_clauses.append("description = %s")
             query_params.append(updated_description)
 
         # Check Title (Activity Name)
-        updated_title = ss.get(f"title_input_{activity_id}", ss.activity_details[7])
-        if updated_title != ss.activity_details[7]:
+        updated_title = ss.get(f"title_input_{activity_id}", ss.activity_details.name)
+        if updated_title != ss.activity_details.name:
             if updated_title == "":
                 updated_title = None
             set_clauses.append("activity_name = %s")
             query_params.append(updated_title)
 
         # Check Category
-        if updated_category != ss.activity_details[8]:
+        if updated_category != ss.activity_details.category:
             set_clauses.append("category = %s")
             query_params.append(updated_category)
 
         # Check adjusted distance
-        if updated_distance_m != ss.activity_details[0]:
+        if updated_distance_m != ss.activity_details.distance:
             set_clauses.append("adjusted_distance = %s")
             query_params.append(updated_distance_m)
 
         # Check adjusted duration
-        if updated_duration_s != ss.activity_details[1]:
+        if updated_duration_s != ss.activity_details.duration:
             set_clauses.append("adjusted_duration = %s")
             query_params.append(updated_duration_s)
 
         # Check Feel
-        if updated_feel != ss.activity_details[4]:
+        if updated_feel != ss.activity_details.feel:
             set_clauses.append("workout_feel = %s")
             query_params.append(updated_feel)
 
         # Check Effort
-        if updated_effort != ss.activity_details[5]:
+        if updated_effort != ss.activity_details.effort:
             set_clauses.append("effort = %s")
             query_params.append(updated_effort)
 
@@ -1367,13 +1368,13 @@ else:
 
     if ss.activity_details:
         # Getting activity details
-        distance_m = ss.activity_details[0]
-        duration_s = ss.activity_details[1]
-        avg_power = ss.activity_details[2]
-        description = ss.activity_details[3] if ss.activity_details[3] else ""
-        feel = ss.activity_details[4]
-        effort = ss.activity_details[5]
-        local_timestamp = ss.activity_details[6]
+        distance_m = ss.activity_details.distance
+        duration_s = ss.activity_details.duration
+        avg_power = ss.activity_details.avg_power
+        description = ss.activity_details.description or ""
+        feel = ss.activity_details.feel
+        effort = ss.activity_details.effort
+        local_timestamp = ss.activity_details.local_timestamp
 
         # day of activity
         # TODO: It looks like the old watch? stored local timestamp at the end of the activity but new watch is beginning of activity. Activities from form are from the start of the activity
@@ -1386,7 +1387,7 @@ else:
     )
     # Title
     with title_col:
-        title = ss.activity_details[7]
+        title = ss.activity_details.name
         if title is None:
             title = ""
         # with title_col:
@@ -1395,7 +1396,7 @@ else:
         )
     with category_col:
         # category
-        category = ss.activity_details[8]
+        category = ss.activity_details.category
         if isinstance(category, str):
             category = category.strip()
 

@@ -19,8 +19,8 @@ from utils import init_session_state
 
 @st.dialog("Activity Summary", width="medium")
 def show_activity_dialog(
-    activity_title, activity_id, activity_sport, activity_row=None
-):
+    activity_title: str, activity_id: int, activity_sport: str, activity_row: dict | None = None
+) -> None:
     """Displays improved activity summary dialog."""
 
     # Fetch activity details
@@ -54,13 +54,13 @@ def show_activity_dialog(
     sessions_df = None
 
     if ss.activity_details:
-        distance_m = ss.activity_details[0] or 0
-        duration_s = ss.activity_details[1] or 0
-        avg_power = ss.activity_details[2]
-        description = ss.activity_details[3] or ""
-        feel = ss.activity_details[4]
-        effort = ss.activity_details[5]
-        local_timestamp = ss.activity_details[6]
+        distance_m = ss.activity_details.distance
+        duration_s = ss.activity_details.duration
+        avg_power = ss.activity_details.avg_power
+        description = ss.activity_details.description or ""
+        feel = ss.activity_details.feel
+        effort = ss.activity_details.effort
+        local_timestamp = ss.activity_details.local_timestamp
 
         # Time since activity
         time_ago = datetime.now() - local_timestamp
@@ -84,7 +84,7 @@ def show_activity_dialog(
         sessions_df = fetch_sessions_for_activity(conn, activity_id)
         if not sessions_df.empty:
             st.markdown("**Legs**")
-            sport_counts = {}
+            sport_counts: dict[str, int] = {}
             for _, row in sessions_df.iterrows():
                 sport = (row["sport"] or "unknown").capitalize()
                 sport_counts[sport] = sport_counts.get(sport, 0) + 1
@@ -148,12 +148,12 @@ def show_activity_dialog(
 
 
 # --- Callbacks ---
-def year_cb():
+def year_cb() -> None:
     """Called when there is a change in Year selectbox."""
     ss["selected_year"] = ss["yeark"]
 
 
-def month_cb():
+def month_cb() -> None:
     """Called when there is a change in Month selectbox."""
     ss["selected_month"] = ss["monthk"]
 
@@ -212,7 +212,7 @@ if __name__ == "__main__":
             del ss["activities_df"]
             st.toast("Fetching new activities")
 
-    calendar_events = []
+    calendar_events: list[dict] = []
     if "activities_df" in ss:
         if not ss.activities_df.empty:
             for index, row in ss.activities_df.iterrows():
