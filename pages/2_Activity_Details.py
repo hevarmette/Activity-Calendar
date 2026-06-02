@@ -42,6 +42,7 @@ from lap_processing import (
     process_swimming_lengths,
     UI_TO_DB_MAP,
 )
+from constants import MPS_TO_MPH, Sport, Intensity
 
 init_session_state()
 
@@ -60,7 +61,7 @@ def _render_summary_metrics(sport: str, distance_m: float, duration_s: float, av
     col1.metric("Distance", f"{miles:.2f} mi")
     col2.metric("Duration", str(duration_td))
 
-    if sport == "cycling":
+    if sport == Sport.CYCLING:
         if avg_power:
             col3.metric("Power", f"{avg_power} watts")
         else:
@@ -171,7 +172,7 @@ def _render_session_content(
         col1, col2, col3 = st.columns(3)
         col1.metric("Distance", f"{miles:.2f} mi")
         col2.metric("Duration", str(duration_td))
-        if sport == "cycling":
+        if sport == Sport.CYCLING:
             if avg_power:
                 col3.metric("Power", f"{avg_power} watts")
             else:
@@ -202,9 +203,9 @@ def _render_session_content(
             and point_df["enhanced_speed"].notnull().any()
         ):
             speed_mps = point_df["enhanced_speed"].replace(0, pd.NA)
-            if sport == "cycling":
+            if sport == Sport.CYCLING:
                 # mph for cycling
-                point_df["speed_mph"] = speed_mps * 2.23694
+                point_df["speed_mph"] = speed_mps * MPS_TO_MPH
             else:
                 # pace (min/mile) for running
                 point_df["pace_min_per_mile"] = ss.meters_to_miles / 60 / speed_mps
@@ -234,7 +235,7 @@ def _render_session_content(
             # -----------------------------------------------------------------
             # CYCLING GRAPHS: Speed, HR, Altitude, Cadence (RPM)
             # -----------------------------------------------------------------
-            if sport == "cycling":
+            if sport == Sport.CYCLING:
                 # Speed
                 if (
                     "speed_mph" in point_df.columns
@@ -486,9 +487,9 @@ def _render_session_content(
         # Fallback: Called if the session length is < 2 (single-sport) or missing indices
         raw_laps_df = fetch_lap_data(conn, activity_id)
 
-    if sport == "cycling":
+    if sport == Sport.CYCLING:
         processed_laps_df = process_cycling_laps(raw_laps_df.copy())
-    elif sport == "running":
+    elif sport == Sport.RUNNING:
         processed_laps_df = process_lap_data(raw_laps_df.copy())
     else:
         processed_laps_df = pd.DataFrame()
@@ -512,7 +513,7 @@ def _render_session_content(
         with laps_tab:
             st.markdown("You can edit values in the table below.")
 
-            intensity_options = ["warm up", "active", "recovery", "rest", "cooldown"]
+            intensity_options = [i.value for i in Intensity]
 
             # st.pills returns the selected string, or None if deselected
             selected_intensity = st.pills(
@@ -537,7 +538,7 @@ def _render_session_content(
                     f"processed_laps_df_{session_key_suffix}"
                 ]
 
-            if sport == "cycling":
+            if sport == Sport.CYCLING:
                 column_config = {
                     "Intensity": st.column_config.SelectboxColumn(
                         "Intensity",
@@ -599,9 +600,9 @@ def _render_session_content(
                 )
 
             # Interval summary for training activities
-            if updated_category == "training" and (ss[f"processed_laps_df_{session_key_suffix}"]["Intensity"] == "active").sum() >= 2:
+            if updated_category == "training" and (ss[f"processed_laps_df_{session_key_suffix}"]["Intensity"] == Intensity.ACTIVE).sum() >= 2:
                 active_laps = ss[f"processed_laps_df_{session_key_suffix}"][
-                    ss[f"processed_laps_df_{session_key_suffix}"]["Intensity"] == "active"
+                    ss[f"processed_laps_df_{session_key_suffix}"]["Intensity"] == Intensity.ACTIVE
                 ]
                 dist_mean = active_laps["Distance (miles)"].mean()
                 time_secs = active_laps["Time (formatted)"].apply(parse_hms_to_seconds)
@@ -633,14 +634,14 @@ def _render_session_content(
                             if has_power:
                                 cols[1].metric("Avg Power (W)", s['avg_power'])
                             else:
-                                cols[1].metric("Avg Speed (mph)" if sport == "cycling" else "Avg Pace (min/mi)", s.get("avg_pace_label", "—"))
+                                cols[1].metric("Avg Speed (mph)" if sport == Sport.CYCLING else "Avg Pace (min/mi)", s.get("avg_pace_label", "—"))
                             cols[2].metric("Farthest Split (mi)", s['farthest_split'])
                         else:
                             cols[0].metric("Avg Time", s['avg_duration'], delta=s.get("time_dev_trend"), delta_color="inverse")
                             if has_power:
                                 cols[1].metric("Avg Power (W)", s['avg_power'])
                             else:
-                                cols[1].metric("Avg Speed (mph)" if sport == "cycling" else "Avg Pace (min/mi)", s.get("avg_pace_label", "—"))
+                                cols[1].metric("Avg Speed (mph)" if sport == Sport.CYCLING else "Avg Pace (min/mi)", s.get("avg_pace_label", "—"))
                             cols[2].metric("Fastest Split", s['fastest_split'])
                         if has_hr:
                             cols[3].metric("Avg HR (bpm)", s['avg_hr'])
@@ -666,7 +667,7 @@ def _render_session_content(
                     st.markdown("---")
                     st.markdown("**Avg Pace / Speed**")
                     avg_speed = None
-                    if sport == "cycling" and mph is not None:
+                    if sport == Sport.CYCLING and mph is not None:
                         avg_speed = f"{mph:.2f} mph"
                     elif pace_min is not None and pace_sec is not None:
                         avg_speed = f"{pace_min}:{pace_sec:02d} /mi"
@@ -726,7 +727,7 @@ def _render_session_content(
                     st.write(f"Ascent: {total_ascent:.0f} feet")
                     st.write(f"Descent: {total_descent:.0f} feet")
 
-                if sport == "cycling":
+                if sport == Sport.CYCLING:
                     # Best lap by speed
                     if "Avg Speed (mph)" in processed_laps_df.columns:
                         if elevation_valid:
@@ -777,7 +778,7 @@ def _render_session_content(
             # Column 4
             # --------------------
             with c4:
-                if sport == "cycling":
+                if sport == Sport.CYCLING:
                     # Cadence in RPM (no doubling)
                     cadence_valid = (
                         not point_df.empty
@@ -797,7 +798,7 @@ def _render_session_content(
                         and "enhanced_speed" in point_df.columns
                         and point_df["enhanced_speed"].notnull().any()
                     ):
-                        max_speed_mph = point_df["enhanced_speed"].max() * 2.23694
+                        max_speed_mph = point_df["enhanced_speed"].max() * MPS_TO_MPH
                         if cadence_valid:
                             st.markdown("---")
                         st.markdown("**Max Speed**")
@@ -892,7 +893,7 @@ def _render_session_content(
             if isinstance(auto_laps_result, tuple):
                 raw_auto_laps_df, target_dists = auto_laps_result
 
-                if sport == "cycling":
+                if sport == Sport.CYCLING:
                     auto_laps_config = {
                         "Distance (miles)": st.column_config.NumberColumn(
                             format="%.2f"
@@ -1421,7 +1422,7 @@ else:
     # FETCH SESSIONS — determines single-sport vs multisport rendering path
     # -------------------------------------------------------------------------
     sessions_df = fetch_sessions_for_activity(conn, activity_id)
-    is_multisport = sport == "multisport" or (
+    is_multisport = sport == Sport.MULTISPORT or (
         sessions_df is not None and len(sessions_df) > 1
     )
 

@@ -5,12 +5,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import timedelta
 from streamlit import session_state as ss
+from constants import Sport
 
 # Sport → polyline colour for multisport maps
 SPORT_COLOR_MAP: dict[str, str] = {
-    "running": "red",
-    "cycling": "green",
-    "swimming": "blue",
+    Sport.RUNNING: "red",
+    Sport.CYCLING: "green",
+    Sport.SWIMMING: "blue",
 }
 SPORT_COLOR_DEFAULT: str = "gray"
 

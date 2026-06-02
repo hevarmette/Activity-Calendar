@@ -1,6 +1,7 @@
 import pandas as pd
 from streamlit import session_state as ss
 from utils import format_pace, format_pace_precise, convert_seconds_to_hms, parse_hms_to_seconds
+from constants import MPS_TO_MPH, Intensity, Sport
 import numpy as np
 
 # Keys = Database Column Names
@@ -340,8 +341,8 @@ def create_auto_laps(points_df: pd.DataFrame, events_df: pd.DataFrame | None = N
                 laps_grouped["enhanced_speed"]["max"], errors="coerce"
             )
             # Convert m/s -> mph
-            laps_df["Avg Speed (mph)"] = (spd_mean * 2.23694).round(1).values
-            laps_df["Max Speed (mph)"] = (spd_max * 2.23694).round(1).values
+            laps_df["Avg Speed (mph)"] = (spd_mean * MPS_TO_MPH).round(1).values
+            laps_df["Max Speed (mph)"] = (spd_max * MPS_TO_MPH).round(1).values
 
     # ---------------------------------------------------------
     # FORMATTING
@@ -418,7 +419,7 @@ def process_swimming_lengths(df: pd.DataFrame, pool_length_m: float = 25) -> pd.
     # Distance per length based on pool size
     df["Distance (m)"] = pool_length_m
     df["Distance (m)"] = df.apply(
-        lambda r: pool_length_m if r["length_type"] == "active" else 0, axis=1
+        lambda r: pool_length_m if r["length_type"] == Intensity.ACTIVE else 0, axis=1
     )
 
     # Time formatting
@@ -428,7 +429,7 @@ def process_swimming_lengths(df: pd.DataFrame, pool_length_m: float = 25) -> pd.
     df["Strokes"] = df["total_strokes"]
 
     # Pace per 100m (seconds per 100m)
-    active_mask = (df["length_type"] == "active") & (df["total_timer_time"] > 0)
+    active_mask = (df["length_type"] == Intensity.ACTIVE) & (df["total_timer_time"] > 0)
     df["Pace /100m"] = None
     df.loc[active_mask, "Pace /100m"] = (
         df.loc[active_mask, "total_timer_time"] / pool_length_m * 100
@@ -497,7 +498,7 @@ def compute_interval_summary(processed_laps_df: pd.DataFrame, sport: str, group_
     Only sets with >= 2 reps are included. Returns a list of dicts sorted by workout order.
     """
     df = processed_laps_df.copy()
-    df = df[df["Intensity"] == "active"]
+    df = df[df["Intensity"] == Intensity.ACTIVE]
     if len(df) < 2:
         return []
 
@@ -576,11 +577,11 @@ def compute_interval_summary(processed_laps_df: pd.DataFrame, sport: str, group_
         if dist_trend < 0:
             entry["dist_dev_trend"] = f"-{entry['dist_dev_trend']}"
 
-        if sport == "cycling" and "avg_power" in subset.columns:
+        if sport == Sport.CYCLING and "avg_power" in subset.columns:
             power = pd.to_numeric(subset["avg_power"], errors="coerce").dropna()
             if not power.empty:
                 entry["avg_power"] = round(power.mean())
-        if sport == "cycling" and "Avg Speed (mph)" in subset.columns:
+        if sport == Sport.CYCLING and "Avg Speed (mph)" in subset.columns:
             speeds = pd.to_numeric(subset["Avg Speed (mph)"], errors="coerce").dropna()
             if not speeds.empty:
                 entry["avg_pace_label"] = f"{speeds.mean():.1f}"

@@ -3,6 +3,7 @@ import psycopg
 from streamlit import session_state as ss
 import pandas as pd
 from pyhigh import get_elevation_batch
+from constants import METERS_TO_FEET
 
 
 from utils import ActivityDetails
@@ -379,14 +380,14 @@ def fetch_activity_points(_conn: psycopg.Connection, activity_id: int) -> pd.Dat
                 )
                 try:
                     points_df["corrected_altitude"] = (
-                        get_elevation_batch(coordinates) * 3.28084
+                        get_elevation_batch(coordinates) * METERS_TO_FEET
                     )  # Converting meters to feet
                 except Exception as e:
                     # st.warning(f"Network error getting elevation: {e}") # Optional logging
                     print(e)
                     if "altitude" in points_df.columns:
                         points_df["corrected_altitude"] = (
-                            points_df["altitude"] * 3.28084
+                            points_df["altitude"] * METERS_TO_FEET
                         )  # converting from meters to feet
                     else:
                         points_df["corrected_altitude"] = 0.0

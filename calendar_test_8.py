@@ -15,6 +15,7 @@ from db import (
 )
 from plotting import create_activity_map
 from utils import init_session_state
+from constants import Sport
 
 
 @st.dialog("Activity Summary", width="medium")
@@ -38,7 +39,7 @@ def show_activity_dialog(
     st.header(activity_title)
 
     # Determine if this is a multisport activity
-    is_multisport = activity_sport == "multisport" or (
+    is_multisport = activity_sport == Sport.MULTISPORT or (
         activity_row is not None
         and activity_row.get("num_sessions", 1) is not None
         and activity_row.get("num_sessions", 1) > 1
@@ -97,7 +98,7 @@ def show_activity_dialog(
                 leg_miles = (row["total_distance"] or 0) / ss.meters_to_miles
                 leg_duration = timedelta(seconds=int(row["total_timer_time"] or 0))
                 st.markdown(f"- **{leg_label}**: {leg_miles:.2f} mi · {leg_duration}")
-    elif activity_sport == "cycling":
+    elif activity_sport == Sport.CYCLING:
         if avg_power:
             col3.metric("Power", f"{avg_power} watts")
         else:
@@ -225,15 +226,15 @@ if __name__ == "__main__":
 
                 # Determine the canonical sport for colouring and routing
                 if num_sessions > 1 or len(set(sports)) > 1:
-                    sport = "multisport"
+                    sport = Sport.MULTISPORT
                 else:
                     sport = sports[0] if sports else "unknown"
 
                 color_map = {
-                    "running": "#FF4B4B",
-                    "swimming": "#1F77B4",
-                    "cycling": "#2CA02C",
-                    "multisport": "#FF8C00",  # orange
+                    Sport.RUNNING: "#FF4B4B",
+                    Sport.SWIMMING: "#1F77B4",
+                    Sport.CYCLING: "#2CA02C",
+                    Sport.MULTISPORT: "#FF8C00",  # orange
                 }
 
                 calendar_events.append(

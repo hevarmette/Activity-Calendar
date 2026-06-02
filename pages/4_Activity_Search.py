@@ -4,6 +4,7 @@ import psycopg
 from streamlit import session_state as ss
 from db import get_connection, fetch_search_data
 from utils import init_session_state, convert_seconds_to_hms, render_activity_card
+from constants import Sport
 
 init_session_state()
 
@@ -43,7 +44,7 @@ def _canonical_sport(sport_str: str, num_sessions: int | None) -> str:
     """Determine canonical sport label from comma-separated sport string."""
     sports = [s.strip() for s in sport_str.split(",")]
     if (num_sessions or 1) > 1 or len(set(sports)) > 1:
-        return "multisport"
+        return Sport.MULTISPORT
     return sports[0] if sports else "other"
 
 
@@ -51,7 +52,7 @@ def _render_filters(container, available_sports: list[str], available_sub_sports
                     min_date, max_date) -> dict:
     """Render all search filter widgets into the given container. Returns filter values."""
 
-    default_sport = 'running' if 'running' in available_sports else available_sports
+    default_sport = Sport.RUNNING if Sport.RUNNING in available_sports else available_sports
 
     with container:
         selected_sports = st.multiselect(

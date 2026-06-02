@@ -5,6 +5,7 @@ import streamlit as st
 from streamlit import session_state as ss
 import base64
 import psycopg
+from constants import METERS_PER_MILE, Sport
 
 
 @dataclass
@@ -25,7 +26,7 @@ def init_session_state() -> None:
     if "schema" not in ss:
         ss.schema = st.secrets.schema
     if "meters_to_miles" not in ss:
-        ss.meters_to_miles = 1609.344
+        ss.meters_to_miles = METERS_PER_MILE
     if "feel_map" not in ss:
         ss.feel_map = {
             0: "very weak",
@@ -167,9 +168,9 @@ def _format_pace_speed(sport: str, distance_m: float, time_s: float) -> str:
     """Return a sport-appropriate pace or speed string."""
     if distance_m <= 0 or time_s <= 0:
         return "—"
-    if sport == "cycling":
+    if sport == Sport.CYCLING:
         return f"{(distance_m / ss.meters_to_miles) / (time_s / 3600):.1f} mph"
-    if sport == "swimming":
+    if sport == Sport.SWIMMING:
         mins, secs = divmod(int(round(time_s / (distance_m / 100))), 60)
         return f"{mins}:{secs:02d} /100m"
     pace = (time_s / 60) / (distance_m / ss.meters_to_miles)

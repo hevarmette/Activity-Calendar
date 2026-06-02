@@ -4,14 +4,15 @@ import plotly.express as px
 from streamlit import session_state as ss
 from db import get_connection, fetch_report_data
 from utils import init_session_state, convert_seconds_to_hms, format_pace
+from constants import METERS_TO_FEET, Sport
 
 init_session_state()
 
 SPORT_COLORS: dict[str, str] = {
-    "running": "#FF4B4B",
-    "cycling": "#2CA02C",
-    "swimming": "#1F77B4",
-    "multisport": "#FF8C00",
+    Sport.RUNNING: "#FF4B4B",
+    Sport.CYCLING: "#2CA02C",
+    Sport.SWIMMING: "#1F77B4",
+    Sport.MULTISPORT: "#FF8C00",
 }
 
 GROUPING_OPTIONS: dict[str, str] = {
@@ -28,7 +29,7 @@ def aggregate_data(df: pd.DataFrame, freq: str, sports: list[str], group_by_spor
     if filtered.empty:
         return pd.DataFrame()
 
-    filtered["period"] = filtered["local_timestamp"].dt.to_period(
+    filtered["period"] = filtered["local_timestamp"].dt.to_period( # type: ignore
         freq
     )
 
@@ -40,7 +41,7 @@ def aggregate_data(df: pd.DataFrame, freq: str, sports: list[str], group_by_spor
         filtered["sport"] = "All Sports"
 
     agg = (
-        filtered.groupby(["period", "sport"])
+        filtered.groupby(["period", "sport"]) # type: ignore
         .agg(
             activities=("activity_id", "nunique"),
             total_distance_m=("total_distance", "sum"),
@@ -71,12 +72,12 @@ def _format_pace_speed(row: pd.Series) -> str:
     if dist_m <= 0 or time_s <= 0:
         return ""
 
-    if sport == "cycling":
+    if sport == Sport.CYCLING:
         miles = dist_m / ss.meters_to_miles
         hours = time_s / 3600
         return f"{miles / hours:.1f} mph"
 
-    if sport == "swimming":
+    if sport == Sport.SWIMMING:
         # pace per 100 meters: seconds per 100m -> M:SS /100m
         pace_s_per_100m = time_s / (dist_m / 100)
         mins, secs = divmod(int(round(pace_s_per_100m)), 60)
@@ -100,7 +101,7 @@ def build_summary_table(agg: pd.DataFrame, group_by_sport: bool) -> pd.DataFrame
     display["Avg Distance (mi)"] = agg["avg_distance_mi"].round(2)
     display["Avg Time"] = agg["avg_time_s"].apply(convert_seconds_to_hms)
     display["Calories"] = agg["total_calories"].fillna(0).astype(int)
-    display["Elevation Gain (ft)"] = (agg["total_ascent"].fillna(0) * 3.28084).astype(int)
+    display["Elevation Gain (ft)"] = (agg["total_ascent"].fillna(0) * METERS_TO_FEET).astype(int)
     display["Avg HR"] = agg["avg_hr"].round(0).fillna(0).astype(int)
     display["Max HR"] = agg["max_hr"].fillna(0).astype(int)
     return display
@@ -127,7 +128,7 @@ available_sports = sorted(raw_df["sport"].unique().tolist())
 with st.sidebar:
     st.header("Report Settings")
 
-    default_sports = ["running"] if "running" in available_sports else available_sports
+    default_sports = [Sport.RUNNING] if Sport.RUNNING in available_sports else available_sports
     selected_sports = st.multiselect(
         "Sports",
         options=available_sports,
