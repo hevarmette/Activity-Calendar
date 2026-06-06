@@ -62,7 +62,7 @@ Activity Calendar serves as a personal training log and analysis tool. It reads 
 
 ```
 Activity-Calendar/
-├── calendar_test_8.py          # Main entry point — calendar view and activity dialog
+├── Activity_Calendar.py          # Main entry point — calendar view and activity dialog
 ├── db.py                       # Database connection and all SQL queries
 ├── plotting.py                 # Folium map builder and Plotly chart factory
 ├── lap_processing.py           # Lap data processing, auto lap generation
@@ -116,5 +116,5 @@ db_url = "postgresql://user:password@host:port/database"
 ### Running
 
 ```bash
-streamlit run calendar_test_8.py
+streamlit run Activity_Calendar.py
 ```

@@ -167,8 +167,6 @@ if __name__ == "__main__":
     conn = get_connection(local=True)
 
     # --- Fetch and Format Data ---
-    # Call the fake data generator instead of the database function
-    # activities_df = generate_fake_activity_data(selected_year, selected_month)
     if "activities_df" not in ss:
         ss.activities_df = retrieve_monthly_data(conn)
 
