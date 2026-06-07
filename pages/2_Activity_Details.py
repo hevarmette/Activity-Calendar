@@ -4,10 +4,6 @@ import pandas as pd
 import psycopg
 from streamlit import session_state as ss
 from datetime import timedelta
-from calendar_test_8 import (
-    fetch_activity_details,
-    fetch_activity_points,
-)
 from streamlit_folium import st_folium
 from db import (
     get_connection,
@@ -21,6 +17,8 @@ from db import (
     fetch_activity_events,
     fetch_similar_activities,
     fetch_length_data,
+    fetch_activity_details,
+    fetch_activity_points,
 )
 from utils import (
     convert_seconds_to_hms,
