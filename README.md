@@ -2,6 +2,8 @@
 
 A Streamlit-based fitness activity dashboard for visualizing, analyzing, and managing workout data stored in a PostgreSQL database (I have my own files to parse the info I want in a sister repository [file-parser](https://github.com/hevarmette/Fitness-File-Parser), so make sure your schema has the required columns and tables). It renders activities on an interactive calendar and provides deep drill-down into lap data, GPS routes, performance graphs, and training metrics.
 
+The real benefit of having my own database and ui, compared to Garmin Connect and Strava, is that I can quickly find past activities and compare workouts against each other. This helps to build my training plan.
+
 > **Note:** This app has only been tested with `.fit` files downloaded from [Garmin Connect](https://connect.garmin.com/). Database setup and FIT file parsing are handled by a separate companion repository.
 
 ## Purpose
