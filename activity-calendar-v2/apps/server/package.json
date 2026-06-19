@@ -1,0 +1,19 @@
+{
+	"name": "@activity-calendar/server",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "bun run --watch src/index.ts",
+		"build": "bun build src/index.ts --outdir dist --target bun"
+	},
+	"dependencies": {
+		"@activity-calendar/shared": "workspace:*",
+		"hono": "4.7.4",
+		"postgres": "3.4.5",
+		"zod": "3.24.4"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.3.14"
+	}
+}
