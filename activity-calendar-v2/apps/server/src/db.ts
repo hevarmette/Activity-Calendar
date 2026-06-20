@@ -8,6 +8,9 @@ const sql = postgres({
 	password: process.env.DB_PASSWORD || "",
 	max: 10,
 	idle_timeout: 20,
+	transform: {
+	  column: { from: postgres.toCamel },
+	},
 });
 
 export const SCHEMA = process.env.DB_SCHEMA || "public";
