@@ -1,7 +1,19 @@
-import { MapContainer, TileLayer, Polyline } from "react-leaflet";
+import { useEffect } from "react";
+import { MapContainer, TileLayer, Polyline, useMap } from "react-leaflet";
 import type { RecordPoint, Session } from "@activity-calendar/shared";
 import { SPORT_COLORS } from "@activity-calendar/shared";
 import "leaflet/dist/leaflet.css";
+
+function MapResizer() {
+	const map = useMap();
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			map.invalidateSize();
+		}, 100);
+		return () => clearTimeout(timer);
+	}, [map]);
+	return null;
+}
 
 interface Props {
 	points: RecordPoint[];
@@ -9,36 +21,34 @@ interface Props {
 }
 
 export function ActivityMap({ points, sessions }: Props) {
-	if (points.length === 0) return null;
-
 	const coords = points
 		.filter((p) => p.latitude != null && p.longitude != null)
 		.map((p) => [p.latitude!, p.longitude!] as [number, number]);
 
 	if (coords.length === 0) return null;
 
-	const bounds = coords.reduce(
-		(acc, [lat, lng]) => ({
-			minLat: Math.min(acc.minLat, lat),
-			maxLat: Math.max(acc.maxLat, lat),
-			minLng: Math.min(acc.minLng, lng),
-			maxLng: Math.max(acc.maxLng, lng),
-		}),
-		{ minLat: coords[0]![0], maxLat: coords[0]![0], minLng: coords[0]![1], maxLng: coords[0]![1] },
-	);
+	const lats = coords.map(([lat]) => lat);
+	const lngs = coords.map(([, lng]) => lng);
+	const bounds: [[number, number], [number, number]] = [
+		[Math.min(...lats), Math.min(...lngs)],
+		[Math.max(...lats), Math.max(...lngs)],
+	];
 
 	const isMultisport = sessions && sessions.length > 1;
 
 	return (
 		<MapContainer
-			bounds={[
-				[bounds.minLat, bounds.minLng],
-				[bounds.maxLat, bounds.maxLng],
-			]}
-			scrollWheelZoom={false}
-			className="h-64 w-full rounded-lg"
+			bounds={bounds}
+			boundsOptions={{ padding: [16, 16] }}
+			scrollWheelZoom={true}
+			zoomControl={true}
+			style={{ height: "100%", width: "100%" }}
 		>
-			<TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+			<TileLayer
+				url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+				attribution='© <a href="https://openstreetmap.org">OpenStreetMap</a>'
+			/>
+			<MapResizer />
 			{isMultisport
 				? sessions.map((session) => {
 						const start = new Date(session.startTime).getTime();
@@ -46,12 +56,21 @@ export function ActivityMap({ points, sessions }: Props) {
 						const segCoords = points
 							.filter((p) => {
 								const t = new Date(p.timestamp).getTime();
-								return t >= start && t <= end && p.latitude != null && p.longitude != null;
+								return (
+									t >= start &&
+									t <= end &&
+									p.latitude != null &&
+									p.longitude != null
+								);
 							})
 							.map((p) => [p.latitude!, p.longitude!] as [number, number]);
 						const color = SPORT_COLORS[session.sport] ?? "#7F7F7F";
 						return segCoords.length > 1 ? (
-							<Polyline key={session.sessionId} positions={segCoords} pathOptions={{ color, weight: 4 }} />
+							<Polyline
+								key={session.sessionId}
+								positions={segCoords}
+								pathOptions={{ color, weight: 4 }}
+							/>
 						) : null;
 					})
 				: <Polyline positions={coords} pathOptions={{ color: "#FF4B4B", weight: 4 }} />}
