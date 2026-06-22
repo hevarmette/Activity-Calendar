@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: activity_user
+      POSTGRES_PASSWORD: activity_pass
+      POSTGRES_DB: activity_calendar
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  server:
+    build: .
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: activity_calendar
+      DB_USER: activity_user
+      DB_PASSWORD: activity_pass
+      PORT: "3000"
+      NODE_ENV: production
+
+volumes:
+  pgdata:

@@ -66,6 +66,8 @@ export function ActivitySearchPage() {
 	const minDur = Number(searchParams.get("minDur")) || 0;
 	const maxDur = Number(searchParams.get("maxDur")) || 0;
 	const page = Number(searchParams.get("page")) || 1;
+	const sortField = searchParams.get("sort") || "date";
+	const sortDir = searchParams.get("dir") || "desc";
 	const hasFilters = sports.length > 0 || categories.length > 0 || dateFrom || dateTo || minDist || maxDist || minDur || maxDur;
 
 	const availableSports = useMemo(() => {
@@ -88,7 +90,7 @@ export function ActivitySearchPage() {
 
 		const agg = aggregateActivities(filtered);
 
-		return agg.filter((a) => {
+		const result = agg.filter((a) => {
 			const mi = a.totalDistance / METERS_PER_MILE;
 			const min = a.totalTimerTime / 60;
 			if (minDist && mi < minDist) return false;
@@ -97,7 +99,23 @@ export function ActivitySearchPage() {
 			if (maxDur && min > maxDur) return false;
 			return true;
 		});
-	}, [data, sports, categories, dateFrom, dateTo, minDist, maxDist, minDur, maxDur]);
+
+		const dir = sortDir === "asc" ? 1 : -1;
+		result.sort((a, b) => {
+			switch (sortField) {
+				case "distance": return dir * (a.totalDistance - b.totalDistance);
+				case "duration": return dir * (a.totalTimerTime - b.totalTimerTime);
+				case "pace": {
+					const pA = a.totalDistance > 0 ? a.totalTimerTime / a.totalDistance : Infinity;
+					const pB = b.totalDistance > 0 ? b.totalTimerTime / b.totalDistance : Infinity;
+					return dir * (pA - pB);
+				}
+				default: return dir * a.localTimestamp.localeCompare(b.localTimestamp);
+			}
+		});
+
+		return result;
+	}, [data, sports, categories, dateFrom, dateTo, minDist, maxDist, minDur, maxDur, sortField, sortDir]);
 
 	const totalPages = Math.max(1, Math.ceil(activities.length / RESULTS_PER_PAGE));
 	const currentPage = Math.min(page, totalPages);
@@ -184,6 +202,18 @@ export function ActivitySearchPage() {
 				{/* Filters: sidebar when results shown, inline otherwise */}
 				<div className={hasFilters ? "" : "max-w-md mb-4"}>
 					{filterPanel}
+					<div className="flex gap-2 mt-3">
+						<select value={sortField} onChange={(e) => updateParam("sort", e.target.value)} className="rounded bg-gray-800 border border-gray-600 px-2 py-1 text-xs">
+							<option value="date">Sort: Date</option>
+							<option value="distance">Sort: Distance</option>
+							<option value="duration">Sort: Duration</option>
+							<option value="pace">Sort: Pace/Speed</option>
+						</select>
+						<select value={sortDir} onChange={(e) => updateParam("dir", e.target.value)} className="rounded bg-gray-800 border border-gray-600 px-2 py-1 text-xs">
+							<option value="desc">Descending</option>
+							<option value="asc">Ascending</option>
+						</select>
+					</div>
 				</div>
 
 				{/* Results */}

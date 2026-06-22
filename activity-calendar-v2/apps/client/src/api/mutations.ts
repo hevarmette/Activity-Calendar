@@ -3,6 +3,17 @@ import type { ActivityUpdatePayload, LapUpdatePayload } from "@activity-calendar
 import { api } from "./client.js";
 import { queryKeys } from "./queries.js";
 
+export function useCombineLengths(activityId: number) {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (lengthIds: number[]) =>
+			api("/api/lengths/combine", { method: "POST", body: JSON.stringify({ lengthIds }) }),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: queryKeys.lengths(activityId) });
+		},
+	});
+}
+
 export function useSaveActivity(activityId: number) {
 	const qc = useQueryClient();
 	return useMutation({

@@ -11,6 +11,7 @@ import { eventsRoutes } from "./routes/events.js";
 import { reportRoutes } from "./routes/report.js";
 import { searchRoutes } from "./routes/search.js";
 import { similarRoutes } from "./routes/similar.js";
+import { autoLapsRoutes } from "./routes/auto-laps.js";
 
 const app = new Hono();
 
@@ -26,6 +27,7 @@ app.route("/api/events", eventsRoutes);
 app.route("/api/report", reportRoutes);
 app.route("/api/search", searchRoutes);
 app.route("/api/similar", similarRoutes);
+app.route("/api/activities", autoLapsRoutes);
 
 app.get("/health", (c) => c.json({ status: "ok" }));
 

@@ -1,5 +1,5 @@
 import React from "react";
-import { Polyline } from "react-leaflet";
+import { Polyline, FeatureGroup } from "react-leaflet";
 import type { RecordPoint } from "@activity-calendar/shared";
 
 interface Props {
@@ -20,22 +20,22 @@ export function SpeedColorLine({ points }: Props) {
 	const min = Math.min(...speeds);
 	const max = Math.max(...speeds);
 
-	const segments: React.ReactElement[] = [];
-	for (let i = 0; i < valid.length - 1; i++) {
-		const p1 = valid[i]!;
-		const p2 = valid[i + 1]!;
-		const color = speedToColor(p1.enhancedSpeed!, min, max);
-		segments.push(
-			<Polyline
-				key={i}
-				positions={[
-					[p1.latitude!, p1.longitude!],
-					[p2.latitude!, p2.longitude!],
-				]}
-				pathOptions={{ color, weight: 5, opacity: 0.9 }}
-			/>,
-		);
-	}
-
-	return <>{segments}</>;
+	return (
+		<FeatureGroup>
+			{valid.slice(0, -1).map((p1, i) => {
+				const p2 = valid[i + 1]!;
+				const color = speedToColor(p1.enhancedSpeed!, min, max);
+				return (
+					<Polyline
+						key={i}
+						positions={[
+							[p1.latitude!, p1.longitude!],
+							[p2.latitude!, p2.longitude!],
+						]}
+						pathOptions={{ color, weight: 5, opacity: 0.9 }}
+					/>
+				);
+			})}
+		</FeatureGroup>
+	);
 }

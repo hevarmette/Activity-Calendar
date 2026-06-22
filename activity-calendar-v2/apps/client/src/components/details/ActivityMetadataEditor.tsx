@@ -59,9 +59,11 @@ export function ActivityMetadataEditor({ name, description, category, feel, effo
 						<button
 							key={value}
 							onClick={() => onChange({ workoutFeel: value })}
-							className={`rounded px-2 py-1 text-xs capitalize ${feel === value ? "bg-blue-600" : "bg-gray-700 hover:bg-gray-600"}`}
+							className={`rounded px-2 py-1 text-xs capitalize flex flex-col items-center gap-1 ${feel === value ? "bg-blue-600" : "bg-gray-700 hover:bg-gray-600"}`}
+							title={label}
 						>
-							{label}
+							<img src={`/assets/${label}.svg`} alt={label} className="w-6 h-6" />
+							<span>{label}</span>
 						</button>
 					))}
 				</div>

@@ -35,11 +35,13 @@ function periodKey(date: Date, grouping: Grouping): string {
 		case "Daily":
 			return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 		case "Weekly": {
-			// Week starting Sunday
-			const day = date.getDay();
+			const day = date.getDay(); // 0=Sun
 			const sun = new Date(date);
-			sun.setDate(d - day);
-			return `${sun.getFullYear()}-W${String(Math.ceil((sun.getDate() + sun.getDay()) / 7)).padStart(2, "0")}`;
+			sun.setDate(date.getDate() - day);
+			const startOfYear = new Date(sun.getFullYear(), 0, 1);
+			const dayOfYear = Math.floor((sun.getTime() - startOfYear.getTime()) / 86400000);
+			const weekNum = Math.floor(dayOfYear / 7) + 1;
+			return `${sun.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
 		}
 		case "Monthly":
 			return `${y}-${String(m + 1).padStart(2, "0")}`;

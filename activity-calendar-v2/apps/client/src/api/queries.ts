@@ -104,3 +104,26 @@ export function useSearch() {
 		queryFn: () => api<SearchRow[]>("/api/search"),
 	});
 }
+
+export interface AutoLap {
+	lap: number;
+	distanceMi: number;
+	timeSeconds: number;
+	paceMinPerMile: number | null;
+	speedMph: number | null;
+	totalAscentFt: number;
+	totalDescentFt: number;
+	avgHr: number | null;
+	maxHr: number | null;
+	avgCadence: number | null;
+	maxCadence: number | null;
+	cumulativeTimeSeconds: number;
+}
+
+export function useAutoLaps(id: number, sport: string, dist: number) {
+	return useQuery({
+		queryKey: ["activity", id, "auto-laps", sport, dist] as const,
+		queryFn: () => api<AutoLap[]>(`/api/activities/${id}/auto-laps?sport=${encodeURIComponent(sport)}&dist=${dist}`),
+		enabled: id > 0,
+	});
+}
