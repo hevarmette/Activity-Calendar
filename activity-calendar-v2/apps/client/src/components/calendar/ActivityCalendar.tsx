@@ -1,3 +1,4 @@
+import { useRef, useEffect } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -41,6 +42,12 @@ interface Props {
 }
 
 export function ActivityCalendar({ events, initialDate, onEventClick }: Props) {
+	const calRef = useRef<FullCalendar>(null);
+
+	useEffect(() => {
+		calRef.current?.getApi().gotoDate(initialDate);
+	}, [initialDate]);
+
 	function handleEventClick(info: EventClickArg) {
 		const props = info.event.extendedProps as {
 			activityId: number;
@@ -58,6 +65,7 @@ export function ActivityCalendar({ events, initialDate, onEventClick }: Props) {
 
 	return (
 		<FullCalendar
+			ref={calRef}
 			plugins={[dayGridPlugin, interactionPlugin]}
 			initialView="dayGridMonth"
 			initialDate={initialDate}
