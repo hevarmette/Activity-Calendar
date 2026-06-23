@@ -168,52 +168,57 @@ export function ActivityReportPage() {
 		setSearchParams(params);
 	}
 
-	if (isLoading) return <div className="text-center py-10">Loading report…</div>;
+	if (isLoading) return <div className="text-center py-10 text-gray-400">Loading report…</div>;
 
 	return (
 		<div className="space-y-6">
-			<h1 className="text-2xl font-bold">Activity Report</h1>
+			<div>
+				<h1 className="text-2xl font-bold text-gray-100">Activity Report</h1>
+				<p className="text-sm text-gray-500 mt-1">Analyze your training volume and trends over time</p>
+			</div>
 
 			{/* Controls */}
-			<div className="flex flex-wrap gap-3 items-end">
-				<div>
-					<label className="text-xs text-gray-400 block mb-1">Sports</label>
-					<select
-						multiple
-						value={selectedSports}
-						onChange={(e) => updateParam("sports", Array.from(e.target.selectedOptions, (o) => o.value).join(","))}
-						className="rounded bg-gray-800 border border-gray-600 px-2 py-1 text-sm min-w-[120px]"
-					>
-						{availableSports.map((s) => (
-							<option key={s} value={s}>{s}</option>
-						))}
-					</select>
+			<div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+				<div className="flex flex-wrap gap-4 items-end">
+					<div>
+						<label className="text-xs font-medium text-gray-400 block mb-1.5">Sports</label>
+						<select
+							multiple
+							value={selectedSports}
+							onChange={(e) => updateParam("sports", Array.from(e.target.selectedOptions, (o) => o.value).join(","))}
+							className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors min-w-[140px]"
+						>
+							{availableSports.map((s) => (
+								<option key={s} value={s}>{s}</option>
+							))}
+						</select>
+					</div>
+					<div>
+						<label className="text-xs font-medium text-gray-400 block mb-1.5">Group By</label>
+						<select value={grouping} onChange={(e) => updateParam("group", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors">
+							{GROUPINGS.map((g) => <option key={g} value={g}>{g}</option>)}
+						</select>
+					</div>
+					<div>
+						<label className="text-xs font-medium text-gray-400 block mb-1.5">Chart Metric</label>
+						<select value={metric} onChange={(e) => updateParam("metric", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors">
+							{METRICS.map((m) => <option key={m} value={m}>{m}</option>)}
+						</select>
+					</div>
+					<label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
+						<input
+							type="checkbox"
+							checked={groupBySport}
+							onChange={(e) => updateParam("groupBySport", e.target.checked ? "false" : "true")}
+							className="rounded border-gray-700 bg-gray-800 text-orange-500 focus:ring-orange-500/50"
+						/>
+						Combine sports
+					</label>
 				</div>
-				<div>
-					<label className="text-xs text-gray-400 block mb-1">Group By</label>
-					<select value={grouping} onChange={(e) => updateParam("group", e.target.value)} className="rounded bg-gray-800 border border-gray-600 px-2 py-1 text-sm">
-						{GROUPINGS.map((g) => <option key={g} value={g}>{g}</option>)}
-					</select>
-				</div>
-				<div>
-					<label className="text-xs text-gray-400 block mb-1">Chart Metric</label>
-					<select value={metric} onChange={(e) => updateParam("metric", e.target.value)} className="rounded bg-gray-800 border border-gray-600 px-2 py-1 text-sm">
-						{METRICS.map((m) => <option key={m} value={m}>{m}</option>)}
-					</select>
-				</div>
-				<label className="flex items-center gap-2 text-sm text-gray-400">
-					<input
-						type="checkbox"
-						checked={groupBySport}
-						onChange={(e) => updateParam("groupBySport", e.target.checked ? "false" : "true")}
-						className="rounded"
-					/>
-					Combine sports
-				</label>
 			</div>
 
 			{/* Summary */}
-			<div className="flex gap-3">
+			<div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
 				<MetricCard label="Activities" value={`${totalActivities}`} />
 				<MetricCard label="Distance" value={`${totalDistance.toFixed(1)} mi`} />
 				<MetricCard label="Time" value={convertSecondsToHms(totalTime) ?? "—"} />
@@ -221,13 +226,13 @@ export function ActivityReportPage() {
 			</div>
 
 			{/* Chart */}
-			<div className="bg-gray-800 rounded-lg p-4">
+			<div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
 				<ResponsiveContainer width="100%" height={300}>
 					<BarChart data={chartData}>
-						<CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-						<XAxis dataKey="period" tick={{ fontSize: 11, fill: "#9ca3af" }} angle={-45} textAnchor="end" height={60} />
-						<YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} />
-						<Tooltip contentStyle={{ background: "#1f2937", border: "1px solid #374151" }} />
+						<CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+						<XAxis dataKey="period" tick={{ fontSize: 11, fill: "#6b7280" }} angle={-45} textAnchor="end" height={60} />
+						<YAxis tick={{ fontSize: 11, fill: "#6b7280" }} />
+						<Tooltip contentStyle={{ background: "#111827", border: "1px solid #1f2937", borderRadius: "8px" }} />
 						<Legend />
 						{chartSports.map((sport) => (
 							<Bar key={sport} dataKey={sport} stackId="a" fill={SPORT_COLORS[sport] ?? "#7F7F7F"} />
@@ -237,19 +242,19 @@ export function ActivityReportPage() {
 			</div>
 
 			{/* Table */}
-			<div className="overflow-x-auto">
+			<div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
 				<table className="w-full text-sm text-left">
-					<thead className="text-xs text-gray-400 border-b border-gray-700">
+					<thead className="bg-gray-800/50 text-xs font-medium text-gray-400 uppercase tracking-wide">
 						<tr>
-							<th className="px-2 py-1">Period</th>
-							{!groupBySport && <th className="px-2 py-1">Sport</th>}
-							<th className="px-2 py-1">Activities</th>
-							<th className="px-2 py-1">Distance (mi)</th>
-							<th className="px-2 py-1">Time</th>
-							<th className="px-2 py-1">Avg Pace/Speed</th>
-							<th className="px-2 py-1">Calories</th>
-							<th className="px-2 py-1">Elev Gain (ft)</th>
-							<th className="px-2 py-1">Avg HR</th>
+							<th className="px-4 py-3">Period</th>
+							{!groupBySport && <th className="px-4 py-3">Sport</th>}
+							<th className="px-4 py-3">Activities</th>
+							<th className="px-4 py-3">Distance (mi)</th>
+							<th className="px-4 py-3">Time</th>
+							<th className="px-4 py-3">Avg Pace/Speed</th>
+							<th className="px-4 py-3">Calories</th>
+							<th className="px-4 py-3">Elev Gain (ft)</th>
+							<th className="px-4 py-3">Avg HR</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -260,16 +265,16 @@ export function ActivityReportPage() {
 									: `${formatPace(row.timeS / 60 / row.distanceMi)} /mi`
 								: "—";
 							return (
-								<tr key={i} className="border-b border-gray-800 hover:bg-gray-800/50">
-									<td className="px-2 py-1">{row.period}</td>
-									{!groupBySport && <td className="px-2 py-1 capitalize">{row.sport}</td>}
-									<td className="px-2 py-1">{row.activities}</td>
-									<td className="px-2 py-1">{row.distanceMi.toFixed(2)}</td>
-									<td className="px-2 py-1">{convertSecondsToHms(row.timeS)}</td>
-									<td className="px-2 py-1">{paceSpeed}</td>
-									<td className="px-2 py-1">{Math.round(row.calories)}</td>
-									<td className="px-2 py-1">{Math.round(row.ascent * METERS_TO_FEET)}</td>
-									<td className="px-2 py-1">{row.avgHr > 0 ? Math.round(row.avgHr) : "—"}</td>
+								<tr key={i} className="border-t border-gray-800 hover:bg-gray-800/30 transition-colors">
+									<td className="px-4 py-3 text-gray-300">{row.period}</td>
+									{!groupBySport && <td className="px-4 py-3 text-gray-300 capitalize">{row.sport}</td>}
+									<td className="px-4 py-3 text-gray-300">{row.activities}</td>
+									<td className="px-4 py-3 text-gray-300">{row.distanceMi.toFixed(2)}</td>
+									<td className="px-4 py-3 text-gray-300">{convertSecondsToHms(row.timeS)}</td>
+									<td className="px-4 py-3 text-gray-300">{paceSpeed}</td>
+									<td className="px-4 py-3 text-gray-300">{Math.round(row.calories)}</td>
+									<td className="px-4 py-3 text-gray-300">{Math.round(row.ascent * METERS_TO_FEET)}</td>
+									<td className="px-4 py-3 text-gray-300">{row.avgHr > 0 ? Math.round(row.avgHr) : "—"}</td>
 								</tr>
 							);
 						})}

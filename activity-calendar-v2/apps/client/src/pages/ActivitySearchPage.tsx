@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useSearchParams, Link } from "react-router";
-import { METERS_PER_MILE, Sport, convertSecondsToHms, formatPaceSpeed } from "@activity-calendar/shared";
+import { METERS_PER_MILE, Sport, convertSecondsToHms, formatPaceSpeed, SPORT_COLORS } from "@activity-calendar/shared";
 import type { SearchRow } from "@activity-calendar/shared";
 import { useSearch } from "../api/queries.js";
 import { MetricCard } from "../components/ui/MetricCard.js";
@@ -135,101 +135,108 @@ export function ActivitySearchPage() {
 		setSearchParams(params);
 	}
 
-	if (isLoading) return <div className="text-center py-10">Loading search data…</div>;
+	if (isLoading) return <div className="text-center py-10 text-gray-400">Loading search data…</div>;
 
 	const filterPanel = (
 		<div className="space-y-3">
 			<div>
-				<label className="text-xs text-gray-400 block mb-1">Sport</label>
+				<label className="text-xs font-medium text-gray-400 block mb-1.5">Sport</label>
 				<select
 					multiple
 					value={sports}
 					onChange={(e) => updateParam("sports", Array.from(e.target.selectedOptions, (o) => o.value).join(","))}
-					className="w-full rounded bg-gray-800 border border-gray-600 px-2 py-1 text-sm"
+					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 				>
 					{availableSports.map((s) => <option key={s} value={s}>{s}</option>)}
 				</select>
 			</div>
 			<div>
-				<label className="text-xs text-gray-400 block mb-1">Category</label>
+				<label className="text-xs font-medium text-gray-400 block mb-1.5">Category</label>
 				<select
 					multiple
 					value={categories}
 					onChange={(e) => updateParam("categories", Array.from(e.target.selectedOptions, (o) => o.value).join(","))}
-					className="w-full rounded bg-gray-800 border border-gray-600 px-2 py-1 text-sm"
+					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 				>
 					{availableCategories.map((c) => <option key={c} value={c}>{c}</option>)}
 				</select>
 			</div>
 			<div className="grid grid-cols-2 gap-2">
 				<div>
-					<label className="text-xs text-gray-400 block mb-1">From</label>
-					<input type="date" value={dateFrom} onChange={(e) => updateParam("from", e.target.value)} className="w-full rounded bg-gray-800 border border-gray-600 px-2 py-1 text-sm" />
+					<label className="text-xs font-medium text-gray-400 block mb-1.5">From</label>
+					<input type="date" value={dateFrom} onChange={(e) => updateParam("from", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors" />
 				</div>
 				<div>
-					<label className="text-xs text-gray-400 block mb-1">To</label>
-					<input type="date" value={dateTo} onChange={(e) => updateParam("to", e.target.value)} className="w-full rounded bg-gray-800 border border-gray-600 px-2 py-1 text-sm" />
-				</div>
-			</div>
-			<div className="grid grid-cols-2 gap-2">
-				<div>
-					<label className="text-xs text-gray-400 block mb-1">Min Dist (mi)</label>
-					<input type="number" step="0.5" value={minDist || ""} onChange={(e) => updateParam("minDist", e.target.value)} className="w-full rounded bg-gray-800 border border-gray-600 px-2 py-1 text-sm" />
-				</div>
-				<div>
-					<label className="text-xs text-gray-400 block mb-1">Max Dist (mi)</label>
-					<input type="number" step="0.5" value={maxDist || ""} onChange={(e) => updateParam("maxDist", e.target.value)} className="w-full rounded bg-gray-800 border border-gray-600 px-2 py-1 text-sm" />
+					<label className="text-xs font-medium text-gray-400 block mb-1.5">To</label>
+					<input type="date" value={dateTo} onChange={(e) => updateParam("to", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors" />
 				</div>
 			</div>
 			<div className="grid grid-cols-2 gap-2">
 				<div>
-					<label className="text-xs text-gray-400 block mb-1">Min Dur (min)</label>
-					<input type="number" step="5" value={minDur || ""} onChange={(e) => updateParam("minDur", e.target.value)} className="w-full rounded bg-gray-800 border border-gray-600 px-2 py-1 text-sm" />
+					<label className="text-xs font-medium text-gray-400 block mb-1.5">Min Dist (mi)</label>
+					<input type="number" step="0.5" value={minDist || ""} onChange={(e) => updateParam("minDist", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors" />
 				</div>
 				<div>
-					<label className="text-xs text-gray-400 block mb-1">Max Dur (min)</label>
-					<input type="number" step="5" value={maxDur || ""} onChange={(e) => updateParam("maxDur", e.target.value)} className="w-full rounded bg-gray-800 border border-gray-600 px-2 py-1 text-sm" />
+					<label className="text-xs font-medium text-gray-400 block mb-1.5">Max Dist (mi)</label>
+					<input type="number" step="0.5" value={maxDist || ""} onChange={(e) => updateParam("maxDist", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors" />
+				</div>
+			</div>
+			<div className="grid grid-cols-2 gap-2">
+				<div>
+					<label className="text-xs font-medium text-gray-400 block mb-1.5">Min Dur (min)</label>
+					<input type="number" step="5" value={minDur || ""} onChange={(e) => updateParam("minDur", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors" />
+				</div>
+				<div>
+					<label className="text-xs font-medium text-gray-400 block mb-1.5">Max Dur (min)</label>
+					<input type="number" step="5" value={maxDur || ""} onChange={(e) => updateParam("maxDur", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors" />
 				</div>
 			</div>
 		</div>
 	);
 
 	return (
-		<div className="space-y-4">
-			<h1 className="text-2xl font-bold">Activity Search</h1>
+		<div className="space-y-6">
+			<div>
+				<h1 className="text-2xl font-bold text-gray-100">Activity Search</h1>
+				<p className="text-sm text-gray-500 mt-1">Find and filter activities across your history</p>
+			</div>
 
-			<div className={hasFilters ? "grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6" : ""}>
-				{/* Filters: sidebar when results shown, inline otherwise */}
-				<div className={hasFilters ? "" : "max-w-md mb-4"}>
-					{filterPanel}
-					<div className="flex gap-2 mt-3">
-						<select value={sortField} onChange={(e) => updateParam("sort", e.target.value)} className="rounded bg-gray-800 border border-gray-600 px-2 py-1 text-xs">
-							<option value="date">Sort: Date</option>
-							<option value="distance">Sort: Distance</option>
-							<option value="duration">Sort: Duration</option>
-							<option value="pace">Sort: Pace/Speed</option>
-						</select>
-						<select value={sortDir} onChange={(e) => updateParam("dir", e.target.value)} className="rounded bg-gray-800 border border-gray-600 px-2 py-1 text-xs">
-							<option value="desc">Descending</option>
-							<option value="asc">Ascending</option>
-						</select>
+			<div className={hasFilters ? "grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6" : ""}>
+				{/* Filters */}
+				<div className={hasFilters ? "" : "max-w-md"}>
+					<div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+						{filterPanel}
+						<div className="flex gap-2 mt-4">
+							<select value={sortField} onChange={(e) => updateParam("sort", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors">
+								<option value="date">Sort: Date</option>
+								<option value="distance">Sort: Distance</option>
+								<option value="duration">Sort: Duration</option>
+								<option value="pace">Sort: Pace/Speed</option>
+							</select>
+							<select value={sortDir} onChange={(e) => updateParam("dir", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors">
+								<option value="desc">Descending</option>
+								<option value="asc">Ascending</option>
+							</select>
+						</div>
 					</div>
 				</div>
 
 				{/* Results */}
 				{hasFilters && (
 					<div className="space-y-3">
-						<p className="text-sm text-gray-400">{activities.length} activities found — showing {((currentPage - 1) * RESULTS_PER_PAGE) + 1}–{Math.min(currentPage * RESULTS_PER_PAGE, activities.length)}</p>
+						<p className="text-sm text-gray-500">{activities.length} activities found — showing {((currentPage - 1) * RESULTS_PER_PAGE) + 1}–{Math.min(currentPage * RESULTS_PER_PAGE, activities.length)}</p>
 
 						{pageActivities.map((a) => {
 							const sport = canonicalSport(a.sport, a.numSessions);
 							const miles = a.totalDistance / METERS_PER_MILE;
 							const paceSpeed = formatPaceSpeed(sport, a.totalDistance, a.totalTimerTime);
 							const date = new Date(a.localTimestamp).toLocaleDateString();
+							const sportColor = SPORT_COLORS[sport] ?? "#6b7280";
 							return (
-								<div key={a.activityId} className="rounded-lg border border-gray-700 bg-gray-800/50 p-4 flex items-center justify-between">
-									<div>
-										<p className="font-medium">{a.activityName} <span className="text-xs text-gray-400 capitalize">· {sport} · {date}</span></p>
+								<div key={a.activityId} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center gap-4 hover:border-gray-700 transition-colors">
+									<div className="w-1 h-12 rounded-full" style={{ backgroundColor: sportColor }} />
+									<div className="flex-1 min-w-0">
+										<p className="font-medium text-gray-200 truncate">{a.activityName} <span className="text-xs text-gray-500 capitalize">· {sport} · {date}</span></p>
 										<div className="flex gap-4 mt-1 text-sm text-gray-400">
 											<span>{miles.toFixed(2)} mi</span>
 											<span>{convertSecondsToHms(a.totalTimerTime) ?? "—"}</span>
@@ -238,7 +245,7 @@ export function ActivitySearchPage() {
 									</div>
 									<Link
 										to={`/activity/${a.activityId}?sport=${sport}`}
-										className="rounded bg-gray-700 px-3 py-1 text-sm hover:bg-gray-600"
+										className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
 									>
 										View
 									</Link>
@@ -248,12 +255,12 @@ export function ActivitySearchPage() {
 
 						{/* Pagination */}
 						{totalPages > 1 && (
-							<div className="flex items-center justify-center gap-4 pt-2">
-								<button onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} className="rounded bg-gray-700 px-3 py-1 text-sm disabled:opacity-30">
+							<div className="flex items-center justify-center gap-4 pt-4">
+								<button onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
 									← Prev
 								</button>
-								<span className="text-sm text-gray-400">Page {currentPage} of {totalPages}</span>
-								<button onClick={() => setPage(currentPage + 1)} disabled={currentPage >= totalPages} className="rounded bg-gray-700 px-3 py-1 text-sm disabled:opacity-30">
+								<span className="text-sm text-gray-500">Page {currentPage} of {totalPages}</span>
+								<button onClick={() => setPage(currentPage + 1)} disabled={currentPage >= totalPages} className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
 									Next →
 								</button>
 							</div>

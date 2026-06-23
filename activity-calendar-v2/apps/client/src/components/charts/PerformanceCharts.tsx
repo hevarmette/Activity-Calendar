@@ -67,19 +67,19 @@ function Chart({
 	if (data.every((d) => (d as Record<string, unknown>)[dataKey] == null)) return null;
 
 	return (
-		<div className="bg-gray-800 rounded-lg p-4">
+		<div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
 			<p className="text-sm text-gray-400 mb-2">{yLabel}</p>
 			<ResponsiveContainer width="100%" height={200}>
 				<LineChart data={data}>
-					<CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-					<XAxis dataKey="x" tick={{ fontSize: 11, fill: "#9ca3af" }} label={{ value: xLabel, position: "bottom", fill: "#9ca3af", fontSize: 11 }} />
+					<CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+					<XAxis dataKey="x" tick={{ fontSize: 11, fill: "#6b7280" }} label={{ value: xLabel, position: "bottom", fill: "#6b7280", fontSize: 11 }} />
 					<YAxis
 						reversed={reversed}
-						tick={{ fontSize: 11, fill: "#9ca3af" }}
+						tick={{ fontSize: 11, fill: "#6b7280" }}
 						tickFormatter={yFormatter}
 					/>
 					<Tooltip
-						contentStyle={{ background: "#1f2937", border: "1px solid #374151" }}
+						contentStyle={{ background: "#111827", border: "1px solid #1f2937", borderRadius: "8px" }}
 						labelFormatter={(v) => `${typeof v === "number" ? v.toFixed(2) : v}`}
 						formatter={(v: number) => [yFormatter ? yFormatter(v) : v.toFixed(1), yLabel]}
 					/>
@@ -89,7 +89,7 @@ function Chart({
 							y={avgValue}
 							stroke={color}
 							strokeDasharray="5 5"
-							label={{ value: `Avg: ${yFormatter ? yFormatter(avgValue) : avgValue.toFixed(1)}`, fill: "#9ca3af", fontSize: 11, position: "insideBottomRight" }}
+							label={{ value: `Avg: ${yFormatter ? yFormatter(avgValue) : avgValue.toFixed(1)}`, fill: "#6b7280", fontSize: 11, position: "insideBottomRight" }}
 						/>
 					)}
 				</LineChart>
@@ -107,16 +107,16 @@ export function PerformanceCharts({ points, sport }: Props) {
 
 	return (
 		<div className="space-y-4">
-			<div className="flex gap-2">
+			<div className="inline-flex rounded-lg bg-gray-800 border border-gray-700 p-0.5">
 				<button
 					onClick={() => setXMode("distance")}
-					className={`rounded px-3 py-1 text-sm ${xMode === "distance" ? "bg-blue-600" : "bg-gray-700 hover:bg-gray-600"}`}
+					className={xMode === "distance" ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-orange-500" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}
 				>
 					Distance
 				</button>
 				<button
 					onClick={() => setXMode("time")}
-					className={`rounded px-3 py-1 text-sm ${xMode === "time" ? "bg-blue-600" : "bg-gray-700 hover:bg-gray-600"}`}
+					className={xMode === "time" ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-orange-500" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}
 				>
 					Time
 				</button>

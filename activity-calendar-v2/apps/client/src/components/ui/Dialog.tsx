@@ -4,10 +4,11 @@ interface Props {
 	open: boolean;
 	onClose: () => void;
 	title: string;
+	subtitle?: string;
 	children: ReactNode;
 }
 
-export function Dialog({ open, onClose, title, children }: Props) {
+export function Dialog({ open, onClose, title, subtitle, children }: Props) {
 	const dialogRef = useRef<HTMLDialogElement>(null);
 
 	useEffect(() => {
@@ -64,11 +65,14 @@ export function Dialog({ open, onClose, title, children }: Props) {
 				onClose={onClose}
 				className="activity-dialog"
 			>
-				<div className="flex items-center justify-between mb-5">
-					<h2 className="text-xl font-semibold text-gray-100">{title}</h2>
+				<div style={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+					<div>
+						<h2 style={{ fontSize: "1.25rem", fontWeight: 600, color: "#f3f4f6" }}>{title}</h2>
+						{subtitle && <p style={{ fontSize: "0.8rem", fontStyle: "italic", color: "#9ca3af", marginTop: "4px" }}>{subtitle}</p>}
+					</div>
 					<button
 						onClick={onClose}
-						className="text-gray-500 hover:text-gray-200 transition-colors text-2xl leading-none"
+						style={{ color: "#6b7280", fontSize: "1.5rem", lineHeight: 1, background: "none", border: "none", cursor: "pointer" }}
 						aria-label="Close"
 					>
 						✕

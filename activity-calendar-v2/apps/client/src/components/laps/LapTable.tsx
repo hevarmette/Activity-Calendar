@@ -39,10 +39,10 @@ export function LapTable({ laps, sport, onEdits }: Props) {
 
 	return (
 		<div>
-			<div className="flex gap-1 mb-3 flex-wrap">
+			<div className="inline-flex rounded-lg bg-gray-800 border border-gray-700 p-0.5 mb-4">
 				<button
 					onClick={() => setFilter(null)}
-					className={`rounded px-2 py-1 text-xs ${filter === null ? "bg-blue-600" : "bg-gray-700 hover:bg-gray-600"}`}
+					className={filter === null ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-orange-500" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}
 				>
 					All
 				</button>
@@ -50,25 +50,25 @@ export function LapTable({ laps, sport, onEdits }: Props) {
 					<button
 						key={i}
 						onClick={() => setFilter(i)}
-						className={`rounded px-2 py-1 text-xs capitalize ${filter === i ? "bg-blue-600" : "bg-gray-700 hover:bg-gray-600"}`}
+						className={`capitalize ${filter === i ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-orange-500" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}`}
 					>
 						{i}
 					</button>
 				))}
 			</div>
 
-			<div className="overflow-x-auto">
+			<div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
 				<table className="w-full text-sm text-left">
-					<thead className="text-xs text-gray-400 border-b border-gray-700">
+					<thead className="bg-gray-800/50 text-xs font-medium text-gray-400 uppercase tracking-wide">
 						<tr>
-							<th className="px-2 py-1">Lap</th>
-							<th className="px-2 py-1">Distance (mi)</th>
-							<th className="px-2 py-1">Time</th>
-							<th className="px-2 py-1">{isCycling ? "Speed (mph)" : "Pace"}</th>
-							<th className="px-2 py-1">Avg HR</th>
-							<th className="px-2 py-1">Max HR</th>
-							<th className="px-2 py-1">Ascent</th>
-							<th className="px-2 py-1">Intensity</th>
+							<th className="px-4 py-3">Lap</th>
+							<th className="px-4 py-3">Distance (mi)</th>
+							<th className="px-4 py-3">Time</th>
+							<th className="px-4 py-3">{isCycling ? "Speed (mph)" : "Pace"}</th>
+							<th className="px-4 py-3">Avg HR</th>
+							<th className="px-4 py-3">Max HR</th>
+							<th className="px-4 py-3">Ascent</th>
+							<th className="px-4 py-3">Intensity</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -79,18 +79,18 @@ export function LapTable({ laps, sport, onEdits }: Props) {
 							const speedMph = time > 0 ? miles / (time / 3600) : null;
 
 							return (
-								<tr key={lap.lapId} className="border-b border-gray-800 hover:bg-gray-800/50">
-									<td className="px-2 py-1">{lap.number}</td>
-									<td className="px-2 py-1">
+								<tr key={lap.lapId} className="border-t border-gray-800 hover:bg-gray-800/30 transition-colors">
+									<td className="px-4 py-3 text-gray-300">{lap.number}</td>
+									<td className="px-4 py-3 text-gray-300">
 										<input
 											type="number"
 											step="0.01"
 											defaultValue={miles.toFixed(2)}
 											onBlur={(e) => handleEdit(lap.lapId, "totalDistance", Number(e.target.value) * METERS_PER_MILE)}
-											className="w-20 bg-transparent border-b border-gray-600 focus:border-blue-500 outline-none"
+											className="w-20 bg-transparent border-b border-dashed border-gray-700 focus:border-orange-500 outline-none text-gray-200 tabular-nums"
 										/>
 									</td>
-									<td className="px-2 py-1">
+									<td className="px-4 py-3 text-gray-300">
 										<input
 											type="text"
 											defaultValue={convertSecondsToHms(time) ?? ""}
@@ -100,27 +100,27 @@ export function LapTable({ laps, sport, onEdits }: Props) {
 													parts.length === 2 ? parts[0]! * 60 + parts[1]! : parts[0] ?? 0;
 												handleEdit(lap.lapId, "totalTimerTime", secs);
 											}}
-											className="w-24 bg-transparent border-b border-gray-600 focus:border-blue-500 outline-none"
+											className="w-24 bg-transparent border-b border-dashed border-gray-700 focus:border-orange-500 outline-none text-gray-200 tabular-nums"
 										/>
 									</td>
-									<td className="px-2 py-1">
+									<td className="px-4 py-3 text-gray-300">
 										{isCycling ? (speedMph?.toFixed(1) ?? "—") : (formatPace(paceVal) ?? "—")}
 									</td>
-									<td className="px-2 py-1">
+									<td className="px-4 py-3 text-gray-300">
 										<input
 											type="number"
 											defaultValue={lap.avgHeartRate ?? ""}
 											onBlur={(e) => handleEdit(lap.lapId, "avgHeartRate", Number(e.target.value))}
-											className="w-14 bg-transparent border-b border-gray-600 focus:border-blue-500 outline-none"
+											className="w-14 bg-transparent border-b border-dashed border-gray-700 focus:border-orange-500 outline-none text-gray-200 tabular-nums"
 										/>
 									</td>
-									<td className="px-2 py-1">{lap.maxHeartRate ?? "—"}</td>
-									<td className="px-2 py-1">{lap.totalAscent ?? "—"}</td>
-									<td className="px-2 py-1">
+									<td className="px-4 py-3 text-gray-300">{lap.maxHeartRate ?? "—"}</td>
+									<td className="px-4 py-3 text-gray-300">{lap.totalAscent ?? "—"}</td>
+									<td className="px-4 py-3 text-gray-300">
 										<select
 											defaultValue={lap.intensity ?? ""}
 											onChange={(e) => handleEdit(lap.lapId, "intensity", e.target.value)}
-											className="bg-gray-800 border border-gray-600 rounded text-xs px-1 py-0.5"
+											className="rounded-lg bg-gray-800 border border-gray-700 text-xs px-2 py-1 text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500"
 										>
 											<option value="">—</option>
 											{INTENSITIES.map((i) => (
@@ -152,9 +152,9 @@ function IntervalSummary({ laps, sport }: { laps: Lap[]; sport: string }) {
 	const avgHr = laps.filter((l) => l.avgHeartRate).reduce((s, l, _, a) => s + (l.avgHeartRate ?? 0) / a.length, 0);
 
 	return (
-		<div className="mt-3 rounded bg-gray-800 p-3 text-sm">
-			<p className="text-gray-400 font-medium mb-1">{laps.length} intervals</p>
-			<div className="flex gap-4 text-gray-300">
+		<div className="mt-4 bg-gray-900 border border-gray-800 rounded-xl p-5">
+			<p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">{laps.length} intervals</p>
+			<div className="flex gap-4 text-sm text-gray-300">
 				<span>Total: {miles.toFixed(2)} mi</span>
 				<span>Time: {convertSecondsToHms(totalTime)}</span>
 				{isCycling ? <span>Avg Speed: {avgSpeed?.toFixed(1)} mph</span> : <span>Avg Pace: {formatPace(avgPace)}</span>}

@@ -88,8 +88,8 @@ export function ActivityDetailsPage() {
 		return points.filter((p) => { const t = new Date(p.timestamp).getTime(); return t >= start && t <= end; });
 	}, [points, activeSession]);
 
-	if (isLoading) return <div className="text-center py-10">Loading activity…</div>;
-	if (!activity) return <div className="text-center py-10">Activity not found.</div>;
+	if (isLoading) return <div className="text-center py-10 text-gray-400">Loading activity…</div>;
+	if (!activity) return <div className="text-center py-10 text-gray-400">Activity not found.</div>;
 
 	const distance = activity.distance ?? 0;
 	const duration = activity.duration ?? 0;
@@ -100,17 +100,17 @@ export function ActivityDetailsPage() {
 		<div className="space-y-6">
 			{/* Header with nav */}
 			<div className="flex items-center justify-between">
-				<button onClick={goPrev} disabled={!prev} className="rounded bg-gray-700 px-3 py-1 text-sm disabled:opacity-30">
+				<button onClick={goPrev} disabled={!prev} className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
 					← Prev
 				</button>
-				<h1 className="text-2xl font-bold">{activity.name || "Untitled Activity"}</h1>
-				<button onClick={goNext} disabled={!next} className="rounded bg-gray-700 px-3 py-1 text-sm disabled:opacity-30">
+				<h1 className="text-2xl font-bold text-gray-100">{activity.name || "Untitled Activity"}</h1>
+				<button onClick={goNext} disabled={!next} className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
 					Next →
 				</button>
 			</div>
 
 			{/* Summary metrics */}
-			<div className="flex gap-3">
+			<div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
 				<MetricCard label="Distance" value={`${miles.toFixed(2)} mi`} />
 				<MetricCard label="Duration" value={convertSecondsToHms(duration) ?? "—"} />
 				<MetricCard
@@ -130,12 +130,12 @@ export function ActivityDetailsPage() {
 
 			{/* TASK 7: Multisport session tabs */}
 			{isMultisport && sessions && (
-				<div className="flex gap-1 border-b border-gray-700 pb-1">
+				<div className="flex gap-1 border-b border-gray-800">
 					{sessions.map((s, i) => (
 						<button
 							key={s.sessionId}
 							onClick={() => setSessionIdx(i)}
-							className={`rounded-t px-4 py-2 text-sm capitalize ${sessionIdx === i ? "bg-gray-800 text-white" : "text-gray-400 hover:text-gray-200"}`}
+							className={`capitalize ${sessionIdx === i ? "px-4 py-2.5 text-sm font-medium text-orange-400 border-b-2 border-orange-400" : "px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-300 border-b-2 border-transparent transition-colors"}`}
 						>
 							{s.sport} ({i + 1})
 						</button>
@@ -144,12 +144,12 @@ export function ActivityDetailsPage() {
 			)}
 
 			{/* Tabs */}
-			<div className="flex gap-1 border-b border-gray-700 pb-1">
+			<div className="flex border-b border-gray-800 mb-6">
 				{(["laps", "charts", "details", "similar"] as Tab[]).map((t) => (
 					<button
 						key={t}
 						onClick={() => setTab(t)}
-						className={`rounded-t px-4 py-2 text-sm capitalize ${tab === t ? "bg-gray-800 text-white" : "text-gray-400 hover:text-gray-200"}`}
+						className={`capitalize ${tab === t ? "px-4 py-2.5 text-sm font-medium text-orange-400 border-b-2 border-orange-400" : "px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-300 border-b-2 border-transparent transition-colors"}`}
 					>
 						{t}
 					</button>
@@ -200,16 +200,18 @@ export function ActivityDetailsPage() {
 
 				{/* Sidebar */}
 				<div className="space-y-4">
-					<SidebarAdjustments
-						distanceM={distance}
-						durationS={duration}
-						onDistanceChange={(m) => handleMetadataChange({ adjustedDistance: m })}
-						onDurationChange={(s) => handleMetadataChange({ adjustedDuration: s })}
-					/>
+					<div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+						<SidebarAdjustments
+							distanceM={distance}
+							durationS={duration}
+							onDistanceChange={(m) => handleMetadataChange({ adjustedDistance: m })}
+							onDurationChange={(s) => handleMetadataChange({ adjustedDuration: s })}
+						/>
+					</div>
 					<button
 						onClick={handleSave}
 						disabled={!isDirty || saveActivity.isPending}
-						className="w-full rounded bg-green-600 px-4 py-2 text-sm font-medium hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed"
+						className={isDirty ? "w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white transition-colors" : "w-full rounded-lg bg-emerald-600/30 px-4 py-2.5 text-sm font-medium text-emerald-200/50 cursor-not-allowed"}
 					>
 						{saveActivity.isPending ? "Saving…" : "Save Changes"}
 					</button>

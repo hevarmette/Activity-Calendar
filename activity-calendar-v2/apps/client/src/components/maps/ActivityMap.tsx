@@ -1,17 +1,18 @@
 import { useEffect } from "react";
 import { MapContainer, TileLayer, Polyline, useMap } from "react-leaflet";
+import type { LatLngBoundsExpression } from "leaflet";
 import type { RecordPoint, Session } from "@activity-calendar/shared";
 import { SPORT_COLORS } from "@activity-calendar/shared";
 import "leaflet/dist/leaflet.css";
 
-function MapResizer() {
+function FitBounds({ bounds }: { bounds: LatLngBoundsExpression }) {
 	const map = useMap();
 	useEffect(() => {
-		const timer = setTimeout(() => {
+		setTimeout(() => {
 			map.invalidateSize();
+			map.fitBounds(bounds, { padding: [16, 16] });
 		}, 100);
-		return () => clearTimeout(timer);
-	}, [map]);
+	}, [map, bounds]);
 	return null;
 }
 
@@ -48,7 +49,7 @@ export function ActivityMap({ points, sessions }: Props) {
 				url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
 				attribution='© <a href="https://openstreetmap.org">OpenStreetMap</a>'
 			/>
-			<MapResizer />
+			<FitBounds bounds={bounds} />
 			{isMultisport
 				? sessions.map((session) => {
 						const start = new Date(session.startTime).getTime();

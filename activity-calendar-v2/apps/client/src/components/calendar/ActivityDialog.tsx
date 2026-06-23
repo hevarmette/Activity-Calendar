@@ -51,8 +51,12 @@ export function ActivityDialog({ activityId, title, sport, numSessions, open, on
 	const effort = activity?.effort;
 	const effortIndex = effort != null ? Math.round(effort / 10) : null;
 
+	const timestamp = activity?.localTimestamp
+		? new Date(activity.localTimestamp).toLocaleString()
+		: undefined;
+
 	return (
-		<Dialog open={open} onClose={onClose} title={title}>
+		<Dialog open={open} onClose={onClose} title={title} subtitle={timestamp}>
 			{activityLoading ? (
 				<div className="flex items-center justify-center py-10">
 					<div className="text-gray-400 text-sm animate-pulse">Loading activity…</div>
@@ -60,7 +64,7 @@ export function ActivityDialog({ activityId, title, sport, numSessions, open, on
 			) : (
 				<>
 					{/* Metrics row */}
-					<div className="grid grid-cols-3 gap-3 mb-5">
+					<div style={{ display: "flex", flexDirection: "row", gap: "12px", width: "100%", marginBottom: "20px" }}>
 						<MetricCard label="Distance" value={`${miles.toFixed(2)} mi`} />
 						<MetricCard label="Duration" value={durationStr} />
 						<MetricCard label={thirdMetric.label} value={thirdMetric.value} />
@@ -107,28 +111,6 @@ export function ActivityDialog({ activityId, title, sport, numSessions, open, on
 						)}
 					</div>
 
-					{/* Feel / Effort */}
-					{(feel != null || effortIndex != null) && (
-						<div className="flex gap-4 mb-5 text-sm text-gray-400">
-							{feel != null && (
-								<span>
-									Feel:{" "}
-									<span className="text-gray-200 capitalize">
-										{FEEL_MAP[feel] ?? "unknown"}
-									</span>
-								</span>
-							)}
-							{effortIndex != null && (
-								<span>
-									Effort:{" "}
-									<span className="text-gray-200">
-										{effortIndex} — {EFFORT_LABELS[effortIndex] ?? ""}
-									</span>
-								</span>
-							)}
-						</div>
-					)}
-
 					{/* Description */}
 					{activity?.description && activity.description !== "0" && (
 						<p className="text-sm text-gray-400 italic mb-5">
@@ -137,16 +119,26 @@ export function ActivityDialog({ activityId, title, sport, numSessions, open, on
 					)}
 
 					{/* Footer */}
-					<div className="flex items-center justify-between pt-3 border-t border-gray-700">
-						<span className="text-xs text-gray-500">
-							Activity #{activityId}
-						</span>
+					<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "12px", borderTop: "1px solid #374151" }}>
+						<div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+							{feel != null && FEEL_MAP[feel] && (
+								<div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+									<img src={`/assets/${FEEL_MAP[feel]}.svg`} alt={FEEL_MAP[feel]} style={{ width: "24px", height: "24px" }} />
+									<span style={{ fontSize: "0.8rem", color: "#d1d5db", textTransform: "capitalize" }}>{FEEL_MAP[feel].replace("-", " ")}</span>
+								</div>
+							)}
+							{effortIndex != null && (
+								<span style={{ fontSize: "0.8rem", color: "#9ca3af" }}>
+									Effort: <span style={{ color: "#d1d5db" }}>{effortIndex}/10</span>
+								</span>
+							)}
+						</div>
 						<Link
 							to={`/activity/${activityId}?sport=${sport}`}
-							className="inline-block rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium hover:bg-blue-500 transition-colors"
+							style={{ display: "inline-block", borderRadius: "8px", background: "#2563eb", padding: "8px 20px", fontSize: "0.875rem", fontWeight: 500, color: "#fff", textDecoration: "none" }}
 							onClick={onClose}
 						>
-							View Details →
+							View Details
 						</Link>
 					</div>
 				</>
