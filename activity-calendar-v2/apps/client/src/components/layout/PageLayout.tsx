@@ -12,14 +12,18 @@ export function PageLayout() {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const queryClient = useQueryClient();
 	const now = new Date();
-	const year = Number(searchParams.get("year")) || now.getFullYear();
-	const month = Number(searchParams.get("month")) || now.getMonth() + 1;
+	const year = Number(searchParams.get("year")) || Number(sessionStorage.getItem("cal_year")) || now.getFullYear();
+	const month = Number(searchParams.get("month")) || Number(sessionStorage.getItem("cal_month")) || now.getMonth() + 1;
 
 	function handleYearChange(e: React.ChangeEvent<HTMLInputElement>) {
+		sessionStorage.setItem("cal_year", e.target.value);
+		sessionStorage.setItem("cal_month", String(month));
 		setSearchParams({ year: e.target.value, month: String(month) });
 	}
 
 	function handleMonthChange(e: React.ChangeEvent<HTMLSelectElement>) {
+		sessionStorage.setItem("cal_year", String(year));
+		sessionStorage.setItem("cal_month", e.target.value);
 		setSearchParams({ year: String(year), month: e.target.value });
 	}
 

@@ -10,14 +10,13 @@ import { PerformanceCharts } from "../components/charts/PerformanceCharts.js";
 import { LapTable, type LapEdit } from "../components/laps/LapTable.js";
 import { AutoLapTable } from "../components/laps/AutoLapTable.js";
 import { SwimLengthTable } from "../components/laps/SwimLengthTable.js";
-import { ActivityMetadataEditor } from "../components/details/ActivityMetadataEditor.js";
-import { SidebarAdjustments } from "../components/details/SidebarAdjustments.js";
+import { ActivityStatsGrid } from "../components/details/ActivityStatsGrid.js";
+import { FeelEffortRow } from "../components/details/FeelEffortRow.js";
 import { SimilarActivities } from "../components/details/SimilarActivities.js";
-import { RunningDynamics } from "../components/details/RunningDynamics.js";
-import { BestLap } from "../components/details/BestLap.js";
-import { MetricCard } from "../components/ui/MetricCard.js";
 
-type Tab = "laps" | "charts" | "details" | "similar";
+type Tab = "laps" | "details" | "auto-laps";
+
+const CATEGORIES = ["uncategorized", "training", "race", "transportation", "recreational", "touring", "fitness"];
 
 export function ActivityDetailsPage() {
 	const { activityId } = useParams<{ activityId: string }>();
@@ -39,7 +38,7 @@ export function ActivityDetailsPage() {
 	const [lapEdits, setLapEdits] = useState<LapEdit[]>([]);
 	const [sessionIdx, setSessionIdx] = useState(0);
 
-	const handleMetadataChange = useCallback((updates: Partial<ActivityUpdatePayload>) => {
+	const handleChange = useCallback((updates: Partial<ActivityUpdatePayload>) => {
 		setActivityEdits((prev) => ({ ...prev, ...updates }));
 	}, []);
 
@@ -56,7 +55,6 @@ export function ActivityDetailsPage() {
 		setLapEdits([]);
 	}
 
-	// TASK 5: Keyboard shortcut 'S' to save
 	useEffect(() => {
 		function onKeyDown(e: KeyboardEvent) {
 			if (e.key !== "s" || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -68,7 +66,7 @@ export function ActivityDetailsPage() {
 		return () => window.removeEventListener("keydown", onKeyDown);
 	});
 
-	// TASK 7: Multisport session scoping
+	// Multisport session scoping
 	const isMultisport = (sessions?.length ?? 0) > 1;
 	const activeSession = isMultisport ? sessions![sessionIdx] : null;
 	const sessionSport = activeSession?.sport ?? sport;
@@ -95,47 +93,83 @@ export function ActivityDetailsPage() {
 	const duration = activity.duration ?? 0;
 	const miles = distance / METERS_PER_MILE;
 	const isCycling = sessionSport === Sport.Cycling;
+	const localDate = new Date(activity.localTimestamp);
 
 	return (
 		<div className="space-y-6">
-			{/* Header with nav */}
-			<div className="flex items-center justify-between">
-				<button onClick={goPrev} disabled={!prev} className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-					← Prev
-				</button>
-				<h1 className="text-2xl font-bold text-gray-100">{activity.name || "Untitled Activity"}</h1>
-				<button onClick={goNext} disabled={!next} className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-					Next →
-				</button>
+			{/* 1. Title row: title heading left, category right, nav far right */}
+			<div className="flex items-center justify-between gap-4">
+				<div className="flex items-center gap-3">
+					<button onClick={goPrev} disabled={!prev} className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">&lt;</button>
+					<button onClick={goNext} disabled={!next} className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">&gt;</button>
+				</div>
+				<select
+					defaultValue={activity.category ?? "uncategorized"}
+					onChange={(e) => handleChange({ category: e.target.value || null })}
+					className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-orange-500"
+				>
+					{CATEGORIES.map((c) => (
+						<option key={c} value={c}>{c}</option>
+					))}
+				</select>
 			</div>
 
-			{/* Summary metrics */}
-			<div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-				<MetricCard label="Distance" value={`${miles.toFixed(2)} mi`} />
-				<MetricCard label="Duration" value={convertSecondsToHms(duration) ?? "—"} />
-				<MetricCard
-					label={isCycling ? "Speed" : "Pace"}
+			{/* Title as heading */}
+			<input
+				type="text"
+				defaultValue={activity.name ?? ""}
+				onBlur={(e) => handleChange({ activityName: e.target.value || null })}
+				placeholder="Activity title"
+				className="w-full bg-transparent border-none text-3xl font-bold text-gray-50 placeholder-gray-600 focus:outline-none"
+			/>
+
+			{/* 2. Date — small italic */}
+			<p className="text-xs italic text-gray-500">
+				{localDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} @ {localDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+			</p>
+
+			{/* 3. Summary metrics — horizontal cards */}
+			<div className="flex gap-4">
+				<MetricBlock label="Distance" value={`${miles.toFixed(2)} mi`} />
+				<MetricBlock label="Duration" value={convertSecondsToHms(duration) ?? "—"} />
+				<MetricBlock
+					label={isCycling ? (activity.avgPower ? "Power" : "Speed") : "Pace"}
 					value={
 						isCycling
-							? `${(duration > 0 ? miles / (duration / 3600) : 0).toFixed(1)} mph`
+							? activity.avgPower ? `${activity.avgPower} W` : `${(duration > 0 ? miles / (duration / 3600) : 0).toFixed(2)} mph`
 							: `${formatPace(miles > 0 ? duration / 60 / miles : null) ?? "—"} /mi`
 					}
 				/>
 			</div>
 
-			{/* Map */}
-			{points && points.length > 0 && (
-				<DetailMap points={points} sport={sport} sessions={isMultisport ? sessions : undefined} />
-			)}
+			{/* 4. Map + Description side-by-side */}
+			<div className="grid grid-cols-1 lg:grid-cols-[7fr_3fr] gap-4 items-stretch">
+				<div>
+					{sessionPoints.length > 0 && sessionPoints.some((p) => p.latitude != null) ? (
+						<DetailMap points={sessionPoints} sport={sessionSport} sessions={isMultisport ? sessions : undefined} />
+					) : (
+						<div className="flex items-center justify-center h-full min-h-[300px] bg-gray-900 border border-gray-800 rounded-xl text-gray-500 text-sm">No GPS data</div>
+					)}
+				</div>
+				<div>
+					<textarea
+						defaultValue={activity.description ?? ""}
+						onBlur={(e) => handleChange({ description: e.target.value || null })}
+						placeholder="Description"
+						rows={8}
+						className="w-full h-full min-h-[300px] rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:border-orange-500"
+					/>
+				</div>
+			</div>
 
-			{/* TASK 7: Multisport session tabs */}
+			{/* 5. Multisport session tabs */}
 			{isMultisport && sessions && (
 				<div className="flex gap-1 border-b border-gray-800">
 					{sessions.map((s, i) => (
 						<button
 							key={s.sessionId}
 							onClick={() => setSessionIdx(i)}
-							className={`capitalize ${sessionIdx === i ? "px-4 py-2.5 text-sm font-medium text-orange-400 border-b-2 border-orange-400" : "px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-300 border-b-2 border-transparent transition-colors"}`}
+							className={`capitalize px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${sessionIdx === i ? "text-orange-400 border-orange-400" : "text-gray-500 hover:text-gray-300 border-transparent"}`}
 						>
 							{s.sport} ({i + 1})
 						</button>
@@ -143,80 +177,77 @@ export function ActivityDetailsPage() {
 				</div>
 			)}
 
-			{/* Tabs */}
-			<div className="flex border-b border-gray-800 mb-6">
-				{(["laps", "charts", "details", "similar"] as Tab[]).map((t) => (
+			{/* 6. Performance Charts (inline, not in tab) */}
+			{sessionPoints.length > 0 && <PerformanceCharts points={sessionPoints} sport={sessionSport} />}
+
+			{/* 7. Three tabs: Laps / Activity Details / Auto Laps */}
+			<div className="flex border-b border-gray-800">
+				{(["laps", "details", "auto-laps"] as Tab[]).map((t) => (
 					<button
 						key={t}
 						onClick={() => setTab(t)}
-						className={`capitalize ${tab === t ? "px-4 py-2.5 text-sm font-medium text-orange-400 border-b-2 border-orange-400" : "px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-300 border-b-2 border-transparent transition-colors"}`}
+						className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t ? "text-orange-400 border-orange-400" : "text-gray-500 hover:text-gray-300 border-transparent"}`}
 					>
-						{t}
+						{t === "laps" ? "Laps" : t === "details" ? "Activity Details" : "Auto Laps"}
 					</button>
 				))}
 			</div>
 
-			{/* Tab content */}
-			<div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
-				<div>
-					{tab === "laps" && sessionLaps.length > 0 && (
-						<>
-							<BestLap laps={sessionLaps} sport={sessionSport} />
-							<div className="mt-4">
-								{sessionSport === Sport.Swimming ? (
-									<SwimLengthTable activityId={id} poolLengthM={activeSession?.poolLength ?? 25} />
-								) : (
-									<LapTable laps={sessionLaps} sport={sessionSport} onEdits={setLapEdits} />
-								)}
-							</div>
-							<div className="mt-4">
-								<h3 className="text-sm font-medium text-gray-400 mb-2">Auto Laps</h3>
-								<AutoLapTable activityId={id} sport={sessionSport} />
-							</div>
-						</>
-					)}
-					{tab === "charts" && sessionPoints.length > 0 && <PerformanceCharts points={sessionPoints} sport={sessionSport} />}
-					{tab === "details" && (
-						<>
-							<ActivityMetadataEditor
-								name={activity.name}
-								description={activity.description}
-								category={activity.category}
-								feel={activity.feel}
-								effort={activity.effort}
-								onChange={handleMetadataChange}
-							/>
-							{sessionLaps.length > 0 && sessionSport === Sport.Running && (
-								<div className="mt-4">
-									<RunningDynamics laps={sessionLaps} />
-								</div>
-							)}
-						</>
-					)}
-					{tab === "similar" && activity.name && (
-						<SimilarActivities activityId={id} title={activity.name} sport={sport} />
-					)}
-				</div>
-
-				{/* Sidebar */}
-				<div className="space-y-4">
-					<div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-						<SidebarAdjustments
-							distanceM={distance}
-							durationS={duration}
-							onDistanceChange={(m) => handleMetadataChange({ adjustedDistance: m })}
-							onDurationChange={(s) => handleMetadataChange({ adjustedDuration: s })}
-						/>
-					</div>
-					<button
-						onClick={handleSave}
-						disabled={!isDirty || saveActivity.isPending}
-						className={isDirty ? "w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white transition-colors" : "w-full rounded-lg bg-emerald-600/30 px-4 py-2.5 text-sm font-medium text-emerald-200/50 cursor-not-allowed"}
-					>
-						{saveActivity.isPending ? "Saving…" : "Save Changes"}
-					</button>
-				</div>
+			<div>
+				{tab === "laps" && (
+					<>
+						{sessionSport === Sport.Swimming ? (
+							<SwimLengthTable activityId={id} poolLengthM={activeSession?.poolLength ?? 25} />
+						) : sessionLaps.length > 0 ? (
+							<LapTable laps={sessionLaps} sport={sessionSport} onEdits={setLapEdits} />
+						) : (
+							<p className="text-sm text-gray-500">No lap data available.</p>
+						)}
+					</>
+				)}
+				{tab === "details" && (
+					<ActivityStatsGrid
+						distance={distance}
+						duration={duration}
+						sport={sessionSport}
+						points={sessionPoints}
+						laps={sessionLaps}
+						avgPower={activity.avgPower}
+					/>
+				)}
+				{tab === "auto-laps" && (
+					<AutoLapTable activityId={id} sport={sessionSport} />
+				)}
 			</div>
+
+			{/* 8. Feel + Effort row */}
+			<FeelEffortRow feel={activity.feel} effort={activity.effort} onChange={handleChange} />
+
+			{/* 9. Save button */}
+			<button
+				onClick={handleSave}
+				disabled={!isDirty || saveActivity.isPending}
+				className={`w-full rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${isDirty ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-emerald-600/30 text-emerald-200/50 cursor-not-allowed"}`}
+			>
+				{saveActivity.isPending ? "Saving…" : "Save Changes"}
+			</button>
+
+			{/* 10. Similar Activities at bottom */}
+			{(activity.category === "training" || activity.category === "race") && activity.name && (
+				<div className="border-t border-gray-800 pt-6">
+					<h3 className="text-sm font-medium uppercase tracking-wide text-gray-500 mb-3">Similar Activities</h3>
+					<SimilarActivities activityId={id} title={activity.name} sport={sport} />
+				</div>
+			)}
+		</div>
+	);
+}
+
+function MetricBlock({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="rounded-xl bg-gray-900 border border-gray-800 p-4">
+			<p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
+			<p className="mt-1 text-2xl font-bold text-gray-50 tabular-nums">{value}</p>
 		</div>
 	);
 }
