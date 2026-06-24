@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { FEEL_MAP, EFFORT_LABELS } from "@activity-calendar/shared";
 import type { ActivityUpdatePayload } from "@activity-calendar/shared";
 
@@ -10,7 +11,21 @@ interface FeelEffortProps {
 const FEEL_OPTIONS = Object.entries(FEEL_MAP).map(([k, v]) => ({ value: Number(k), label: v }));
 
 export function FeelEffortRow({ feel, effort, onChange }: FeelEffortProps) {
-	const effortIndex = effort != null ? Math.round(effort / 10) : null;
+	const [localFeel, setLocalFeel] = useState(feel);
+	const [localEffort, setLocalEffort] = useState(effort);
+
+	const effortIndex = localEffort != null ? Math.round(localEffort / 10) : null;
+
+	function handleFeel(value: number) {
+		setLocalFeel(value);
+		onChange({ workoutFeel: value });
+	}
+
+	function handleEffort(value: number) {
+		const scaled = value * 10;
+		setLocalEffort(scaled);
+		onChange({ effort: scaled });
+	}
 
 	return (
 		<div className="grid grid-cols-[3fr_7fr] gap-8 items-start">
@@ -21,11 +36,11 @@ export function FeelEffortRow({ feel, effort, onChange }: FeelEffortProps) {
 					{FEEL_OPTIONS.map(({ value, label }) => (
 						<button
 							key={value}
-							onClick={() => onChange({ workoutFeel: value })}
-							className={`rounded-lg px-3 py-2 text-xs capitalize flex flex-col items-center gap-1 transition-colors ${feel === value ? "bg-orange-500/20 border border-orange-500 ring-1 ring-orange-500/50" : "bg-gray-800 border border-gray-700 hover:border-gray-600"}`}
+							onClick={() => handleFeel(value)}
+							className={`rounded-lg px-3 py-2 text-xs capitalize flex flex-col items-center gap-1 transition-colors ${localFeel === value ? "bg-orange-500/20 border border-orange-500 ring-1 ring-orange-500/50" : "bg-gray-800 border border-gray-700 hover:border-gray-600"}`}
 							title={label}
 						>
-							<img src={`/assets/${label}.svg`} alt={label} className="w-6 h-6 max-w-6 max-h-6" />
+							<img src={`/assets/${label}.svg`} alt={label} className="w-8 h-8" />
 							<span className="text-gray-300">{label}</span>
 						</button>
 					))}
@@ -42,7 +57,7 @@ export function FeelEffortRow({ feel, effort, onChange }: FeelEffortProps) {
 					min={1}
 					max={10}
 					value={effortIndex ?? 5}
-					onChange={(e) => onChange({ effort: Number(e.target.value) * 10 })}
+					onChange={(e) => handleEffort(Number(e.target.value))}
 					className="w-full accent-orange-500"
 				/>
 				<div className="flex justify-between text-[10px] text-gray-600 mt-1">

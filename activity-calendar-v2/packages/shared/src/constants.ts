@@ -37,3 +37,11 @@ export const AUTO_LAP_DISTANCES: Record<string, number> = {
 	[Sport.Cycling]: 5,
 	default: 1,
 };
+
+/** Standard track distances in miles paired with labels. */
+export const TRACK_DISTANCES: [number, string][] = [
+	[0.0621, "100m"], [0.1243, "200m"], [0.1864, "300m"],
+	[0.2485, "400m"], [0.3107, "500m"], [0.3728, "600m"],
+	[0.4971, "800m"], [0.6214, "1000m"], [0.7456, "1200m"],
+	[1.0, "1 mi"], [1.2427, "2000m"], [1.8641, "3000m"],
+];

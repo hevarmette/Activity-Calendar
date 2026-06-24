@@ -197,7 +197,7 @@ export function ActivityDetailsPage() {
 						{sessionSport === Sport.Swimming ? (
 							<SwimLengthTable activityId={id} poolLengthM={activeSession?.poolLength ?? 25} />
 						) : sessionLaps.length > 0 ? (
-							<LapTable laps={sessionLaps} sport={sessionSport} onEdits={setLapEdits} />
+							<LapTable laps={sessionLaps} sport={sessionSport} category={activity.category ?? "uncategorized"} onEdits={setLapEdits} />
 						) : (
 							<p className="text-sm text-gray-500">No lap data available.</p>
 						)}

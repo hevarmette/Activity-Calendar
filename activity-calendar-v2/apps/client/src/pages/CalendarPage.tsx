@@ -7,8 +7,8 @@ import { ActivityDialog } from "../components/calendar/ActivityDialog.js";
 export function CalendarPage() {
 	const [searchParams] = useSearchParams();
 	const now = new Date();
-	const year = Number(searchParams.get("year")) || now.getFullYear();
-	const month = Number(searchParams.get("month")) || now.getMonth() + 1;
+	const year = Number(searchParams.get("year")) || Number(sessionStorage.getItem("cal_year")) || now.getFullYear();
+	const month = Number(searchParams.get("month")) || Number(sessionStorage.getItem("cal_month")) || now.getMonth() + 1;
 	const initialDate = `${year}-${String(month).padStart(2, "0")}-01`;
 
 	const { data, isLoading } = useCalendar();

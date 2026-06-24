@@ -27,3 +27,46 @@
 
 - [x] **docker-compose.yml** — Add PostgreSQL service for local development (`docker compose up` spins up full stack).
 - [x] **E2E tests with Playwright** — Config + test files covering: calendar navigation, activity detail view + save, search + filter, report grouping.
+
+  ## Completed During Review/Refinement (2026-06-24)
+
+  ### Critical Fix
+  - [x] **Tailwind CSS not generating utilities** — `@tailwindcss/vite` plugin was never installed. Added `@tailwindcss/vite@4.1.8` to
+        devDependencies and configured in `vite.config.ts`. All utility classes now generate correctly.
+
+  ### Activity Details Page Restructure
+  - [x] **Title row layout** — Combined title input + category dropdown + prev/next nav into one row: title (flex-1, left), category +
+        nav (right, justify-between).
+  - [x] **Title as heading** — Enlarged to `text-4xl font-bold` for visual prominence.
+  - [x] **Summary metrics as horizontal cards** — Changed from `flex` to `grid grid-cols-3` for equal-width metric blocks.
+  - [x] **Map + Description side-by-side** — Grid `[7fr_3fr]` at `md` breakpoint. Added `min-h-[500px]` to map container.
+  - [x] **Feel/Effort proportions** — Changed grid to `[3fr_7fr]` matching Streamlit's `[0.3, 0.7]`.
+  - [x] **Vertical spacing** — `space-y-8` with `w-full` on outer container.
+
+  ### Feel & Effort UX
+  - [x] **Immediate UI feedback** — Local `useState` for instant visual updates on feel/effort changes.
+  - [x] **SVG sizing fix** — Removed inline `style="width:100%; height:100%"` from all SVGs. Increased img to `w-8 h-8`.
+
+  ### Interval Summary (Feature Parity)
+  - [x] **Full clustering algorithm** — Ported `compute_interval_summary` with scaling tolerance clustering.
+  - [x] **Category gate** — Only shows when category is "training" AND ≥2 active laps.
+  - [x] **Group by toggle** — Auto-selects Distance vs Time by coefficient of variation.
+  - [x] **TRACK_DISTANCES constant** — Added to `packages/shared/src/constants.ts`.
+  - [x] **Per-set display** — "N×label" with avg time, avg pace/speed, fastest split, avg HR.
+
+  ### Multi-select Intensity Pills
+  - [x] **Multi-select filter** — Intensity pills now support toggling multiple selections.
+
+  ### Calendar Navigation Persistence
+  - [x] **SessionStorage fallback** — CalendarPage reads `cal_year`/`cal_month` from sessionStorage.
+
+  ***
+
+  ## Known Issues / Future Work
+  - [ ] **Hardcoded timezone** — `'America/Chicago'` in server SQL. Needs env var.
+  - [ ] **Elevation API caching** — No caching on Open-Meteo calls per request.
+  - [ ] **useEffect missing deps** — Keyboard shortcut re-registers every render.
+  - [ ] **defaultValue won't reset on nav** — Needs `key={id}` on page wrapper.
+  - [ ] **No save error feedback** — Silent failure, edits cleared.
+  - [ ] **Accessibility gaps** — Missing aria-labels and tab roles.
+  - [ ] **Sidebar distance/duration adjustment** — Not yet ported from Streamlit.

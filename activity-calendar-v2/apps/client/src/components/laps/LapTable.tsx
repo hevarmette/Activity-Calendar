@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
 	METERS_PER_MILE,
 	Intensity,
 	Sport,
+	TRACK_DISTANCES,
 	formatPace,
 	convertSecondsToHms,
 } from "@activity-calendar/shared";
@@ -17,17 +18,139 @@ export interface LapEdit {
 interface Props {
 	laps: Lap[];
 	sport: string;
+	category: string;
 	onEdits: (edits: LapEdit[]) => void;
+}
+
+interface IntervalSet {
+	count: number;
+	label: string;
+	avgDuration: string | null;
+	avgPaceLabel: string;
+	fastestSplit: string | null;
+	avgHr: number | null;
+	firstLap: number;
 }
 
 const INTENSITIES = Object.values(Intensity);
 
-export function LapTable({ laps, sport, onEdits }: Props) {
-	const [filter, setFilter] = useState<string | null>(null);
-	const [edits, setEdits] = useState<Map<string, LapEdit>>(new Map());
+function scalingTolerance(distMi: number): number {
+	return Math.max(0.02, 0.10 * (0.0621 / distMi));
+}
 
-	const filtered = filter ? laps.filter((l) => l.intensity === filter) : laps;
+function distanceLabel(meanDistMi: number): string {
+	const tol = scalingTolerance(meanDistMi);
+	for (const [ref, label] of TRACK_DISTANCES) {
+		if (Math.abs(meanDistMi - ref) / ref <= tol) return label;
+	}
+	return `${meanDistMi.toFixed(2)} mi`;
+}
+
+function timeLabel(meanSecs: number): string {
+	const total = Math.round(meanSecs);
+	const m = Math.floor(total / 60);
+	const s = total % 60;
+	return m > 0 ? `${m}:${String(s).padStart(2, "0")}` : `0:${String(s).padStart(2, "0")}`;
+}
+
+function computeIntervalSummary(laps: Lap[], sport: string, groupBy: "distance" | "time"): IntervalSet[] {
+	const active = laps.filter((l) => l.intensity === Intensity.Active && (l.totalDistance ?? 0) > 0 && (l.totalTimerTime ?? 0) > 0);
+	if (active.length < 2) return [];
+
+	const withMetrics = active.map((l) => ({
+		lap: l,
+		dist: (l.totalDistance ?? 0) / METERS_PER_MILE,
+		secs: l.totalTimerTime ?? 0,
+	}));
+
+	const sorted = [...withMetrics].sort((a, b) => groupBy === "time" ? a.secs - b.secs : a.dist - b.dist);
+
+	// Cluster
+	const groups: (typeof sorted)[] = [];
+	let current = [sorted[0]!];
+	for (let i = 1; i < sorted.length; i++) {
+		const val = groupBy === "time" ? sorted[i]!.secs : sorted[i]!.dist;
+		const meanVal = current.reduce((s, c) => s + (groupBy === "time" ? c.secs : c.dist), 0) / current.length;
+		const tol = groupBy === "time" ? Math.max(0.05, 0.15 * (15 / meanVal)) : scalingTolerance(meanVal);
+		if (Math.abs(val - meanVal) / meanVal <= tol) {
+			current.push(sorted[i]!);
+		} else {
+			groups.push(current);
+			current = [sorted[i]!];
+		}
+	}
+	groups.push(current);
+
 	const isCycling = sport === Sport.Cycling;
+	const results: IntervalSet[] = [];
+
+	for (const group of groups) {
+		if (group.length < 2) continue;
+		const meanDist = group.reduce((s, g) => s + g.dist, 0) / group.length;
+		const avgSecs = group.reduce((s, g) => s + g.secs, 0) / group.length;
+		const label = groupBy === "time" ? timeLabel(avgSecs) : distanceLabel(meanDist);
+
+		const fastestSecs = Math.min(...group.map((g) => g.secs));
+
+		let avgPaceLabel: string;
+		if (isCycling) {
+			const avgSpeed = meanDist / (avgSecs / 3600);
+			avgPaceLabel = `${avgSpeed.toFixed(1)} mph`;
+		} else {
+			const pace = avgSecs / 60 / meanDist;
+			avgPaceLabel = `${formatPace(pace) ?? "—"} /mi`;
+		}
+
+		const hrs = group.map((g) => g.lap.avgHeartRate).filter((h): h is number => h != null);
+		const avgHr = hrs.length > 0 ? Math.round(hrs.reduce((a, b) => a + b, 0) / hrs.length) : null;
+		const firstLap = Math.min(...group.map((g) => g.lap.number));
+
+		results.push({
+			count: group.length,
+			label,
+			avgDuration: convertSecondsToHms(avgSecs),
+			avgPaceLabel,
+			fastestSplit: convertSecondsToHms(fastestSecs),
+			avgHr,
+			firstLap,
+		});
+	}
+
+	results.sort((a, b) => a.firstLap - b.firstLap);
+	return results;
+}
+
+/** Detect whether to default to "time" or "distance" grouping based on coefficient of variation. */
+function detectDefaultGroup(laps: Lap[]): "distance" | "time" {
+	const active = laps.filter((l) => l.intensity === Intensity.Active && (l.totalDistance ?? 0) > 0 && (l.totalTimerTime ?? 0) > 0);
+	if (active.length < 2) return "distance";
+	const dists = active.map((l) => (l.totalDistance ?? 0) / METERS_PER_MILE);
+	const times = active.map((l) => l.totalTimerTime ?? 0);
+	const cv = (arr: number[]) => { const m = arr.reduce((a, b) => a + b, 0) / arr.length; const std = Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / arr.length); return m > 0 ? std / m : 1; };
+	return cv(times) < cv(dists) ? "time" : "distance";
+}
+
+export function LapTable({ laps, sport, category, onEdits }: Props) {
+	const [filters, setFilters] = useState<Set<string>>(new Set());
+	const [edits, setEdits] = useState<Map<string, LapEdit>>(new Map());
+	const defaultGroup = useMemo(() => detectDefaultGroup(laps), [laps]);
+	const [groupBy, setGroupBy] = useState<"distance" | "time">(defaultGroup);
+
+	const filtered = filters.size > 0 ? laps.filter((l) => l.intensity != null && filters.has(l.intensity)) : laps;
+	const isCycling = sport === Sport.Cycling;
+
+	const activeLaps = laps.filter((l) => l.intensity === Intensity.Active);
+	const showIntervalSummary = category === "training" && activeLaps.length >= 2;
+	const intervalSets = useMemo(() => showIntervalSummary ? computeIntervalSummary(laps, sport, groupBy) : [], [laps, sport, groupBy, showIntervalSummary]);
+
+	function toggleFilter(intensity: string) {
+		setFilters((prev) => {
+			const next = new Set(prev);
+			if (next.has(intensity)) next.delete(intensity);
+			else next.add(intensity);
+			return next;
+		});
+	}
 
 	function handleEdit(lapId: number, field: string, value: unknown) {
 		const key = `${lapId}-${field}`;
@@ -41,16 +164,16 @@ export function LapTable({ laps, sport, onEdits }: Props) {
 		<div>
 			<div className="inline-flex rounded-lg bg-gray-800 border border-gray-700 p-0.5 mb-4">
 				<button
-					onClick={() => setFilter(null)}
-					className={filter === null ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-orange-500" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}
+					onClick={() => setFilters(new Set())}
+					className={filters.size === 0 ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-orange-500" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}
 				>
 					All
 				</button>
 				{INTENSITIES.map((i) => (
 					<button
 						key={i}
-						onClick={() => setFilter(i)}
-						className={`capitalize ${filter === i ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-orange-500" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}`}
+						onClick={() => toggleFilter(i)}
+						className={`capitalize ${filters.has(i) ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-orange-500" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}`}
 					>
 						{i}
 					</button>
@@ -135,31 +258,54 @@ export function LapTable({ laps, sport, onEdits }: Props) {
 				</table>
 			</div>
 
-			{filtered.length > 0 && (
-				<IntervalSummary laps={filtered} sport={sport} />
+			{showIntervalSummary && (
+				<div className="mt-6">
+					<div className="inline-flex rounded-lg bg-gray-800 border border-gray-700 p-0.5 mb-4">
+						<button
+							onClick={() => setGroupBy("distance")}
+							className={groupBy === "distance" ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-orange-500" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}
+						>
+							Distance
+						</button>
+						<button
+							onClick={() => setGroupBy("time")}
+							className={groupBy === "time" ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-orange-500" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}
+						>
+							Time
+						</button>
+					</div>
+
+					{intervalSets.map((set, idx) => (
+						<div key={idx} className="mb-4 bg-gray-900 border border-gray-800 rounded-xl p-5">
+							<p className="text-lg font-bold text-gray-50 mb-2">{set.count}×{set.label}</p>
+							<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+								<div>
+									<p className="text-xs text-gray-500 uppercase tracking-wide">Avg Time</p>
+									<p className="text-gray-200 font-medium tabular-nums">{set.avgDuration ?? "—"}</p>
+								</div>
+								<div>
+									<p className="text-xs text-gray-500 uppercase tracking-wide">{isCycling ? "Avg Speed" : "Avg Pace"}</p>
+									<p className="text-gray-200 font-medium tabular-nums">{set.avgPaceLabel}</p>
+								</div>
+								<div>
+									<p className="text-xs text-gray-500 uppercase tracking-wide">Fastest Split</p>
+									<p className="text-gray-200 font-medium tabular-nums">{set.fastestSplit ?? "—"}</p>
+								</div>
+								{set.avgHr != null && (
+									<div>
+										<p className="text-xs text-gray-500 uppercase tracking-wide">Avg HR</p>
+										<p className="text-gray-200 font-medium tabular-nums">{set.avgHr} bpm</p>
+									</div>
+								)}
+							</div>
+						</div>
+					))}
+
+					{intervalSets.length === 0 && (
+						<p className="text-sm text-gray-500">No interval sets detected (need ≥2 similar active laps).</p>
+					)}
+				</div>
 			)}
-		</div>
-	);
-}
-
-function IntervalSummary({ laps, sport }: { laps: Lap[]; sport: string }) {
-	const isCycling = sport === Sport.Cycling;
-	const totalDist = laps.reduce((s, l) => s + (l.totalDistance ?? 0), 0);
-	const totalTime = laps.reduce((s, l) => s + (l.totalTimerTime ?? 0), 0);
-	const miles = totalDist / METERS_PER_MILE;
-	const avgPace = miles > 0 ? totalTime / 60 / miles : null;
-	const avgSpeed = totalTime > 0 ? miles / (totalTime / 3600) : null;
-	const avgHr = laps.filter((l) => l.avgHeartRate).reduce((s, l, _, a) => s + (l.avgHeartRate ?? 0) / a.length, 0);
-
-	return (
-		<div className="mt-4 bg-gray-900 border border-gray-800 rounded-xl p-5">
-			<p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">{laps.length} intervals</p>
-			<div className="flex gap-4 text-sm text-gray-300">
-				<span>Total: {miles.toFixed(2)} mi</span>
-				<span>Time: {convertSecondsToHms(totalTime)}</span>
-				{isCycling ? <span>Avg Speed: {avgSpeed?.toFixed(1)} mph</span> : <span>Avg Pace: {formatPace(avgPace)}</span>}
-				{avgHr > 0 && <span>Avg HR: {Math.round(avgHr)}</span>}
-			</div>
 		</div>
 	);
 }
