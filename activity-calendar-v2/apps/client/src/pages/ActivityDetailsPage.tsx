@@ -96,32 +96,30 @@ export function ActivityDetailsPage() {
 	const localDate = new Date(activity.localTimestamp);
 
 	return (
-		<div className="space-y-6">
-			{/* 1. Title row: title heading left, category right, nav far right */}
-			<div className="flex items-center justify-between gap-4">
-				<div className="flex items-center gap-3">
+		<div className="w-full space-y-8">
+			{/* 1. Title row: title left, category + nav right */}
+			<div className="flex items-center justify-between gap-6">
+				<input
+					type="text"
+					defaultValue={activity.name ?? ""}
+					onBlur={(e) => handleChange({ activityName: e.target.value || null })}
+					placeholder="Activity title"
+					className="flex-1 min-w-0 bg-transparent border-none text-4xl font-bold text-gray-50 placeholder-gray-600 focus:outline-none"
+				/>
+				<div className="flex items-center gap-3 shrink-0">
+					<select
+						defaultValue={activity.category ?? "uncategorized"}
+						onChange={(e) => handleChange({ category: e.target.value || null })}
+						className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-orange-500"
+					>
+						{CATEGORIES.map((c) => (
+							<option key={c} value={c}>{c}</option>
+						))}
+					</select>
 					<button onClick={goPrev} disabled={!prev} className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">&lt;</button>
 					<button onClick={goNext} disabled={!next} className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">&gt;</button>
 				</div>
-				<select
-					defaultValue={activity.category ?? "uncategorized"}
-					onChange={(e) => handleChange({ category: e.target.value || null })}
-					className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-orange-500"
-				>
-					{CATEGORIES.map((c) => (
-						<option key={c} value={c}>{c}</option>
-					))}
-				</select>
 			</div>
-
-			{/* Title as heading */}
-			<input
-				type="text"
-				defaultValue={activity.name ?? ""}
-				onBlur={(e) => handleChange({ activityName: e.target.value || null })}
-				placeholder="Activity title"
-				className="w-full bg-transparent border-none text-3xl font-bold text-gray-50 placeholder-gray-600 focus:outline-none"
-			/>
 
 			{/* 2. Date — small italic */}
 			<p className="text-xs italic text-gray-500">
@@ -129,7 +127,7 @@ export function ActivityDetailsPage() {
 			</p>
 
 			{/* 3. Summary metrics — horizontal cards */}
-			<div className="flex gap-4">
+			<div className="grid grid-cols-3 gap-4">
 				<MetricBlock label="Distance" value={`${miles.toFixed(2)} mi`} />
 				<MetricBlock label="Duration" value={convertSecondsToHms(duration) ?? "—"} />
 				<MetricBlock
@@ -143,12 +141,12 @@ export function ActivityDetailsPage() {
 			</div>
 
 			{/* 4. Map + Description side-by-side */}
-			<div className="grid grid-cols-1 lg:grid-cols-[7fr_3fr] gap-4 items-stretch">
-				<div>
+			<div className="grid grid-cols-1 md:grid-cols-[7fr_3fr] gap-4">
+				<div className="min-h-[500px]">
 					{sessionPoints.length > 0 && sessionPoints.some((p) => p.latitude != null) ? (
 						<DetailMap points={sessionPoints} sport={sessionSport} sessions={isMultisport ? sessions : undefined} />
 					) : (
-						<div className="flex items-center justify-center h-full min-h-[300px] bg-gray-900 border border-gray-800 rounded-xl text-gray-500 text-sm">No GPS data</div>
+						<div className="flex items-center justify-center h-full min-h-[500px] bg-gray-900 border border-gray-800 rounded-xl text-gray-500 text-sm">No GPS data</div>
 					)}
 				</div>
 				<div>
@@ -157,7 +155,7 @@ export function ActivityDetailsPage() {
 						onBlur={(e) => handleChange({ description: e.target.value || null })}
 						placeholder="Description"
 						rows={8}
-						className="w-full h-full min-h-[300px] rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:border-orange-500"
+						className="w-full h-full min-h-[500px] rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:border-orange-500"
 					/>
 				</div>
 			</div>

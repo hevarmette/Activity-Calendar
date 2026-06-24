@@ -13,7 +13,7 @@ export function FeelEffortRow({ feel, effort, onChange }: FeelEffortProps) {
 	const effortIndex = effort != null ? Math.round(effort / 10) : null;
 
 	return (
-		<div className="grid grid-cols-[auto_1fr] gap-8 items-start">
+		<div className="grid grid-cols-[3fr_7fr] gap-8 items-start">
 			{/* Feel */}
 			<div>
 				<label className="text-xs font-medium uppercase tracking-wide text-gray-500 block mb-2">How did you feel?</label>
