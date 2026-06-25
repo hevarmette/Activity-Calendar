@@ -1,32 +1,71 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
 	AUTO_LAP_DISTANCES,
+	METERS_PER_MILE,
 	Sport,
 	convertSecondsToHms,
 	formatPace,
 } from "@activity-calendar/shared";
 import { useAutoLaps } from "../../api/queries.js";
 
+type Unit = "mi" | "m";
+
 interface Props {
 	activityId: number;
 	sport: string;
 }
 
+/**
+ * Displays auto-lap splits for an activity with a configurable distance input and unit toggle.
+ */
 export function AutoLapTable({ activityId, sport }: Props) {
-	const distances = [0.5, 1, 2, 5];
-	const defaultDist = AUTO_LAP_DISTANCES[sport] ?? AUTO_LAP_DISTANCES["default"]!;
-	const [dist, setDist] = useState(defaultDist);
-	const { data: laps } = useAutoLaps(activityId, sport, dist);
+	const [inputValue, setInputValue] = useState(1);
+	const [unit, setUnit] = useState<Unit>("mi");
+	const [debouncedValue, setDebouncedValue] = useState(inputValue);
+	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	useEffect(() => {
+		timerRef.current = setTimeout(() => setDebouncedValue(inputValue), 400);
+		return () => {
+			if (timerRef.current) clearTimeout(timerRef.current);
+		};
+	}, [inputValue]);
+
+	const distInMiles = unit === "mi" ? debouncedValue : debouncedValue / METERS_PER_MILE;
+
+	const { data: laps } = useAutoLaps(activityId, sport, distInMiles);
 	const isCycling = sport === Sport.Cycling;
 
 	return (
 		<div>
-			<div className="flex gap-1 mb-3">
-				{distances.map((d) => (
-					<button key={d} onClick={() => setDist(d)} className={`rounded px-2 py-1 text-xs ${dist === d ? "bg-blue-600" : "bg-gray-700 hover:bg-gray-600"}`}>
-						{d} mi
+			<div className="flex items-center gap-2 mb-3">
+				<input
+					type="number"
+					min={0}
+					step={unit === "mi" ? 0.1 : 100}
+					value={inputValue}
+					onChange={(e) => setInputValue(Number(e.target.value))}
+					aria-label="Lap distance"
+					className="w-20 rounded bg-gray-700 border border-gray-600 px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+				/>
+				<div className="flex rounded overflow-hidden text-xs" role="group" aria-label="Distance unit">
+					<button
+						type="button"
+						onClick={() => setUnit("mi")}
+						className={`px-2 py-1 ${unit === "mi" ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}
+						aria-pressed={unit === "mi"}
+					>
+						mi
 					</button>
-				))}
+					<button
+						type="button"
+						onClick={() => setUnit("m")}
+						className={`px-2 py-1 ${unit === "m" ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}
+						aria-pressed={unit === "m"}
+					>
+						m
+					</button>
+				</div>
 			</div>
 			{laps && laps.length > 0 ? (
 				<div className="overflow-x-auto">
