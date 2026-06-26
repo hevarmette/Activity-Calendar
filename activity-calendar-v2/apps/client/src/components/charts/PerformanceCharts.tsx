@@ -19,7 +19,8 @@ interface Props {
 	sport: string;
 }
 
-function buildChartData(points: RecordPoint[], xMode: XMode) {
+function buildChartData(points: RecordPoint[], xMode: XMode, sport: string) {
+	const isCycling = sport === Sport.Cycling;
 	return points
 		.filter((p) => p.latitude != null)
 		.map((p) => {
@@ -34,7 +35,7 @@ function buildChartData(points: RecordPoint[], xMode: XMode) {
 				speed: speedMph,
 				hr: p.heartRate,
 				altitude: p.correctedAltitude ?? (p.altitude ? p.altitude * 3.28084 : null),
-				cadence: p.cadence ? (p.cadence + (p.fractionalCadence ?? 0)) * 2 : null,
+				cadence: p.cadence ? (p.cadence + (p.fractionalCadence ?? 0)) * (isCycling ? 1 : 2) : null,
 			};
 		});
 }
@@ -100,7 +101,7 @@ function Chart({
 
 export function PerformanceCharts({ points, sport }: Props) {
 	const [xMode, setXMode] = useState<XMode>("distance");
-	const data = buildChartData(points, xMode);
+	const data = buildChartData(points, xMode, sport);
 	const xLabel = xMode === "distance" ? "Distance (mi)" : "Time (min)";
 
 	const isCycling = sport === Sport.Cycling;

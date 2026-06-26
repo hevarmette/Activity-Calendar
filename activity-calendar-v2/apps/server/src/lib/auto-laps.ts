@@ -149,8 +149,8 @@ export function computeAutoLaps(
       totalDescentFt: Math.round(descentFt * 10) / 10,
       avgHr: hrCount > 0 ? Math.round(hrSum / hrCount) : null,
       maxHr: hrMax || null,
-      avgCadence: cadCount > 0 ? Math.round(cadSum / cadCount) : null,
-      maxCadence: cadMax || null,
+      avgCadence: cadCount > 0 ? Math.round((cadSum / cadCount) * (sport === "cycling" ? 1 : 2)) : null,
+      maxCadence: cadMax ? Math.round(cadMax * (sport === "cycling" ? 1 : 2)) : null,
       cumulativeTimeSeconds: Math.round(interpTimes[i + 1]! * 10) / 10,
     });
   }

@@ -106,6 +106,7 @@ recordsRoutes.get("/:activityId", async (c) => {
 
 	const result = (rows as any[]).map((r, i) => ({
 		...r,
+		fractionalCadence: r.fractionalCadence != null ? Number(r.fractionalCadence) : null,
 		correctedAltitude: elevations[i],
 		elapsedTime: elapsedTimes[i],
 	}));
