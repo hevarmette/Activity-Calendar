@@ -73,13 +73,17 @@ activitiesRoutes.patch("/:id", async (c) => {
 		values.push(body.category);
 	}
 
-	if (updates.length === 0) return c.json({ success: true });
+	if (updates.length === 0) return c.json({ success: true, sql: null });
+
+	const setClause = Object.fromEntries(updates.map((col, i) => [col, values[i]]));
 
 	await sql`
 		UPDATE ${sql(SCHEMA)}.activity
-		SET ${sql(Object.fromEntries(updates.map((col, i) => [col, values[i]])))}
+		SET ${sql(setClause)}
 		WHERE activity_id = ${id}
 	`;
 
-	return c.json({ success: true });
+	const sqlString = `UPDATE ${SCHEMA}.activity SET ${updates.map((col, i) => `${col} = ${JSON.stringify(values[i])}`).join(", ")} WHERE activity_id = ${id};`;
+
+	return c.json({ success: true, sql: sqlString });
 });

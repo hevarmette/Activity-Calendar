@@ -38,6 +38,7 @@ export function ActivityDetailsPage() {
 	const [lapEdits, setLapEdits] = useState<LapEdit[]>([]);
 	const [sessionIdx, setSessionIdx] = useState(0);
 	const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+	const [lastSql, setLastSql] = useState<string | null>(null);
 
 	const handleChange = useCallback((updates: Partial<ActivityUpdatePayload>) => {
 		setActivityEdits((prev) => ({ ...prev, ...updates }));
@@ -46,14 +47,17 @@ export function ActivityDetailsPage() {
 	const isDirty = Object.keys(activityEdits).length > 0 || lapEdits.length > 0;
 
 	async function handleSave() {
+		const sqls: string[] = [];
 		if (Object.keys(activityEdits).length > 0) {
-			await saveActivity.mutateAsync(activityEdits as ActivityUpdatePayload);
+			const result = await saveActivity.mutateAsync(activityEdits as ActivityUpdatePayload);
+			if (result?.sql) sqls.push(result.sql);
 		}
 		for (const edit of lapEdits) {
 			await saveLap.mutateAsync({ lapId: edit.lapId, [edit.field]: edit.value } as Parameters<typeof saveLap.mutateAsync>[0]);
 		}
 		setActivityEdits({});
 		setLapEdits([]);
+		setLastSql(sqls.length > 0 ? sqls.join("\n") : null);
 	}
 
 	useEffect(() => {
@@ -100,13 +104,16 @@ export function ActivityDetailsPage() {
 		<div className="w-full space-y-8">
 			{/* 1. Title row: title left, category + nav right */}
 			<div className="flex items-center justify-between gap-6">
-				<input
-					type="text"
-					defaultValue={activity.name ?? ""}
-					onBlur={(e) => handleChange({ activityName: e.target.value || null })}
-					placeholder="Activity title"
-					className="flex-1 min-w-0 bg-transparent border-none text-4xl font-bold text-gray-50 placeholder-gray-600 focus:outline-none"
-				/>
+				<div className="flex items-baseline gap-2 flex-1 min-w-0">
+					<input
+						type="text"
+						defaultValue={activity.name ?? ""}
+						onBlur={(e) => handleChange({ activityName: e.target.value || null })}
+						placeholder="Activity title"
+						className="flex-1 min-w-0 bg-transparent border-none text-4xl font-bold text-gray-50 placeholder-gray-600 focus:outline-none"
+					/>
+					<span className="text-lg text-gray-500 shrink-0">- {id}</span>
+				</div>
 				<div className="flex items-center gap-3 shrink-0">
 					<select
 						defaultValue={activity.category ?? "uncategorized"}
@@ -230,6 +237,10 @@ export function ActivityDetailsPage() {
 			>
 				{saveActivity.isPending ? "Saving…" : "Save Changes"}
 			</button>
+
+			{lastSql && (
+				<pre className="rounded-lg bg-gray-900 border border-gray-700 p-3 text-xs text-gray-300 font-mono overflow-x-auto whitespace-pre-wrap">{lastSql}</pre>
+			)}
 
 			{/* 10. Similar Activities at bottom */}
 			{(activity.category === "training" || activity.category === "race") && activity.name && (

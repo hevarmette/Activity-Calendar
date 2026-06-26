@@ -18,7 +18,7 @@ export function useSaveActivity(activityId: number) {
 	const qc = useQueryClient();
 	return useMutation({
 		mutationFn: (payload: ActivityUpdatePayload) =>
-			api(`/api/activities/${activityId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+			api<{ success: boolean; sql: string | null }>(`/api/activities/${activityId}`, { method: "PATCH", body: JSON.stringify(payload) }),
 		onSuccess: () => {
 			qc.invalidateQueries({ queryKey: queryKeys.activity(activityId) });
 			qc.invalidateQueries({ queryKey: queryKeys.calendar });
