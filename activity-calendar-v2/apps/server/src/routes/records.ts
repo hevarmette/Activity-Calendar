@@ -1,13 +1,38 @@
 import { Hono } from "hono";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import sql, { SCHEMA } from "../db.js";
 
 export const recordsRoutes = new Hono();
 
 const METERS_TO_FEET = 3.28084;
+const CACHE_DIR = join(import.meta.dirname ?? ".", ".elevation-cache");
 
-async function fetchElevations(records: any[]): Promise<number[]> {
+function getCachePath(activityId: number): string {
+	return join(CACHE_DIR, `${activityId}.json`);
+}
+
+function readCache(activityId: number): number[] | null {
+	const path = getCachePath(activityId);
+	if (!existsSync(path)) return null;
+	try {
+		return JSON.parse(readFileSync(path, "utf-8"));
+	} catch {
+		return null;
+	}
+}
+
+function writeCache(activityId: number, elevations: number[]): void {
+	if (!existsSync(CACHE_DIR)) mkdirSync(CACHE_DIR, { recursive: true });
+	writeFileSync(getCachePath(activityId), JSON.stringify(elevations));
+}
+
+async function fetchElevations(activityId: number, records: any[]): Promise<number[]> {
+	const cached = readCache(activityId);
+	if (cached && cached.length === records.length) return cached;
+
 	const elevations = new Array(records.length).fill(null);
-	const BATCH = 100;
+	const BATCH = 80;
 	try {
 		for (let i = 0; i < records.length; i += BATCH) {
 			const batch = records.slice(i, i + BATCH);
@@ -16,16 +41,19 @@ async function fetchElevations(records: any[]): Promise<number[]> {
 			const res = await fetch(
 				`https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`
 			);
-			if (!res.ok) throw new Error("elevation API failed");
+			if (!res.ok) throw new Error(`elevation API returned ${res.status}`);
 			const data = await res.json();
 			for (let j = 0; j < data.elevation.length; j++) {
 				elevations[i + j] = data.elevation[j] * METERS_TO_FEET;
 			}
+			// Small delay to avoid rate limiting
+			if (i + BATCH < records.length) await new Promise((r) => setTimeout(r, 200));
 		}
+		writeCache(activityId, elevations);
 	} catch {
-		// Fallback: use raw altitude
+		// Fallback: use raw altitude from DB if available
 		for (let i = 0; i < records.length; i++) {
-			elevations[i] = (records[i].altitude ?? 0) * METERS_TO_FEET;
+			elevations[i] = records[i].altitude != null ? records[i].altitude * METERS_TO_FEET : null;
 		}
 	}
 	return elevations;
@@ -100,7 +128,7 @@ recordsRoutes.get("/:activityId", async (c) => {
 	]);
 
 	const [elevations, elapsedTimes] = await Promise.all([
-		fetchElevations(rows as any[]),
+		fetchElevations(activityId, rows as any[]),
 		Promise.resolve(computeElapsedTimes(rows as any[], events as any[])),
 	]);
 
