@@ -37,6 +37,7 @@ export function ActivityDetailsPage() {
 	const [activityEdits, setActivityEdits] = useState<Partial<ActivityUpdatePayload>>({});
 	const [lapEdits, setLapEdits] = useState<LapEdit[]>([]);
 	const [sessionIdx, setSessionIdx] = useState(0);
+	const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
 	const handleChange = useCallback((updates: Partial<ActivityUpdatePayload>) => {
 		setActivityEdits((prev) => ({ ...prev, ...updates }));
@@ -144,7 +145,7 @@ export function ActivityDetailsPage() {
 			<div className="grid grid-cols-1 md:grid-cols-[7fr_3fr] gap-4">
 				<div className="min-h-[500px]">
 					{sessionPoints.length > 0 && sessionPoints.some((p) => p.latitude != null) ? (
-						<DetailMap points={sessionPoints} sport={sessionSport} sessions={isMultisport ? sessions : undefined} />
+						<DetailMap points={sessionPoints} sport={sessionSport} sessions={isMultisport ? sessions : undefined} hoveredIndex={hoveredIndex} />
 					) : (
 						<div className="flex items-center justify-center h-full min-h-[500px] bg-gray-900 border border-gray-800 rounded-xl text-gray-500 text-sm">No GPS data</div>
 					)}
@@ -176,7 +177,7 @@ export function ActivityDetailsPage() {
 			)}
 
 			{/* 6. Performance Charts (inline, not in tab) */}
-			{sessionPoints.length > 0 && <PerformanceCharts points={sessionPoints} sport={sessionSport} />}
+			{sessionPoints.length > 0 && <PerformanceCharts points={sessionPoints} sport={sessionSport} onHover={setHoveredIndex} />}
 
 			{/* 7. Three tabs: Laps / Activity Details / Auto Laps */}
 			<div className="flex border-b border-gray-800">

@@ -1,4 +1,4 @@
-import { MapContainer, TileLayer, Polyline, Marker, LayersControl } from "react-leaflet";
+import { MapContainer, TileLayer, Polyline, Marker, CircleMarker, LayersControl } from "react-leaflet";
 import L from "leaflet";
 import type { RecordPoint, Session } from "@activity-calendar/shared";
 import { SPORT_COLORS, AUTO_LAP_DISTANCES } from "@activity-calendar/shared";
@@ -25,9 +25,10 @@ interface Props {
 	points: RecordPoint[];
 	sport: string;
 	sessions?: Session[];
+	hoveredIndex?: number | null;
 }
 
-export function DetailMap({ points, sport, sessions }: Props) {
+export function DetailMap({ points, sport, sessions, hoveredIndex }: Props) {
 	const coords = points
 		.filter((p) => p.latitude != null && p.longitude != null)
 		.map((p) => [p.latitude!, p.longitude!] as [number, number]);
@@ -86,6 +87,14 @@ export function DetailMap({ points, sport, sessions }: Props) {
 
 			<Marker position={coords[0]!} icon={startIcon} />
 			<Marker position={coords[coords.length - 1]!} icon={endIcon} />
+
+			{hoveredIndex != null && points[hoveredIndex]?.latitude != null && (
+				<CircleMarker
+					center={[points[hoveredIndex]!.latitude!, points[hoveredIndex]!.longitude!]}
+					radius={6}
+					pathOptions={{ color: "#f97316", fillColor: "#f97316", fillOpacity: 1, weight: 2 }}
+				/>
+			)}
 		</MapContainer>
 	);
 }
