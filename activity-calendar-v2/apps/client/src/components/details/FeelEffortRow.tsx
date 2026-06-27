@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { FEEL_MAP, EFFORT_LABELS } from "@activity-calendar/shared";
+import { EFFORT_LABELS, FEEL_MAP } from "@activity-calendar/shared";
 import type { ActivityUpdatePayload } from "@activity-calendar/shared";
+import { useEffect, useState } from "react";
 
 interface FeelEffortProps {
 	feel: number | null;
@@ -15,6 +15,12 @@ export function FeelEffortRow({ feel, effort, onChange }: FeelEffortProps) {
 	const [localEffort, setLocalEffort] = useState(effort);
 
 	const effortIndex = localEffort != null ? Math.round(localEffort / 10) : null;
+	const hasEffort = effortIndex != null;
+
+	useEffect(() => {
+		setLocalFeel(feel);
+		setLocalEffort(effort);
+	}, [feel, effort]);
 
 	function handleFeel(value: number) {
 		setLocalFeel(value);
@@ -31,10 +37,11 @@ export function FeelEffortRow({ feel, effort, onChange }: FeelEffortProps) {
 		<div className="grid grid-cols-[3fr_7fr] gap-8 items-start">
 			{/* Feel */}
 			<div>
-				<label className="text-xs font-medium uppercase tracking-wide text-gray-500 block mb-2">How did you feel?</label>
+				<div className="text-xs font-medium uppercase tracking-wide text-gray-500 block mb-2">How did you feel?</div>
 				<div className="flex gap-2">
 					{FEEL_OPTIONS.map(({ value, label }) => (
 						<button
+							type="button"
 							key={value}
 							onClick={() => handleFeel(value)}
 							className={`rounded-lg px-3 py-2 text-xs capitalize flex flex-col items-center gap-1 transition-colors ${localFeel === value ? "bg-orange-500/20 border border-orange-500 ring-1 ring-orange-500/50" : "bg-gray-800 border border-gray-700 hover:border-gray-600"}`}
@@ -49,19 +56,25 @@ export function FeelEffortRow({ feel, effort, onChange }: FeelEffortProps) {
 
 			{/* Effort */}
 			<div>
-				<label className="text-xs font-medium uppercase tracking-wide text-gray-500 block mb-2">
-					Perceived Effort{effortIndex ? `: ${effortIndex} — ${EFFORT_LABELS[effortIndex] ?? ""}` : ""}
-				</label>
+				<div className="flex items-center justify-between gap-3 mb-2">
+					<label htmlFor="perceived-effort" className="text-xs font-medium uppercase tracking-wide text-gray-500">
+						Perceived Effort{hasEffort ? `: ${effortIndex} - ${EFFORT_LABELS[effortIndex] ?? ""}` : ""}
+					</label>
+					{!hasEffort && <span className="text-xs text-gray-600">Not set</span>}
+				</div>
 				<input
+					id="perceived-effort"
 					type="range"
 					min={1}
 					max={10}
-					value={effortIndex ?? 5}
+					value={effortIndex ?? 1}
 					onChange={(e) => handleEffort(Number(e.target.value))}
-					className="w-full accent-orange-500"
+					className={`effort-slider w-full accent-orange-500 ${hasEffort ? "" : "effort-slider-unset"}`}
 				/>
 				<div className="flex justify-between text-[10px] text-gray-600 mt-1">
-					{Array.from({ length: 10 }, (_, i) => <span key={i}>{i + 1}</span>)}
+					{Array.from({ length: 10 }, (_, i) => i + 1).map((value) => (
+						<span key={value}>{value}</span>
+					))}
 				</div>
 			</div>
 		</div>

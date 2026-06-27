@@ -1,22 +1,28 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
-import { useParams, useSearchParams } from "react-router";
-import { METERS_PER_MILE, Sport, convertSecondsToHms, formatPace } from "@activity-calendar/shared";
+import { METERS_PER_MILE, Sport, convertSecondsToHms, formatPace, parseHmsToSeconds } from "@activity-calendar/shared";
 import type { ActivityUpdatePayload } from "@activity-calendar/shared";
-import { useActivity, useRecords, useSessions, useLaps } from "../api/queries.js";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams, useSearchParams } from "react-router";
 import { useSaveActivity, useSaveLap } from "../api/mutations.js";
-import { useActivityNavigation } from "../hooks/useActivityNavigation.js";
-import { DetailMap } from "../components/maps/DetailMap.js";
+import { useActivity, useLaps, useRecords, useSessions } from "../api/queries.js";
 import { PerformanceCharts } from "../components/charts/PerformanceCharts.js";
-import { LapTable, type LapEdit } from "../components/laps/LapTable.js";
-import { AutoLapTable } from "../components/laps/AutoLapTable.js";
-import { SwimLengthTable } from "../components/laps/SwimLengthTable.js";
 import { ActivityStatsGrid } from "../components/details/ActivityStatsGrid.js";
 import { FeelEffortRow } from "../components/details/FeelEffortRow.js";
 import { SimilarActivities } from "../components/details/SimilarActivities.js";
+import { AutoLapTable } from "../components/laps/AutoLapTable.js";
+import { type LapEdit, LapTable } from "../components/laps/LapTable.js";
+import { SwimLengthTable } from "../components/laps/SwimLengthTable.js";
+import { DetailMap } from "../components/maps/DetailMap.js";
+import { useActivityNavigation } from "../hooks/useActivityNavigation.js";
 
 type Tab = "laps" | "details" | "auto-laps";
 
 const CATEGORIES = ["uncategorized", "training", "race", "transportation", "recreational", "touring", "fitness"];
+
+function normalizeCategory(category: string | null | undefined) {
+	const trimmed = category?.trim();
+	return trimmed && CATEGORIES.includes(trimmed) ? trimmed : "uncategorized";
+}
 
 export function ActivityDetailsPage() {
 	const { activityId } = useParams<{ activityId: string }>();
@@ -39,10 +45,27 @@ export function ActivityDetailsPage() {
 	const [sessionIdx, setSessionIdx] = useState(0);
 	const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 	const [lastSql, setLastSql] = useState<string | null>(null);
+	const [distanceInput, setDistanceInput] = useState("");
+	const [durationInput, setDurationInput] = useState("");
 
 	const handleChange = useCallback((updates: Partial<ActivityUpdatePayload>) => {
 		setActivityEdits((prev) => ({ ...prev, ...updates }));
 	}, []);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: local edits must reset when the route activity changes.
+	useEffect(() => {
+		setActivityEdits({});
+		setLapEdits([]);
+		setLastSql(null);
+		setDistanceInput("");
+		setDurationInput("");
+	}, [id]);
+
+	useEffect(() => {
+		if (!activity) return;
+		setDistanceInput(((activity.distance ?? 0) / METERS_PER_MILE).toFixed(2));
+		setDurationInput(convertSecondsToHms(activity.duration ?? 0) ?? "");
+	}, [activity]);
 
 	const isDirty = Object.keys(activityEdits).length > 0 || lapEdits.length > 0;
 
@@ -53,7 +76,9 @@ export function ActivityDetailsPage() {
 			if (result?.sql) sqls.push(result.sql);
 		}
 		for (const edit of lapEdits) {
-			await saveLap.mutateAsync({ lapId: edit.lapId, [edit.field]: edit.value } as Parameters<typeof saveLap.mutateAsync>[0]);
+			await saveLap.mutateAsync({ lapId: edit.lapId, [edit.field]: edit.value } as Parameters<
+				typeof saveLap.mutateAsync
+			>[0]);
 		}
 		setActivityEdits({});
 		setLapEdits([]);
@@ -65,7 +90,10 @@ export function ActivityDetailsPage() {
 			if (e.key !== "s" || e.metaKey || e.ctrlKey || e.altKey) return;
 			const tag = (e.target as HTMLElement)?.tagName;
 			if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-			if (isDirty) { e.preventDefault(); handleSave(); }
+			if (isDirty) {
+				e.preventDefault();
+				handleSave();
+			}
 		}
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
@@ -73,7 +101,7 @@ export function ActivityDetailsPage() {
 
 	// Multisport session scoping
 	const isMultisport = (sessions?.length ?? 0) > 1;
-	const activeSession = isMultisport ? sessions![sessionIdx] : null;
+	const activeSession = isMultisport ? sessions?.[sessionIdx] : null;
 	const sessionSport = activeSession?.sport ?? sport;
 
 	const sessionLaps = useMemo(() => {
@@ -88,7 +116,10 @@ export function ActivityDetailsPage() {
 		if (!activeSession) return points;
 		const start = new Date(activeSession.startTime).getTime();
 		const end = start + (activeSession.totalTimerTime ?? 0) * 1000;
-		return points.filter((p) => { const t = new Date(p.timestamp).getTime(); return t >= start && t <= end; });
+		return points.filter((p) => {
+			const t = new Date(p.timestamp).getTime();
+			return t >= start && t <= end;
+		});
 	}, [points, activeSession]);
 
 	if (isLoading) return <div className="text-center py-10 text-gray-400">Loading activity…</div>;
@@ -96,19 +127,29 @@ export function ActivityDetailsPage() {
 
 	const distance = activity.distance ?? 0;
 	const duration = activity.duration ?? 0;
+	const editedDistance = activityEdits.adjustedDistance ?? distance;
+	const editedDuration = activityEdits.adjustedDuration ?? duration;
 	const miles = distance / METERS_PER_MILE;
+	const editedMiles = editedDistance / METERS_PER_MILE;
 	const isCycling = sessionSport === Sport.Cycling;
 	const localDate = new Date(activity.localTimestamp);
+	const category =
+		activityEdits.category !== undefined
+			? normalizeCategory(activityEdits.category)
+			: normalizeCategory(activity.category);
+	const title = activityEdits.activityName !== undefined ? (activityEdits.activityName ?? "") : (activity.name ?? "");
+	const description =
+		activityEdits.description !== undefined ? (activityEdits.description ?? "") : (activity.description ?? "");
 
 	return (
-		<div className="w-full space-y-8">
+		<div key={id} className="w-full space-y-8">
 			{/* 1. Title row: title left, category + nav right */}
 			<div className="flex items-center justify-between gap-6">
 				<div className="flex items-baseline gap-2 flex-1 min-w-0">
 					<input
 						type="text"
-						defaultValue={activity.name ?? ""}
-						onBlur={(e) => handleChange({ activityName: e.target.value || null })}
+						value={title}
+						onChange={(e) => handleChange({ activityName: e.target.value || null })}
 						placeholder="Activity title"
 						className="flex-1 min-w-0 bg-transparent border-none text-4xl font-bold text-gray-50 placeholder-gray-600 focus:outline-none"
 					/>
@@ -116,34 +157,97 @@ export function ActivityDetailsPage() {
 				</div>
 				<div className="flex items-center gap-3 shrink-0">
 					<select
-						defaultValue={activity.category ?? "uncategorized"}
+						value={category}
 						onChange={(e) => handleChange({ category: e.target.value || null })}
 						className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-orange-500"
 					>
 						{CATEGORIES.map((c) => (
-							<option key={c} value={c}>{c}</option>
+							<option key={c} value={c}>
+								{c}
+							</option>
 						))}
 					</select>
-					<button onClick={goPrev} disabled={!prev} className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">&lt;</button>
-					<button onClick={goNext} disabled={!next} className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">&gt;</button>
+					<button
+						type="button"
+						onClick={goPrev}
+						disabled={!prev}
+						className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+					>
+						&lt;
+					</button>
+					<button
+						type="button"
+						onClick={goNext}
+						disabled={!next}
+						className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+					>
+						&gt;
+					</button>
 				</div>
 			</div>
 
 			{/* 2. Date — small italic */}
 			<p className="text-xs italic text-gray-500">
-				{localDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} @ {localDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+				{localDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} @{" "}
+				{localDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
 			</p>
 
 			{/* 3. Summary metrics — horizontal cards */}
 			<div className="grid grid-cols-3 gap-4">
-				<MetricBlock label="Distance" value={`${miles.toFixed(2)} mi`} />
-				<MetricBlock label="Duration" value={convertSecondsToHms(duration) ?? "—"} />
+				<MetricBlock label="Distance">
+					<div className="mt-1 flex items-baseline gap-2">
+						<input
+							type="number"
+							min={0}
+							step="0.01"
+							value={distanceInput}
+							onChange={(e) => {
+								const nextValue = e.target.value;
+								setDistanceInput(nextValue);
+								if (nextValue.trim() === "") return;
+								const nextMiles = Number(nextValue);
+								if (!Number.isNaN(nextMiles) && nextMiles >= 0) {
+									handleChange({ adjustedDistance: nextMiles * METERS_PER_MILE });
+								}
+							}}
+							onBlur={(e) => {
+								const nextMiles = Number(e.target.value);
+								setDistanceInput(
+									!Number.isNaN(nextMiles) && nextMiles >= 0 ? nextMiles.toFixed(2) : editedMiles.toFixed(2),
+								);
+							}}
+							className="w-full min-w-0 bg-transparent border-none p-0 text-2xl font-bold text-gray-50 tabular-nums focus:outline-none focus:text-orange-200"
+							aria-label="Distance in miles"
+						/>
+						<span className="text-2xl font-bold text-gray-50">mi</span>
+					</div>
+				</MetricBlock>
+				<MetricBlock label="Duration">
+					<input
+						type="text"
+						value={durationInput}
+						onChange={(e) => {
+							const nextValue = e.target.value;
+							setDurationInput(nextValue);
+							const seconds = parseHmsToSeconds(nextValue);
+							if (seconds != null) handleChange({ adjustedDuration: seconds });
+						}}
+						onBlur={(e) => {
+							const seconds = parseHmsToSeconds(e.target.value);
+							setDurationInput(convertSecondsToHms(seconds ?? editedDuration) ?? "");
+						}}
+						className="mt-1 w-full bg-transparent border-none p-0 text-2xl font-bold text-gray-50 tabular-nums focus:outline-none focus:text-orange-200"
+						aria-label="Duration"
+					/>
+				</MetricBlock>
 				<MetricBlock
 					label={isCycling ? (activity.avgPower ? "Power" : "Speed") : "Pace"}
 					value={
 						isCycling
-							? activity.avgPower ? `${activity.avgPower} W` : `${(duration > 0 ? miles / (duration / 3600) : 0).toFixed(2)} mph`
-							: `${formatPace(miles > 0 ? duration / 60 / miles : null) ?? "—"} /mi`
+							? activity.avgPower
+								? `${activity.avgPower} W`
+								: `${(editedDuration > 0 ? editedMiles / (editedDuration / 3600) : 0).toFixed(2)} mph`
+							: `${formatPace(editedMiles > 0 ? editedDuration / 60 / editedMiles : null) ?? "—"} /mi`
 					}
 				/>
 			</div>
@@ -152,15 +256,22 @@ export function ActivityDetailsPage() {
 			<div className="grid grid-cols-1 md:grid-cols-[7fr_3fr] gap-4">
 				<div className="min-h-[500px]">
 					{sessionPoints.length > 0 && sessionPoints.some((p) => p.latitude != null) ? (
-						<DetailMap points={sessionPoints} sport={sessionSport} sessions={isMultisport ? sessions : undefined} hoveredIndex={hoveredIndex} />
+						<DetailMap
+							points={sessionPoints}
+							sport={sessionSport}
+							sessions={isMultisport ? sessions : undefined}
+							hoveredIndex={hoveredIndex}
+						/>
 					) : (
-						<div className="flex items-center justify-center h-full min-h-[500px] bg-gray-900 border border-gray-800 rounded-xl text-gray-500 text-sm">No GPS data</div>
+						<div className="flex items-center justify-center h-full min-h-[500px] bg-gray-900 border border-gray-800 rounded-xl text-gray-500 text-sm">
+							No GPS data
+						</div>
 					)}
 				</div>
 				<div>
 					<textarea
-						defaultValue={activity.description ?? ""}
-						onBlur={(e) => handleChange({ description: e.target.value || null })}
+						value={description}
+						onChange={(e) => handleChange({ description: e.target.value || null })}
 						placeholder="Description"
 						rows={8}
 						className="w-full h-full min-h-[500px] rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:border-orange-500"
@@ -173,6 +284,7 @@ export function ActivityDetailsPage() {
 				<div className="flex gap-1 border-b border-gray-800">
 					{sessions.map((s, i) => (
 						<button
+							type="button"
 							key={s.sessionId}
 							onClick={() => setSessionIdx(i)}
 							className={`capitalize px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${sessionIdx === i ? "text-orange-400 border-orange-400" : "text-gray-500 hover:text-gray-300 border-transparent"}`}
@@ -184,12 +296,15 @@ export function ActivityDetailsPage() {
 			)}
 
 			{/* 6. Performance Charts (inline, not in tab) */}
-			{sessionPoints.length > 0 && <PerformanceCharts points={sessionPoints} sport={sessionSport} onHover={setHoveredIndex} />}
+			{sessionPoints.length > 0 && (
+				<PerformanceCharts points={sessionPoints} sport={sessionSport} onHover={setHoveredIndex} />
+			)}
 
 			{/* 7. Three tabs: Laps / Activity Details / Auto Laps */}
 			<div className="flex border-b border-gray-800">
 				{(["laps", "details", "auto-laps"] as Tab[]).map((t) => (
 					<button
+						type="button"
 						key={t}
 						onClick={() => setTab(t)}
 						className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t ? "text-orange-400 border-orange-400" : "text-gray-500 hover:text-gray-300 border-transparent"}`}
@@ -200,30 +315,25 @@ export function ActivityDetailsPage() {
 			</div>
 
 			<div>
-				{tab === "laps" && (
-					<>
-						{sessionSport === Sport.Swimming ? (
-							<SwimLengthTable activityId={id} poolLengthM={activeSession?.poolLength ?? 25} />
-						) : sessionLaps.length > 0 ? (
-							<LapTable laps={sessionLaps} sport={sessionSport} category={activity.category ?? "uncategorized"} onEdits={setLapEdits} />
-						) : (
-							<p className="text-sm text-gray-500">No lap data available.</p>
-						)}
-					</>
-				)}
+				{tab === "laps" &&
+					(sessionSport === Sport.Swimming ? (
+						<SwimLengthTable activityId={id} poolLengthM={activeSession?.poolLength ?? 25} />
+					) : sessionLaps.length > 0 ? (
+						<LapTable laps={sessionLaps} sport={sessionSport} category={category} onEdits={setLapEdits} />
+					) : (
+						<p className="text-sm text-gray-500">No lap data available.</p>
+					))}
 				{tab === "details" && (
 					<ActivityStatsGrid
-						distance={distance}
-						duration={duration}
+						distance={editedDistance}
+						duration={editedDuration}
 						sport={sessionSport}
 						points={sessionPoints}
 						laps={sessionLaps}
 						avgPower={activity.avgPower}
 					/>
 				)}
-				{tab === "auto-laps" && (
-					<AutoLapTable activityId={id} sport={sessionSport} />
-				)}
+				{tab === "auto-laps" && <AutoLapTable activityId={id} sport={sessionSport} />}
 			</div>
 
 			{/* 8. Feel + Effort row */}
@@ -231,6 +341,8 @@ export function ActivityDetailsPage() {
 
 			{/* 9. Save button */}
 			<button
+				type="button"
+				data-testid="save-button"
 				onClick={handleSave}
 				disabled={!isDirty || saveActivity.isPending}
 				className={`w-full rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${isDirty ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-emerald-600/30 text-emerald-200/50 cursor-not-allowed"}`}
@@ -239,25 +351,27 @@ export function ActivityDetailsPage() {
 			</button>
 
 			{lastSql && (
-				<pre className="rounded-lg bg-gray-900 border border-gray-700 p-3 text-xs text-gray-300 font-mono overflow-x-auto whitespace-pre-wrap">{lastSql}</pre>
+				<pre className="rounded-lg bg-gray-900 border border-gray-700 p-3 text-xs text-gray-300 font-mono overflow-x-auto whitespace-pre-wrap">
+					{lastSql}
+				</pre>
 			)}
 
 			{/* 10. Similar Activities at bottom */}
-			{(activity.category === "training" || activity.category === "race") && activity.name && (
+			{(category === "training" || category === "race") && title && (
 				<div className="border-t border-gray-800 pt-6">
 					<h3 className="text-sm font-medium uppercase tracking-wide text-gray-500 mb-3">Similar Activities</h3>
-					<SimilarActivities activityId={id} title={activity.name} sport={sport} />
+					<SimilarActivities activityId={id} title={title} sport={sport} />
 				</div>
 			)}
 		</div>
 	);
 }
 
-function MetricBlock({ label, value }: { label: string; value: string }) {
+function MetricBlock({ label, value, children }: { label: string; value?: string; children?: ReactNode }) {
 	return (
 		<div className="rounded-xl bg-gray-900 border border-gray-800 p-4">
 			<p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
-			<p className="mt-1 text-2xl font-bold text-gray-50 tabular-nums">{value}</p>
+			{children ?? <p className="mt-1 text-2xl font-bold text-gray-50 tabular-nums">{value}</p>}
 		</div>
 	);
 }
