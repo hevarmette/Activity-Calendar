@@ -64,9 +64,17 @@
 
   ## Known Issues / Future Work
   - [ ] **Hardcoded timezone** — `'America/Chicago'` in server SQL. Needs env var.
-  - [ ] **Elevation API caching** — No caching on Open-Meteo calls per request.
+  - [ ] **Elevation API caching** — Cache on Open-Meteo calls per request. Maybe find a better solution because it seems i am getting rate limited or hitting the request limit
   - [ ] **useEffect missing deps** — Keyboard shortcut re-registers every render.
   - [ ] **defaultValue won't reset on nav** — Needs `key={id}` on page wrapper.
   - [ ] **No save error feedback** — Silent failure, edits cleared.
   - [ ] **Accessibility gaps** — Missing aria-labels and tab roles.
   - [ ] **Sidebar distance/duration adjustment** — Not yet ported from Streamlit.
+  - [ ] **Perceived effort default value** should not show in the slider if it is null
+  - [ ] **Get all old comments and notes from streamlit code into here**
+  - [ ] **Have the graphs/plots match the colors from streamlit** - blue for pace, green for elevation, red for HR, etc.
+  - [ ] **Feel buttons be equally spaced**
+  - [ ] **back and next buttons do not work** - they are always disabled for some reason
+  - [ ] **make the maps load faster** - somehow
+  - [ ] **the category is not properly being fetched or displayed from the database**
+  - [ ] **show cumulative distance for auto laps in streamlit app and this one**
