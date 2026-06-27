@@ -86,7 +86,9 @@ export function useSimilar(id: number, title: string, sport: string) {
 	return useQuery({
 		queryKey: queryKeys.similar(id),
 		queryFn: () =>
-			api<SimilarActivity[]>(`/api/similar/${id}?title=${encodeURIComponent(title)}&sport=${encodeURIComponent(sport)}`),
+			api<SimilarActivity[]>(
+				`/api/similar/${id}?title=${encodeURIComponent(title)}&sport=${encodeURIComponent(sport)}`,
+			),
 		enabled: id > 0 && title.length > 0,
 	});
 }
@@ -108,6 +110,7 @@ export function useSearch() {
 export interface AutoLap {
 	lap: number;
 	distanceMi: number;
+	cumulativeDistanceMi: number;
 	timeSeconds: number;
 	paceMinPerMile: number | null;
 	speedMph: number | null;

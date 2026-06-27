@@ -1,11 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import {
-	AUTO_LAP_DISTANCES,
-	METERS_PER_MILE,
-	Sport,
-	convertSecondsToHms,
-	formatPace,
-} from "@activity-calendar/shared";
+import { AUTO_LAP_DISTANCES, METERS_PER_MILE, Sport, convertSecondsToHms, formatPace } from "@activity-calendar/shared";
 import { useAutoLaps } from "../../api/queries.js";
 
 type Unit = "mi" | "m";
@@ -75,6 +69,7 @@ export function AutoLapTable({ activityId, sport }: Props) {
 								<th className="px-2 py-1">Lap</th>
 								<th className="px-2 py-1">Time</th>
 								<th className="px-2 py-1">Distance</th>
+								<th className="px-2 py-1">Cum. Dist</th>
 								<th className="px-2 py-1">{isCycling ? "Speed" : "Pace"}</th>
 								<th className="px-2 py-1">Cum. Time</th>
 								<th className="px-2 py-1">Ascent</th>
@@ -90,7 +85,10 @@ export function AutoLapTable({ activityId, sport }: Props) {
 									<td className="px-2 py-1">{l.lap}</td>
 									<td className="px-2 py-1">{convertSecondsToHms(l.timeSeconds)}</td>
 									<td className="px-2 py-1">{l.distanceMi.toFixed(2)} mi</td>
-									<td className="px-2 py-1">{isCycling ? `${l.speedMph?.toFixed(1)} mph` : `${formatPace(l.paceMinPerMile)} /mi`}</td>
+									<td className="px-2 py-1">{l.cumulativeDistanceMi.toFixed(2)} mi</td>
+									<td className="px-2 py-1">
+										{isCycling ? `${l.speedMph?.toFixed(1)} mph` : `${formatPace(l.paceMinPerMile)} /mi`}
+									</td>
 									<td className="px-2 py-1">{convertSecondsToHms(l.cumulativeTimeSeconds)}</td>
 									<td className="px-2 py-1">{Math.round(l.totalAscentFt)}</td>
 									<td className="px-2 py-1">{Math.round(l.totalDescentFt)}</td>

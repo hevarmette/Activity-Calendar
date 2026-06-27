@@ -77,4 +77,5 @@
   - [x] **back and next buttons do not work** - they are always disabled for some reason
   - [ ] **make the maps load faster** - somehow
   - [x] **the category is not properly being fetched or displayed from the database**
-  - [ ] **show cumulative distance for auto laps in streamlit app and this one**
+  - [x] **show cumulative distance for auto laps in streamlit app and this one**
+  - [ ] **being able to select x axis range on graphs and it can filter for all other graphs and the map**
