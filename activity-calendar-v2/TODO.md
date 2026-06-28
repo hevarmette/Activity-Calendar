@@ -79,3 +79,6 @@
   - [x] **the category is not properly being fetched or displayed from the database**
   - [x] **show cumulative distance for auto laps in streamlit app and this one**
   - [ ] **being able to select x axis range on graphs and it can filter for all other graphs and the map**
+  - [ ] **auto laps should have precision to the hundreths place** not just the tenths place. on activity details page
+  - [ ] **show elapsed time for the acitivty details page**
+  - [ ] **re render the auto lap markers on the map when the auto lap distance changes**
