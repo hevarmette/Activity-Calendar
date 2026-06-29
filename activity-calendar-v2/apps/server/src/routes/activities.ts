@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import sql, { SCHEMA } from "../db.js";
+import { TIMEZONE } from "../config.js";
 
 export const activitiesRoutes = new Hono();
 
@@ -15,7 +16,7 @@ activitiesRoutes.get("/:id", async (c) => {
 			a.description,
 			a.workout_feel AS feel,
 			a.effort,
-			COALESCE(a.local_timestamp, a.timestamp AT TIME ZONE 'America/Chicago') AS local_timestamp,
+			COALESCE(a.local_timestamp, a.timestamp AT TIME ZONE ${TIMEZONE}) AS local_timestamp,
 			a.activity_name AS name,
 			a.category
 		FROM ${sql(SCHEMA)}.activity a

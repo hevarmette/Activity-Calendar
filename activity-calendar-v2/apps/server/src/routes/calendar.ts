@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import sql, { SCHEMA } from "../db.js";
+import { TIMEZONE } from "../config.js";
 
 export const calendarRoutes = new Hono();
 
@@ -7,7 +8,7 @@ calendarRoutes.get("/", async (c) => {
 	const rows = await sql`
 		SELECT
 			a.activity_id,
-			(a.timestamp AT TIME ZONE 'America/Chicago') AS activity_date,
+			(a.timestamp AT TIME ZONE ${TIMEZONE}) AS activity_date,
 			a.activity_name,
 			a.num_sessions,
 			STRING_AGG(s.sport, ',' ORDER BY s.start_time) AS sport

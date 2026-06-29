@@ -1,3 +1,18 @@
+/**
+ * Auto-lap computation ported from the Streamlit app's `create_auto_laps` in lap_processing.py.
+ *
+ * Key algorithmic notes from the original Python implementation:
+ * - Pause removal: Only explicit device pauses (stop_all/start events) are removed from
+ *   elapsed time. A speed-based filter (STOP_THRESHOLD_MPS) was originally considered for
+ *   removing "near-stationary" time (e.g., waiting at a light) but was disabled so that
+ *   only explicit timer pauses affect the split times.
+ * - Interpolation: To compute exact split times at precise mile boundaries, cumulative
+ *   metrics (time, ascent, descent) are interpolated using np.interp. The x-axis (distance)
+ *   must be strictly increasing, so duplicate distance values (standing still) are dropped.
+ * - HR/Cadence binning: Each GPS point is assigned to an auto-lap using pd.cut, then
+ *   aggregated per lap. Values are forced to numeric to handle empty bins gracefully.
+ * - The last "partial" lap is always included (distance to the end of the activity).
+ */
 const METERS_PER_MILE = 1609.344;
 const METERS_TO_FEET = 3.28084;
 const MPS_TO_MPH = 2.23694;

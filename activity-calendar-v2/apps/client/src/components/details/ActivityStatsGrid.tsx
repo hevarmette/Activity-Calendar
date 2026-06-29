@@ -48,6 +48,9 @@ export function ActivityStatsGrid({ distance, duration, sport, points, laps, avg
 	}
 
 	// Best lap
+	// From Streamlit (pages/2_Activity_Details.py):
+	// "Due to rounding differences in avg speed and lap speed, we will use avg speed
+	// if there is only one lap" — so single-lap activities use overall pace, not lap pace.
 	const validLaps = laps.filter((l) => (l.totalDistance ?? 0) > 0 && (l.totalTimerTime ?? 0) > 0);
 	let bestLapLabel: string | null = null;
 	if (validLaps.length) {

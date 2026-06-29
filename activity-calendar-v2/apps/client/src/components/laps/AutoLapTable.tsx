@@ -7,12 +7,13 @@ type Unit = "mi" | "m";
 interface Props {
 	activityId: number;
 	sport: string;
+	onDistanceChange?: (distInMiles: number) => void;
 }
 
 /**
  * Displays auto-lap splits for an activity with a configurable distance input and unit toggle.
  */
-export function AutoLapTable({ activityId, sport }: Props) {
+export function AutoLapTable({ activityId, sport, onDistanceChange }: Props) {
 	const [inputValue, setInputValue] = useState(1);
 	const [unit, setUnit] = useState<Unit>("mi");
 	const [debouncedValue, setDebouncedValue] = useState(inputValue);
@@ -26,6 +27,11 @@ export function AutoLapTable({ activityId, sport }: Props) {
 	}, [inputValue]);
 
 	const distInMiles = unit === "mi" ? debouncedValue : debouncedValue / METERS_PER_MILE;
+
+	// Notify parent when auto-lap distance changes (TODO #12)
+	useEffect(() => {
+		onDistanceChange?.(distInMiles);
+	}, [distInMiles, onDistanceChange]);
 
 	const { data: laps } = useAutoLaps(activityId, sport, distInMiles);
 	const isCycling = sport === Sport.Cycling;

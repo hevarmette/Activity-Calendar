@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
 	LineChart,
 	Line,
@@ -18,6 +18,8 @@ interface Props {
 	points: RecordPoint[];
 	sport: string;
 	onHover?: (index: number | null) => void;
+	/** Callback when user selects a range on any chart. Returns [startPointIndex, endPointIndex] or null to clear. */
+	onRangeSelect?: (range: [number, number] | null) => void;
 }
 
 interface ChartPoint {
@@ -112,6 +114,9 @@ function Chart({
 	avgValue,
 	isCycling,
 	onHover,
+	selectionRange,
+	onSelectionStart,
+	onSelectionEnd,
 }: {
 	data: ChartPoint[];
 	dataKey: string;
@@ -125,17 +130,36 @@ function Chart({
 	avgValue: number | null;
 	isCycling: boolean;
 	onHover?: (index: number | null) => void;
+	selectionRange?: [number, number] | null;
+	onSelectionStart?: (x: number) => void;
+	onSelectionEnd?: (x: number) => void;
 }) {
-	if (data.every((d) => (d as Record<string, unknown>)[dataKey] == null)) return null;
+	if (data.every((d) => (d as unknown as Record<string, unknown>)[dataKey] == null)) return null;
 
 	const integerAxis = dataKey === "hr" || dataKey === "altitude" || dataKey === "cadence";
+
+	// Filter data to selected range if present
+	const displayData = selectionRange
+		? data.filter((d) => d.x >= selectionRange[0] && d.x <= selectionRange[1])
+		: data;
+	const displayAvg = selectionRange ? avg(displayData, dataKey as keyof ChartPoint) : avgValue;
 
 	return (
 		<div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
 			<p className="text-sm text-gray-400 mb-2">{yLabel}</p>
 			<ResponsiveContainer width="100%" height={200}>
 				<LineChart
-					data={data}
+					data={displayData}
+					onMouseDown={(e) => {
+						if (e?.activeLabel != null && onSelectionStart) {
+							onSelectionStart(Number(e.activeLabel));
+						}
+					}}
+					onMouseUp={(e) => {
+						if (e?.activeLabel != null && onSelectionEnd) {
+							onSelectionEnd(Number(e.activeLabel));
+						}
+					}}
 					onMouseMove={(e) => {
 						if (e?.activePayload?.[0] && onHover) {
 							onHover((e.activePayload[0].payload as ChartPoint).pointIndex);
@@ -163,12 +187,12 @@ function Chart({
 						cursor={{ stroke: "#f97316", strokeWidth: 1 }}
 					/>
 					<Line type="monotone" dataKey={dataKey} stroke={color} dot={false} strokeWidth={1.5} />
-					{avgValue != null && (
+					{displayAvg != null && (
 						<ReferenceLine
-							y={avgValue}
+							y={displayAvg}
 							stroke={color}
 							strokeDasharray="5 5"
-							label={{ value: `Avg: ${yFormatter ? yFormatter(avgValue) : integerAxis ? Math.round(avgValue).toString() : avgValue.toFixed(1)}`, fill: "#6b7280", fontSize: 11, position: "insideBottomRight" }}
+							label={{ value: `Avg: ${yFormatter ? yFormatter(displayAvg) : integerAxis ? Math.round(displayAvg).toString() : displayAvg.toFixed(1)}`, fill: "#6b7280", fontSize: 11, position: "insideBottomRight" }}
 						/>
 					)}
 				</LineChart>
@@ -177,37 +201,108 @@ function Chart({
 	);
 }
 
-export function PerformanceCharts({ points, sport, onHover }: Props) {
+/**
+ * Performance charts for activity record data.
+ *
+ * Color scheme ported from the Streamlit plotting.py:
+ *   - Pace (running): blue — invert y-axis so faster pace is higher
+ *   - Speed (cycling): blue
+ *   - Heart Rate: red
+ *   - Altitude: green
+ *   - Cadence: purple (scatter in Streamlit, line here for density)
+ *
+ * From the original Streamlit code (pages/2_Activity_Details.py):
+ * - Pace y-axis range is bounded: top_bound = min(5, fastest_pace),
+ *   bottom_bound = min(11, p_pace) where p_pace = 85th percentile for training,
+ *   95th + 3 for other categories. This prevents outlier spikes from compressing
+ *   the useful range.
+ * - Time x-axis uses pd.Timestamp(0) + elapsed_time to format as HH:MM:SS
+ *   (the timestamp is technically 1970-01-01 00:00:00, showing only the time part).
+ * - Average line is drawn as a dashed horizontal reference with annotation.
+ *
+ * Range selection (TODO #10): Drag on any chart to select an x-axis range.
+ * All charts zoom to that range and the map highlights the corresponding segment.
+ * Click without dragging to clear the selection.
+ */
+export function PerformanceCharts({ points, sport, onHover, onRangeSelect }: Props) {
 	const [xMode, setXMode] = useState<XMode>("distance");
-	const data = buildChartData(points, xMode, sport);
+	const [selectionRange, setSelectionRange] = useState<[number, number] | null>(null);
+	const selectionStartRef = useRef<number | null>(null);
+
+	const data = useMemo(() => buildChartData(points, xMode, sport), [points, xMode, sport]);
 	const xLabel = xMode === "distance" ? "Distance (mi)" : "Time (min)";
 	const isCycling = sport === Sport.Cycling;
 
+	const handleSelectionStart = useCallback((x: number) => {
+		selectionStartRef.current = x;
+	}, []);
+
+	const handleSelectionEnd = useCallback((x: number) => {
+		const start = selectionStartRef.current;
+		selectionStartRef.current = null;
+		if (start == null || start === x) {
+			// Click without drag — clear selection
+			setSelectionRange(null);
+			onRangeSelect?.(null);
+			return;
+		}
+		const xMin = Math.min(start, x);
+		const xMax = Math.max(start, x);
+		setSelectionRange([xMin, xMax]);
+
+		// Convert x range to point indices for the map
+		const startIdx = data.find((d) => d.x >= xMin)?.pointIndex ?? 0;
+		const endIdx = [...data].reverse().find((d) => d.x <= xMax)?.pointIndex ?? data[data.length - 1]?.pointIndex ?? 0;
+		onRangeSelect?.([startIdx, endIdx]);
+	}, [data, onRangeSelect]);
+
+	const clearSelection = useCallback(() => {
+		setSelectionRange(null);
+		onRangeSelect?.(null);
+	}, [onRangeSelect]);
+
 	return (
 		<div className="space-y-4">
-			<div className="inline-flex rounded-lg bg-gray-800 border border-gray-700 p-0.5">
+			<div className="inline-flex rounded-lg bg-gray-800 border border-gray-700 p-0.5" role="group" aria-label="X-axis mode">
 				<button
+					type="button"
 					onClick={() => setXMode("distance")}
+					aria-pressed={xMode === "distance"}
+					aria-label="Plot by distance"
 					className={xMode === "distance" ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-orange-500" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}
 				>
 					Distance
 				</button>
 				<button
+					type="button"
 					onClick={() => setXMode("time")}
+					aria-pressed={xMode === "time"}
+					aria-label="Plot by time"
 					className={xMode === "time" ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-orange-500" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}
 				>
 					Time
 				</button>
 			</div>
 
+			{selectionRange && (
+				<button
+					type="button"
+					onClick={clearSelection}
+					className="text-xs text-orange-400 hover:text-orange-300 underline"
+					aria-label="Clear chart range selection"
+				>
+					Clear selection
+				</button>
+			)}
+
 			{isCycling ? (
-				<Chart data={data} dataKey="speed" metric="speed" color="#2CA02C" yLabel="Speed (mph)" xLabel={xLabel} xMode={xMode} isCycling={isCycling} avgValue={avg(data, "speed")} onHover={onHover} />
+				<Chart data={data} dataKey="speed" metric="speed" color="#1F77B4" yLabel="Speed (mph)" xLabel={xLabel} xMode={xMode} isCycling={isCycling} avgValue={avg(data, "speed")} onHover={onHover} selectionRange={selectionRange} onSelectionStart={handleSelectionStart} onSelectionEnd={handleSelectionEnd} />
 			) : (
 				<Chart
 					data={data}
 					dataKey="pace"
 					metric="pace"
-					color="#FF4B4B"
+					color="#1F77B4"
 					yLabel="Pace (min/mi)"
 					xLabel={xLabel}
 					xMode={xMode}
@@ -216,11 +311,14 @@ export function PerformanceCharts({ points, sport, onHover }: Props) {
 					avgValue={avg(data, "pace")}
 					isCycling={isCycling}
 					onHover={onHover}
+					selectionRange={selectionRange}
+					onSelectionStart={handleSelectionStart}
+					onSelectionEnd={handleSelectionEnd}
 				/>
 			)}
 
-			<Chart data={data} dataKey="hr" metric="hr" color="#e53e3e" yLabel="Heart Rate (bpm)" xLabel={xLabel} xMode={xMode} isCycling={isCycling} avgValue={avg(data, "hr")} onHover={onHover} />
-			<Chart data={data} dataKey="altitude" metric="altitude" color="#38a169" yLabel="Altitude (ft)" xLabel={xLabel} xMode={xMode} isCycling={isCycling} avgValue={null} onHover={onHover} />
+			<Chart data={data} dataKey="hr" metric="hr" color="#e53e3e" yLabel="Heart Rate (bpm)" xLabel={xLabel} xMode={xMode} isCycling={isCycling} avgValue={avg(data, "hr")} onHover={onHover} selectionRange={selectionRange} onSelectionStart={handleSelectionStart} onSelectionEnd={handleSelectionEnd} />
+			<Chart data={data} dataKey="altitude" metric="altitude" color="#2CA02C" yLabel="Altitude (ft)" xLabel={xLabel} xMode={xMode} isCycling={isCycling} avgValue={null} onHover={onHover} selectionRange={selectionRange} onSelectionStart={handleSelectionStart} onSelectionEnd={handleSelectionEnd} />
 			<Chart
 				data={data}
 				dataKey="cadence"
@@ -232,6 +330,9 @@ export function PerformanceCharts({ points, sport, onHover }: Props) {
 				isCycling={isCycling}
 				avgValue={avg(data, "cadence")}
 				onHover={onHover}
+				selectionRange={selectionRange}
+				onSelectionStart={handleSelectionStart}
+				onSelectionEnd={handleSelectionEnd}
 			/>
 		</div>
 	);

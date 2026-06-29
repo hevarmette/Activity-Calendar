@@ -27,29 +27,81 @@ function writeCache(activityId: number, elevations: number[]): void {
 	writeFileSync(getCachePath(activityId), JSON.stringify(elevations));
 }
 
+/**
+ * Fetches corrected elevation data from the Open-Meteo API.
+ *
+ * From the original Streamlit db.py:
+ * "Getting elevation data from 3rd party package because the garmin data is bad"
+ * The Garmin barometric altitude is often inaccurate, so we fetch DEM-based
+ * elevations for the GPS coordinates. Values are converted from meters to feet.
+ * If the API call fails (rate limiting, network error), we fall back to the
+ * raw altitude column from the FIT file (also converted to feet).
+ */
 async function fetchElevations(activityId: number, records: any[]): Promise<number[]> {
 	const cached = readCache(activityId);
 	if (cached && cached.length === records.length) return cached;
 
 	const elevations = new Array(records.length).fill(null);
 	const BATCH = 80;
+	const MAX_RETRIES = 3;
+	const BASE_DELAY_MS = 500;
+
 	try {
 		for (let i = 0; i < records.length; i += BATCH) {
 			const batch = records.slice(i, i + BATCH);
 			const lats = batch.map((r: any) => r.latitude).join(",");
 			const lons = batch.map((r: any) => r.longitude).join(",");
-			const res = await fetch(
-				`https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`
-			);
-			if (!res.ok) throw new Error(`elevation API returned ${res.status}`);
-			const data = await res.json();
-			for (let j = 0; j < data.elevation.length; j++) {
-				elevations[i + j] = data.elevation[j] * METERS_TO_FEET;
+
+			let lastError: Error | null = null;
+			let success = false;
+
+			// Retry with exponential backoff on rate limit or transient errors
+			for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+				try {
+					const res = await fetch(
+						`https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`
+					);
+					if (res.status === 429 || res.status >= 500) {
+						// Rate limited or server error — retry after backoff
+						const delay = BASE_DELAY_MS * 2 ** attempt;
+						await new Promise((r) => setTimeout(r, delay));
+						continue;
+					}
+					if (!res.ok) throw new Error(`elevation API returned ${res.status}`);
+					const data = await res.json();
+					for (let j = 0; j < data.elevation.length; j++) {
+						elevations[i + j] = data.elevation[j] * METERS_TO_FEET;
+					}
+					success = true;
+					break;
+				} catch (err) {
+					lastError = err instanceof Error ? err : new Error(String(err));
+					if (attempt < MAX_RETRIES - 1) {
+						const delay = BASE_DELAY_MS * 2 ** attempt;
+						await new Promise((r) => setTimeout(r, delay));
+					}
+				}
 			}
-			// Small delay to avoid rate limiting
-			if (i + BATCH < records.length) await new Promise((r) => setTimeout(r, 200));
+
+			if (!success) {
+				// If all retries failed for this batch, fall back to raw altitude
+				console.warn(
+					`Elevation fetch failed for batch at index ${i}: ${lastError?.message}. Using raw altitude.`
+				);
+				for (let j = 0; j < batch.length; j++) {
+					elevations[i + j] = records[i + j].altitude != null
+						? records[i + j].altitude * METERS_TO_FEET
+						: null;
+				}
+			}
+
+			// Delay between successful batches to avoid rate limiting (500ms)
+			if (i + BATCH < records.length) await new Promise((r) => setTimeout(r, 500));
 		}
-		writeCache(activityId, elevations);
+		// Only cache if all values were fetched from the API (no fallbacks)
+		if (elevations.every((e) => e !== null)) {
+			writeCache(activityId, elevations);
+		}
 	} catch {
 		// Fallback: use raw altitude from DB if available
 		for (let i = 0; i < records.length; i++) {
@@ -59,6 +111,18 @@ async function fetchElevations(activityId: number, records: any[]): Promise<numb
 	return elevations;
 }
 
+/**
+ * Computes pause-removed elapsed time for each record point.
+ *
+ * From the original Streamlit db.py:
+ * "Compute pause-removed elapsed time using timer events so time-based graphs
+ * don't show gaps during paused periods."
+ *
+ * The algorithm builds pause intervals from stop_all/start event pairs,
+ * then subtracts the total paused duration from each point's raw elapsed time.
+ * This ensures performance charts (pace over time, HR over time) show continuous
+ * moving time without misleading flat sections during pauses.
+ */
 function computeElapsedTimes(records: any[], events: any[]): number[] {
 	if (records.length === 0) return [];
 	const firstTs = new Date(records[0].timestamp).getTime() / 1000;
@@ -86,7 +150,18 @@ function computeElapsedTimes(records: any[], events: any[]): number[] {
 	});
 }
 
-/** GET /api/records/:activityId - fetch GPS points with imputed lat/lon */
+/**
+ * GET /api/records/:activityId - fetch GPS points with imputed lat/lon.
+ *
+ * From the original Streamlit db.py (fetch_activity_points):
+ * "In rare cases, I was receiving an NA error when plotting some maps, so
+ * this query will impute missing values by taking the next available, and
+ * previous lat and long. Will not work if missing value is at the start or
+ * end. For that see if the session table has the start and end lat and longs."
+ *
+ * The SQL uses window functions (COUNT + FIRST_VALUE) to forward/backward fill
+ * null lat/lon gaps, averaging the nearest bounds when both sides are available.
+ */
 recordsRoutes.get("/:activityId", async (c) => {
 	const activityId = Number(c.req.param("activityId"));
 

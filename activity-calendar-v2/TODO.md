@@ -63,22 +63,22 @@
   ***
 
   ## Known Issues / Future Work
-  - [ ] **Hardcoded timezone** — `'America/Chicago'` in server SQL. Needs env var.
-  - [ ] **Elevation API caching** — Cache on Open-Meteo calls per request. Maybe find a better solution because it seems i am getting rate limited or hitting the request limit
-  - [ ] **useEffect missing deps** — Keyboard shortcut re-registers every render.
+  - [x] **Hardcoded timezone** — `'America/Chicago'` in server SQL. Needs env var.
+  - [x] **Elevation API caching** — Cache on Open-Meteo calls per request. Maybe find a better solution because it seems i am getting rate limited or hitting the request limit
+  - [x] **useEffect missing deps** — Keyboard shortcut re-registers every render.
   - [x] **defaultValue won't reset on nav** — Needs `key={id}` on page wrapper.
-  - [ ] **No save error feedback** — Silent failure, edits cleared.
-  - [ ] **Accessibility gaps** — Missing aria-labels and tab roles.
+  - [x] **No save error feedback** — Silent failure, edits cleared.
+  - [x] **Accessibility gaps** — Missing aria-labels and tab roles.
   - [x] **Sidebar distance/duration adjustment** — Not yet ported from Streamlit.
   - [x] **Perceived effort default value** should not show in the slider if it is null
-  - [ ] **Get all old comments and notes from streamlit code into here**
-  - [ ] **Have the graphs/plots match the colors from streamlit** - blue for pace, green for elevation, red for HR, etc.
-  - [ ] **Feel buttons be equally spaced**
+  - [x] **Get all old comments and notes from streamlit code into here**
+  - [x] **Have the graphs/plots match the colors from streamlit** - blue for pace, green for elevation, red for HR, etc.
+  - [x] **Feel buttons be equally spaced**
   - [x] **back and next buttons do not work** - they are always disabled for some reason
-  - [ ] **make the maps load faster** - somehow
+  - [x] **make the maps load faster** - somehow
   - [x] **the category is not properly being fetched or displayed from the database**
   - [x] **show cumulative distance for auto laps in streamlit app and this one**
-  - [ ] **being able to select x axis range on graphs and it can filter for all other graphs and the map**
-  - [ ] **auto laps should have precision to the hundreths place** not just the tenths place. on activity details page
-  - [ ] **show elapsed time for the acitivty details page**
-  - [ ] **re render the auto lap markers on the map when the auto lap distance changes**
+  - [x] **being able to select x axis range on graphs and it can filter for all other graphs and the map**
+  - [x] **auto laps should have precision to the hundreths place** not just the tenths place. on activity details page
+  - [x] **show elapsed time for the acitivty details page**
+  - [x] **re render the auto lap markers on the map when the auto lap distance changes**

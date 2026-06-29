@@ -6,6 +6,7 @@ import { SpeedColorLine } from "./SpeedColorLine.js";
 import { LapMarkers } from "./LapMarkers.js";
 import { MileMarkers } from "./MileMarkers.js";
 import "leaflet/dist/leaflet.css";
+import { useMemo } from "react";
 
 const startIcon = L.divIcon({
 	className: "",
@@ -21,26 +22,63 @@ const endIcon = L.divIcon({
 	iconAnchor: [14, 14],
 });
 
+/**
+ * Downsample an array of coordinates to at most `maxPoints` using uniform sampling.
+ * Always preserves the first and last point for route continuity.
+ */
+function downsample(coords: [number, number][], maxPoints: number): [number, number][] {
+	if (coords.length <= maxPoints) return coords;
+	const step = (coords.length - 1) / (maxPoints - 1);
+	const result: [number, number][] = [];
+	for (let i = 0; i < maxPoints - 1; i++) {
+		result.push(coords[Math.round(i * step)]!);
+	}
+	result.push(coords[coords.length - 1]!);
+	return result;
+}
+
 interface Props {
 	points: RecordPoint[];
 	sport: string;
 	sessions?: Session[];
 	hoveredIndex?: number | null;
+	/** Dynamic auto-lap distance in miles. Overrides the sport default when provided. */
+	autoLapDist?: number | null;
+	/** Optional selected range [startIndex, endIndex] to highlight on the map (TODO #10). */
+	selectedRange?: [number, number] | null;
 }
 
-export function DetailMap({ points, sport, sessions, hoveredIndex }: Props) {
-	const coords = points
-		.filter((p) => p.latitude != null && p.longitude != null)
-		.map((p) => [p.latitude!, p.longitude!] as [number, number]);
+export function DetailMap({ points, sport, sessions, hoveredIndex, autoLapDist: autoLapDistProp, selectedRange }: Props) {
+	const coords = useMemo(
+		() =>
+			points
+				.filter((p) => p.latitude != null && p.longitude != null)
+				.map((p) => [p.latitude!, p.longitude!] as [number, number]),
+		[points],
+	);
+
+	// Downsample polyline for rendering performance — keeps markers accurate on full coords
+	const displayCoords = useMemo(() => downsample(coords, 1000), [coords]);
 
 	if (coords.length < 2) return null;
 
 	const bounds = L.latLngBounds(coords.map(([lat, lng]) => L.latLng(lat, lng)));
 	const isMultisport = sessions && sessions.length > 1;
-	const autoLapDist = AUTO_LAP_DISTANCES[sport] ?? AUTO_LAP_DISTANCES["default"]!;
+	const autoLapDist = autoLapDistProp ?? AUTO_LAP_DISTANCES[sport] ?? AUTO_LAP_DISTANCES["default"]!;
+
+	// Build highlighted segment coords from selectedRange (TODO #10)
+	const highlightCoords = useMemo(() => {
+		if (!selectedRange) return null;
+		const [startIdx, endIdx] = selectedRange;
+		const seg = points
+			.slice(startIdx, endIdx + 1)
+			.filter((p) => p.latitude != null && p.longitude != null)
+			.map((p) => [p.latitude!, p.longitude!] as [number, number]);
+		return seg.length > 1 ? seg : null;
+	}, [points, selectedRange]);
 
 	return (
-		<MapContainer bounds={bounds} scrollWheelZoom className="h-[500px] w-full rounded-lg">
+		<MapContainer bounds={bounds} scrollWheelZoom preferCanvas className="h-[500px] w-full rounded-lg">
 			<LayersControl position="topright">
 				<LayersControl.BaseLayer checked name="OpenStreetMap">
 					<TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
@@ -61,10 +99,11 @@ export function DetailMap({ points, sport, sessions, hoveredIndex }: Props) {
 										return t >= start && t <= end && p.latitude != null && p.longitude != null;
 									})
 									.map((p) => [p.latitude!, p.longitude!] as [number, number]);
-								return seg.length > 1 ? (
+								const displaySeg = downsample(seg, 1000);
+								return displaySeg.length > 1 ? (
 									<Polyline
 										key={session.sessionId}
-										positions={seg}
+										positions={displaySeg}
 										pathOptions={{ color: SPORT_COLORS[session.sport] ?? "#7F7F7F", weight: 5 }}
 									/>
 								) : null;
@@ -73,7 +112,7 @@ export function DetailMap({ points, sport, sessions, hoveredIndex }: Props) {
 					</LayersControl.Overlay>
 				) : (
 					<LayersControl.Overlay checked name="Route">
-						<Polyline positions={coords} pathOptions={{ color: "#FF4B4B", weight: 5 }} />
+						<Polyline positions={displayCoords} pathOptions={{ color: "#FF4B4B", weight: 5 }} />
 					</LayersControl.Overlay>
 				)}
 
@@ -87,6 +126,14 @@ export function DetailMap({ points, sport, sessions, hoveredIndex }: Props) {
 
 			<Marker position={coords[0]!} icon={startIcon} />
 			<Marker position={coords[coords.length - 1]!} icon={endIcon} />
+
+			{/* Highlighted range segment (TODO #10) */}
+			{highlightCoords && (
+				<Polyline
+					positions={highlightCoords}
+					pathOptions={{ color: "#f97316", weight: 6, opacity: 0.9 }}
+				/>
+			)}
 
 			{hoveredIndex != null && points[hoveredIndex]?.latitude != null && (
 				<CircleMarker

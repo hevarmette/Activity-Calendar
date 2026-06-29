@@ -16,6 +16,19 @@ interface Props {
 	points: RecordPoint[];
 }
 
+/**
+ * Renders numbered lap markers on the map at each lap boundary.
+ *
+ * From the original Streamlit plotting.py:
+ * "For some reason activities with latest watch that are pre-defined workout has
+ * every record marked as the last lap which means there are no laps to mark except
+ * for the last one aka the end marker. IDK why and how to figure out the rest so
+ * I want to plot markers with only one unique lap number."
+ *
+ * If there's only 1 unique lap number in the data, we skip markers entirely.
+ * The first lap marker is at the start of lap 2 (= end of lap 1); the start
+ * of the activity is covered by the green start marker.
+ */
 export function LapMarkers({ points }: Props) {
 	if (points.length === 0) return null;
 

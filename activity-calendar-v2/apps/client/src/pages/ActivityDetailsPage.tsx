@@ -1,7 +1,7 @@
 import { METERS_PER_MILE, Sport, convertSecondsToHms, formatPace, parseHmsToSeconds } from "@activity-calendar/shared";
 import type { ActivityUpdatePayload } from "@activity-calendar/shared";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { useSaveActivity, useSaveLap } from "../api/mutations.js";
 import { useActivity, useLaps, useRecords, useSessions } from "../api/queries.js";
@@ -44,6 +44,7 @@ export function ActivityDetailsPage() {
 	const [lapEdits, setLapEdits] = useState<LapEdit[]>([]);
 	const [sessionIdx, setSessionIdx] = useState(0);
 	const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+	const [selectedRange, setSelectedRange] = useState<[number, number] | null>(null);
 	const [lastSql, setLastSql] = useState<string | null>(null);
 	const [distanceInput, setDistanceInput] = useState("");
 	const [durationInput, setDurationInput] = useState("");
@@ -69,21 +70,39 @@ export function ActivityDetailsPage() {
 
 	const isDirty = Object.keys(activityEdits).length > 0 || lapEdits.length > 0;
 
+	// Toast state for save error feedback (TODO #4)
+	const [saveError, setSaveError] = useState<string | null>(null);
+
+	// Auto-lap distance state lifted for sharing between AutoLapTable and DetailMap (TODO #12)
+	const [autoLapDist, setAutoLapDist] = useState<number | null>(null);
+
 	async function handleSave() {
-		const sqls: string[] = [];
-		if (Object.keys(activityEdits).length > 0) {
-			const result = await saveActivity.mutateAsync(activityEdits as ActivityUpdatePayload);
-			if (result?.sql) sqls.push(result.sql);
+		setSaveError(null);
+		try {
+			const sqls: string[] = [];
+			if (Object.keys(activityEdits).length > 0) {
+				const result = await saveActivity.mutateAsync(activityEdits as ActivityUpdatePayload);
+				if (result?.sql) sqls.push(result.sql);
+			}
+			for (const edit of lapEdits) {
+				await saveLap.mutateAsync({ lapId: edit.lapId, [edit.field]: edit.value } as Parameters<
+					typeof saveLap.mutateAsync
+				>[0]);
+			}
+			setActivityEdits({});
+			setLapEdits([]);
+			setLastSql(sqls.length > 0 ? sqls.join("\n") : null);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "An unknown error occurred while saving.";
+			setSaveError(message);
+			// Auto-dismiss after 5 seconds
+			setTimeout(() => setSaveError(null), 5000);
 		}
-		for (const edit of lapEdits) {
-			await saveLap.mutateAsync({ lapId: edit.lapId, [edit.field]: edit.value } as Parameters<
-				typeof saveLap.mutateAsync
-			>[0]);
-		}
-		setActivityEdits({});
-		setLapEdits([]);
-		setLastSql(sqls.length > 0 ? sqls.join("\n") : null);
 	}
+
+	// Ref to keep handleSave stable for the keyboard shortcut effect (TODO #3)
+	const handleSaveRef = useRef(handleSave);
+	handleSaveRef.current = handleSave;
 
 	useEffect(() => {
 		function onKeyDown(e: KeyboardEvent) {
@@ -92,12 +111,12 @@ export function ActivityDetailsPage() {
 			if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
 			if (isDirty) {
 				e.preventDefault();
-				handleSave();
+				handleSaveRef.current();
 			}
 		}
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
-	});
+	}, [isDirty]);
 
 	// Multisport session scoping
 	const isMultisport = (sessions?.length ?? 0) > 1;
@@ -171,6 +190,7 @@ export function ActivityDetailsPage() {
 						type="button"
 						onClick={goPrev}
 						disabled={!prev}
+						aria-label="Previous activity"
 						className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 					>
 						&lt;
@@ -179,6 +199,7 @@ export function ActivityDetailsPage() {
 						type="button"
 						onClick={goNext}
 						disabled={!next}
+						aria-label="Next activity"
 						className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
 					>
 						&gt;
@@ -187,6 +208,9 @@ export function ActivityDetailsPage() {
 			</div>
 
 			{/* 2. Date — small italic */}
+			{/* NOTE from original Streamlit code (pages/2_Activity_Details.py):
+			    "It looks like the old watch stored local_timestamp at the end of the activity
+			     but new watch is beginning of activity. Activities from form are from the start." */}
 			<p className="text-xs italic text-gray-500">
 				{localDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} @{" "}
 				{localDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
@@ -261,6 +285,8 @@ export function ActivityDetailsPage() {
 							sport={sessionSport}
 							sessions={isMultisport ? sessions : undefined}
 							hoveredIndex={hoveredIndex}
+							autoLapDist={autoLapDist}
+							selectedRange={selectedRange}
 						/>
 					) : (
 						<div className="flex items-center justify-center h-full min-h-[500px] bg-gray-900 border border-gray-800 rounded-xl text-gray-500 text-sm">
@@ -281,11 +307,14 @@ export function ActivityDetailsPage() {
 
 			{/* 5. Multisport session tabs */}
 			{isMultisport && sessions && (
-				<div className="flex gap-1 border-b border-gray-800">
+				<div className="flex gap-1 border-b border-gray-800" role="tablist" aria-label="Multisport sessions">
 					{sessions.map((s, i) => (
 						<button
 							type="button"
 							key={s.sessionId}
+							role="tab"
+							aria-selected={sessionIdx === i}
+							aria-label={`${s.sport} session ${i + 1}`}
 							onClick={() => setSessionIdx(i)}
 							className={`capitalize px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${sessionIdx === i ? "text-orange-400 border-orange-400" : "text-gray-500 hover:text-gray-300 border-transparent"}`}
 						>
@@ -297,15 +326,18 @@ export function ActivityDetailsPage() {
 
 			{/* 6. Performance Charts (inline, not in tab) */}
 			{sessionPoints.length > 0 && (
-				<PerformanceCharts points={sessionPoints} sport={sessionSport} onHover={setHoveredIndex} />
+				<PerformanceCharts points={sessionPoints} sport={sessionSport} onHover={setHoveredIndex} onRangeSelect={setSelectedRange} />
 			)}
 
 			{/* 7. Three tabs: Laps / Activity Details / Auto Laps */}
-			<div className="flex border-b border-gray-800">
+			<div className="flex border-b border-gray-800" role="tablist" aria-label="Activity data tabs">
 				{(["laps", "details", "auto-laps"] as Tab[]).map((t) => (
 					<button
 						type="button"
 						key={t}
+						role="tab"
+						aria-selected={tab === t}
+						aria-label={t === "laps" ? "Laps" : t === "details" ? "Activity Details" : "Auto Laps"}
 						onClick={() => setTab(t)}
 						className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t ? "text-orange-400 border-orange-400" : "text-gray-500 hover:text-gray-300 border-transparent"}`}
 					>
@@ -324,27 +356,62 @@ export function ActivityDetailsPage() {
 						<p className="text-sm text-gray-500">No lap data available.</p>
 					))}
 				{tab === "details" && (
-					<ActivityStatsGrid
-						distance={editedDistance}
-						duration={editedDuration}
-						sport={sessionSport}
-						points={sessionPoints}
-						laps={sessionLaps}
-						avgPower={activity.avgPower}
-					/>
+					<>
+						<ActivityStatsGrid
+							distance={editedDistance}
+							duration={editedDuration}
+							sport={sessionSport}
+							points={sessionPoints}
+							laps={sessionLaps}
+							avgPower={activity.avgPower}
+						/>
+						{/* Show elapsed time from session data (TODO #11) */}
+						{sessions && sessions.length > 0 && (() => {
+							const session = activeSession ?? sessions[0];
+							const elapsed = session?.totalElapsedTime;
+							if (elapsed == null || elapsed <= 0) return null;
+							return (
+								<div className="mt-4 rounded-xl bg-gray-900 border border-gray-800 p-4 inline-block">
+									<p className="text-xs font-medium uppercase tracking-wide text-gray-500">Elapsed Time</p>
+									<p className="mt-1 text-lg font-semibold text-gray-100 tabular-nums">
+										{convertSecondsToHms(Math.round(elapsed))}
+									</p>
+								</div>
+							);
+						})()}
+					</>
 				)}
-				{tab === "auto-laps" && <AutoLapTable activityId={id} sport={sessionSport} />}
+				{tab === "auto-laps" && (
+					<AutoLapTable activityId={id} sport={sessionSport} onDistanceChange={setAutoLapDist} />
+				)}
 			</div>
 
 			{/* 8. Feel + Effort row */}
 			<FeelEffortRow feel={activity.feel} effort={activity.effort} onChange={handleChange} />
 
 			{/* 9. Save button */}
+			{saveError && (
+				<div
+					role="alert"
+					className="rounded-lg bg-red-900/50 border border-red-700 px-4 py-3 text-sm text-red-200 flex items-center justify-between"
+				>
+					<span>Save failed: {saveError}</span>
+					<button
+						type="button"
+						onClick={() => setSaveError(null)}
+						className="text-red-300 hover:text-red-100 ml-4"
+						aria-label="Dismiss error"
+					>
+						✕
+					</button>
+				</div>
+			)}
 			<button
 				type="button"
 				data-testid="save-button"
 				onClick={handleSave}
 				disabled={!isDirty || saveActivity.isPending}
+				aria-label="Save changes"
 				className={`w-full rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${isDirty ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-emerald-600/30 text-emerald-200/50 cursor-not-allowed"}`}
 			>
 				{saveActivity.isPending ? "Saving…" : "Save Changes"}

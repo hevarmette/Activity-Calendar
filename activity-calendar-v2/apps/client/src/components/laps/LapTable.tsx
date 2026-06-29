@@ -53,6 +53,19 @@ function timeLabel(meanSecs: number): string {
 	return m > 0 ? `${m}:${String(s).padStart(2, "0")}` : `0:${String(s).padStart(2, "0")}`;
 }
 
+/**
+ * Groups active laps by similar distance or time and returns per-set stats.
+ *
+ * From the original Streamlit lap_processing.py (compute_interval_summary):
+ * - Only sets with >= 2 reps are included. Results are sorted by workout order.
+ * - Clustering uses a scaling tolerance that starts at 10% for 100m intervals
+ *   and shrinks proportionally with distance.
+ * - Deviation trend: each rep's deviation from the median is computed, then
+ *   last deviation minus first deviation (by lap order) shows positive/negative split drift.
+ * - The default grouping mode (distance vs time) is auto-detected by comparing
+ *   the coefficient of variation (CV) of distances vs times — whichever is more
+ *   consistent (lower CV) becomes the grouping axis.
+ */
 function computeIntervalSummary(laps: Lap[], sport: string, groupBy: "distance" | "time"): IntervalSet[] {
 	const active = laps.filter((l) => l.intensity === Intensity.Active && (l.totalDistance ?? 0) > 0 && (l.totalTimerTime ?? 0) > 0);
 	if (active.length < 2) return [];

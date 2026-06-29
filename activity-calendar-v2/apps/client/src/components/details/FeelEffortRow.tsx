@@ -38,7 +38,7 @@ export function FeelEffortRow({ feel, effort, onChange }: FeelEffortProps) {
 			{/* Feel */}
 			<div>
 				<div className="text-xs font-medium uppercase tracking-wide text-gray-500 block mb-2">How did you feel?</div>
-				<div className="flex gap-2">
+				<div className="grid grid-cols-5 gap-2">
 					{FEEL_OPTIONS.map(({ value, label }) => (
 						<button
 							type="button"
@@ -46,6 +46,8 @@ export function FeelEffortRow({ feel, effort, onChange }: FeelEffortProps) {
 							onClick={() => handleFeel(value)}
 							className={`rounded-lg px-3 py-2 text-xs capitalize flex flex-col items-center gap-1 transition-colors ${localFeel === value ? "bg-orange-500/20 border border-orange-500 ring-1 ring-orange-500/50" : "bg-gray-800 border border-gray-700 hover:border-gray-600"}`}
 							title={label}
+							aria-label={`Feel: ${label}`}
+							aria-pressed={localFeel === value}
 						>
 							<img src={`/assets/${label}.svg`} alt={label} className="w-8 h-8" />
 							<span className="text-gray-300">{label}</span>
