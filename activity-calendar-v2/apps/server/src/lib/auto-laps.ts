@@ -151,7 +151,7 @@ export function computeAutoLaps(records: RecordPoint[], events: TimerEvent[], sp
 			lap: i + 1,
 			distanceMi: Math.round(distMi * 100) / 100,
 			cumulativeDistanceMi: Math.round(cumulativeDistanceMi * 100) / 100,
-			timeSeconds: Math.round(timeSeconds * 10) / 10,
+			timeSeconds: Math.round(timeSeconds * 100) / 100,
 			paceMinPerMile: sport === "running" ? Math.round(paceMinPerMile * 100) / 100 : null,
 			speedMph: sport === "cycling" ? Math.round(speedMph * 100) / 100 : null,
 			totalAscentFt: Math.round(ascentFt * 10) / 10,
@@ -160,7 +160,7 @@ export function computeAutoLaps(records: RecordPoint[], events: TimerEvent[], sp
 			maxHr: hrMax || null,
 			avgCadence: cadCount > 0 ? Math.round((cadSum / cadCount) * (sport === "cycling" ? 1 : 2)) : null,
 			maxCadence: cadMax ? Math.round(cadMax * (sport === "cycling" ? 1 : 2)) : null,
-			cumulativeTimeSeconds: Math.round(interpTimes[i + 1]! * 10) / 10,
+			cumulativeTimeSeconds: Math.round(interpTimes[i + 1]! * 100) / 100,
 		});
 	}
 
