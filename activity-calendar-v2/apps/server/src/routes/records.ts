@@ -202,10 +202,14 @@ recordsRoutes.get("/:activityId", async (c) => {
 		`,
 	]);
 
-	const [elevations, elapsedTimes] = await Promise.all([
-		fetchElevations(activityId, rows as any[]),
-		Promise.resolve(computeElapsedTimes(rows as any[], events as any[])),
-	]);
+	// DISABLED: Elevation API calls are too slow and can cause the entire
+	// records endpoint to time out, preventing the map from loading.
+	// Using raw altitude from the FIT file instead until a better solution is found.
+	// const elevations = await fetchElevations(activityId, rows as any[]);
+	const elevations = (rows as any[]).map((r) =>
+		r.altitude != null ? r.altitude * METERS_TO_FEET : null
+	);
+	const elapsedTimes = computeElapsedTimes(rows as any[], events as any[]);
 
 	const result = (rows as any[]).map((r, i) => ({
 		...r,
