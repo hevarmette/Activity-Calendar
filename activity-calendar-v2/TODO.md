@@ -82,3 +82,6 @@
   - [x] **auto laps should have precision to the hundreths place** not just the tenths place. on activity details page
   - [x] **show elapsed time for the acitivty details page**
   - [x] **re render the auto lap markers on the map when the auto lap distance changes**
+  - [] show swim activity dialog in meters and pace is time/100m
+  - [] the search page is not working at all, null pointer error
+  - [] the report page sport selection widget is a bad widget
