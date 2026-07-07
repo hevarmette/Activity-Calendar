@@ -287,6 +287,7 @@ export function ActivityDetailsPage() {
 							hoveredIndex={hoveredIndex}
 							autoLapDist={autoLapDist}
 							selectedRange={selectedRange}
+							lapCount={sessionLaps.length}
 						/>
 					) : (
 						<div className="flex items-center justify-center h-full min-h-[500px] bg-gray-900 border border-gray-800 rounded-xl text-gray-500 text-sm">
@@ -326,7 +327,7 @@ export function ActivityDetailsPage() {
 
 			{/* 6. Performance Charts (inline, not in tab) */}
 			{sessionPoints.length > 0 && (
-				<PerformanceCharts points={sessionPoints} sport={sessionSport} onHover={setHoveredIndex} onRangeSelect={setSelectedRange} />
+				<PerformanceCharts points={sessionPoints} sport={sessionSport} category={category} onHover={setHoveredIndex} onRangeSelect={setSelectedRange} />
 			)}
 
 			{/* 7. Three tabs: Laps / Activity Details / Auto Laps */}

@@ -3,6 +3,7 @@ import {
 	METERS_PER_MILE,
 	Sport,
 	formatPace,
+	formatPaceSpeed,
 	convertSecondsToHms,
 	FEEL_MAP,
 	EFFORT_LABELS,
@@ -31,6 +32,7 @@ export function ActivityDialog({ activityId, title, sport, numSessions, open, on
 	const miles = distance / METERS_PER_MILE;
 	const durationStr = convertSecondsToHms(duration) ?? "—";
 	const isMultisport = numSessions > 1 || sport === Sport.Multisport;
+	const isSwimming = sport === Sport.Swimming;
 
 	let thirdMetric: { label: string; value: string };
 	if (isMultisport || sport === Sport.Cycling) {
@@ -38,6 +40,11 @@ export function ActivityDialog({ activityId, title, sport, numSessions, open, on
 		thirdMetric = {
 			label: sport === Sport.Cycling ? "Speed" : "Avg Speed",
 			value: mph > 0 ? `${mph.toFixed(1)} mph` : "—",
+		};
+	} else if (isSwimming) {
+		thirdMetric = {
+			label: "Pace",
+			value: distance > 0 && duration > 0 ? formatPaceSpeed(sport, distance, duration) : "—",
 		};
 	} else {
 		const pace = miles > 0 && duration > 0 ? duration / 60 / miles : 0;
@@ -65,7 +72,7 @@ export function ActivityDialog({ activityId, title, sport, numSessions, open, on
 				<>
 					{/* Metrics row */}
 					<div style={{ display: "flex", flexDirection: "row", gap: "12px", width: "100%", marginBottom: "20px" }}>
-						<MetricCard label="Distance" value={`${miles.toFixed(2)} mi`} />
+						<MetricCard label="Distance" value={isSwimming ? `${Math.round(distance)} m` : `${miles.toFixed(2)} mi`} />
 						<MetricCard label="Duration" value={durationStr} />
 						<MetricCard label={thirdMetric.label} value={thirdMetric.value} />
 					</div>
@@ -76,8 +83,11 @@ export function ActivityDialog({ activityId, title, sport, numSessions, open, on
 							<p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Legs</p>
 							<ul className="space-y-1">
 								{sessions.map((s) => {
-									const legMiles = (s.totalDistance ?? 0) / METERS_PER_MILE;
+									const legDist = s.totalDistance ?? 0;
+									const legMiles = legDist / METERS_PER_MILE;
 									const legDur = convertSecondsToHms(s.totalTimerTime ?? 0) ?? "—";
+									const isSwimLeg = s.sport === Sport.Swimming;
+									const distStr = isSwimLeg ? `${Math.round(legDist)} m` : `${legMiles.toFixed(2)} mi`;
 									const sportName =
 										(s.sport ?? "unknown").charAt(0).toUpperCase() +
 										(s.sport ?? "").slice(1);
@@ -85,7 +95,7 @@ export function ActivityDialog({ activityId, title, sport, numSessions, open, on
 										<li key={s.sessionId} className="text-sm text-gray-300">
 											<span className="font-medium text-gray-100">{sportName}</span>
 											{" — "}
-											{legMiles.toFixed(2)} mi · {legDur}
+											{distStr} · {legDur}
 										</li>
 									);
 								})}

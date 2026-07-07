@@ -46,9 +46,11 @@ interface Props {
 	autoLapDist?: number | null;
 	/** Optional selected range [startIndex, endIndex] to highlight on the map (TODO #10). */
 	selectedRange?: [number, number] | null;
+	/** Number of laps in the session. When > 1, auto-generated LapMarkers are hidden. */
+	lapCount?: number;
 }
 
-export function DetailMap({ points, sport, sessions, hoveredIndex, autoLapDist: autoLapDistProp, selectedRange }: Props) {
+export function DetailMap({ points, sport, sessions, hoveredIndex, autoLapDist: autoLapDistProp, selectedRange, lapCount }: Props) {
 	const coords = useMemo(
 		() =>
 			points
@@ -121,7 +123,7 @@ export function DetailMap({ points, sport, sessions, hoveredIndex, autoLapDist: 
 				</LayersControl.Overlay>
 			</LayersControl>
 
-			<LapMarkers points={points} />
+			{(lapCount == null || lapCount <= 1) && <LapMarkers points={points} />}
 			<MileMarkers points={points} interval={autoLapDist} />
 
 			<Marker position={coords[0]!} icon={startIcon} />

@@ -182,16 +182,30 @@ export function ActivityReportPage() {
 				<div className="flex flex-wrap gap-4 items-end">
 					<div>
 						<label className="text-xs font-medium text-gray-400 block mb-1.5">Sports</label>
-						<select
-							multiple
-							value={selectedSports}
-							onChange={(e) => updateParam("sports", Array.from(e.target.selectedOptions, (o) => o.value).join(","))}
-							className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors min-w-[140px]"
-						>
-							{availableSports.map((s) => (
-								<option key={s} value={s}>{s}</option>
-							))}
-						</select>
+						<div className="flex flex-wrap gap-1.5">
+							{availableSports.map((s) => {
+								const isSelected = selectedSports.includes(s);
+								return (
+									<button
+										key={s}
+										type="button"
+										onClick={() => {
+											const next = isSelected
+												? selectedSports.filter((sp) => sp !== s)
+												: [...selectedSports, s];
+											updateParam("sports", next.join(","));
+										}}
+										className={`capitalize px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+											isSelected
+												? "bg-orange-500/20 text-orange-300 border-orange-500/50"
+												: "bg-gray-800 text-gray-400 border-gray-700 hover:text-gray-200 hover:border-gray-600"
+										}`}
+									>
+										{s}
+									</button>
+								);
+							})}
+						</div>
 					</div>
 					<div>
 						<label className="text-xs font-medium text-gray-400 block mb-1.5">Group By</label>

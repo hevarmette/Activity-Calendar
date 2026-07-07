@@ -17,6 +17,8 @@ type XMode = "distance" | "time";
 interface Props {
 	points: RecordPoint[];
 	sport: string;
+	/** Activity category used for pace y-axis bounding logic. */
+	category?: string;
 	onHover?: (index: number | null) => void;
 	/** Callback when user selects a range on any chart. Returns [startPointIndex, endPointIndex] or null to clear. */
 	onRangeSelect?: (range: [number, number] | null) => void;
@@ -80,6 +82,32 @@ function formatTime(minutes: number): string {
 	return `${m}:${s}`;
 }
 
+/**
+ * Compute bounded pace y-axis domain and tick marks matching original Streamlit logic.
+ * Returns null if insufficient pace data is available.
+ */
+function computePaceDomain(data: ChartPoint[], category: string): { domain: [number, number]; ticks: number[] } | null {
+	const paceValues = data.map((d) => d.pace).filter((p): p is number => p != null && p > 0 && p < 30);
+	if (paceValues.length === 0) return null;
+	const sorted = [...paceValues].sort((a, b) => a - b);
+	const fastestPace = sorted[0]!;
+	let pPace: number;
+	if (category === "training") {
+		const idx = Math.floor(sorted.length * 0.85);
+		pPace = Math.min(sorted[idx] ?? sorted[sorted.length - 1]!, 12);
+	} else {
+		const idx = Math.floor(sorted.length * 0.95);
+		pPace = (sorted[idx] ?? sorted[sorted.length - 1]!) + 3;
+	}
+	const topBound = fastestPace >= 5 ? 5 : fastestPace;
+	const bottomBound = pPace > 11 ? 11 : pPace;
+	const minTick = Math.floor(topBound);
+	const maxTick = Math.ceil(bottomBound);
+	const ticks: number[] = [];
+	for (let i = minTick; i <= maxTick; i++) ticks.push(i);
+	return { domain: [topBound, bottomBound], ticks };
+}
+
 function ChartTooltip({ active, payload, metric, isCycling }: { active?: boolean; payload?: any[]; metric: string; isCycling: boolean }) {
 	if (!active || !payload?.[0]) return null;
 	const d = payload[0].payload as ChartPoint;
@@ -117,6 +145,8 @@ function Chart({
 	selectionRange,
 	onSelectionStart,
 	onSelectionEnd,
+	yDomain,
+	yTicks,
 }: {
 	data: ChartPoint[];
 	dataKey: string;
@@ -133,6 +163,8 @@ function Chart({
 	selectionRange?: [number, number] | null;
 	onSelectionStart?: (x: number) => void;
 	onSelectionEnd?: (x: number) => void;
+	yDomain?: [number, number];
+	yTicks?: number[];
 }) {
 	if (data.every((d) => (d as unknown as Record<string, unknown>)[dataKey] == null)) return null;
 
@@ -179,6 +211,9 @@ function Chart({
 					<YAxis
 						reversed={reversed}
 						allowDecimals={!integerAxis}
+						domain={yDomain}
+						ticks={yTicks}
+						allowDataOverflow={!!yDomain}
 						tick={{ fontSize: 11, fill: "#6b7280" }}
 						tickFormatter={yFormatter ?? (integerAxis ? (v) => Math.round(v).toString() : undefined)}
 					/>
@@ -224,7 +259,7 @@ function Chart({
  * All charts zoom to that range and the map highlights the corresponding segment.
  * Click without dragging to clear the selection.
  */
-export function PerformanceCharts({ points, sport, onHover, onRangeSelect }: Props) {
+export function PerformanceCharts({ points, sport, category, onHover, onRangeSelect }: Props) {
 	const [xMode, setXMode] = useState<XMode>("distance");
 	const [selectionRange, setSelectionRange] = useState<[number, number] | null>(null);
 	const selectionStartRef = useRef<number | null>(null);
@@ -232,6 +267,11 @@ export function PerformanceCharts({ points, sport, onHover, onRangeSelect }: Pro
 	const data = useMemo(() => buildChartData(points, xMode, sport), [points, xMode, sport]);
 	const xLabel = xMode === "distance" ? "Distance (mi)" : "Time (min)";
 	const isCycling = sport === Sport.Cycling;
+
+	const paceDomain = useMemo(() => {
+		if (isCycling || !category) return null;
+		return computePaceDomain(data, category);
+	}, [data, category, isCycling]);
 
 	const handleSelectionStart = useCallback((x: number) => {
 		selectionStartRef.current = x;
@@ -314,6 +354,8 @@ export function PerformanceCharts({ points, sport, onHover, onRangeSelect }: Pro
 					selectionRange={selectionRange}
 					onSelectionStart={handleSelectionStart}
 					onSelectionEnd={handleSelectionEnd}
+					yDomain={paceDomain?.domain}
+					yTicks={paceDomain?.ticks}
 				/>
 			)}
 

@@ -23,6 +23,7 @@ interface Activity {
 function aggregateActivities(rows: SearchRow[]): Activity[] {
 	const map = new Map<number, Activity>();
 	for (const row of rows) {
+		if (row.activityId == null) continue;
 		const existing = map.get(row.activityId);
 		if (existing) {
 			existing.sport += `,${row.sport}`;
@@ -36,7 +37,7 @@ function aggregateActivities(rows: SearchRow[]): Activity[] {
 				activityName: row.activityName ?? "Untitled",
 				category: row.category ?? "",
 				numSessions: row.numSessions,
-				sport: row.sport,
+				sport: row.sport ?? "other",
 				subSport: row.subSport ?? "",
 				totalDistance: row.totalDistance ?? 0,
 				totalTimerTime: row.totalTimerTime ?? 0,
@@ -72,12 +73,12 @@ export function ActivitySearchPage() {
 
 	const availableSports = useMemo(() => {
 		if (!data) return [];
-		return [...new Set(data.map((r) => r.sport))].sort();
+		return [...new Set(data.map((r) => r.sport).filter(Boolean))].sort();
 	}, [data]);
 
 	const availableCategories = useMemo(() => {
 		if (!data) return [];
-		return [...new Set(data.map((r) => r.category?.trim()).filter(Boolean) as string[])].sort();
+		return [...new Set(data.map((r) => r.category?.trim()).filter((c): c is string => !!c))].sort();
 	}, [data]);
 
 	const activities = useMemo(() => {

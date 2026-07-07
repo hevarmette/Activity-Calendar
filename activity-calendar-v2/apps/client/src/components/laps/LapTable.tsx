@@ -28,8 +28,17 @@ interface IntervalSet {
 	avgDuration: string | null;
 	avgPaceLabel: string;
 	fastestSplit: string | null;
+	fastestLap: number;
 	avgHr: number | null;
 	firstLap: number;
+	avgDistLabel: string;
+	meanDist: number;
+	farthestSplit: string;
+	farthestLap: number;
+	timeDevTrend: string | null;
+	distDevTrend: string | null;
+	timeDevTrendValue: number | null;
+	distDevTrendValue: number | null;
 }
 
 const INTENSITIES = Object.values(Intensity);
@@ -51,6 +60,30 @@ function timeLabel(meanSecs: number): string {
 	const m = Math.floor(total / 60);
 	const s = total % 60;
 	return m > 0 ? `${m}:${String(s).padStart(2, "0")}` : `0:${String(s).padStart(2, "0")}`;
+}
+
+/**
+ * Compute the median of a numeric array.
+ */
+function median(arr: number[]): number {
+	const sorted = [...arr].sort((a, b) => a - b);
+	const mid = Math.floor(sorted.length / 2);
+	return sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!;
+}
+
+/**
+ * Format a deviation trend value as a signed string.
+ */
+function formatDevTrend(value: number, mode: "time" | "dist"): string {
+	const sign = value < 0 ? "-" : "";
+	const absVal = Math.abs(value);
+	if (mode === "time") {
+		const totalSec = Math.round(absVal);
+		const m = Math.floor(totalSec / 60);
+		const s = totalSec % 60;
+		return `${sign}${m}:${String(s).padStart(2, "0")}`;
+	}
+	return `${sign}${absVal.toFixed(2)}`;
 }
 
 /**
@@ -104,11 +137,18 @@ function computeIntervalSummary(laps: Lap[], sport: string, groupBy: "distance" 
 		const label = groupBy === "time" ? timeLabel(avgSecs) : distanceLabel(meanDist);
 
 		const fastestSecs = Math.min(...group.map((g) => g.secs));
+		const fastestItem = group.find((g) => g.secs === fastestSecs)!;
+		const fastestLap = fastestItem.lap.number;
+
+		const farthestDist = Math.max(...group.map((g) => g.dist));
+		const farthestItem = group.find((g) => g.dist === farthestDist)!;
+		const farthestSplit = `${farthestDist.toFixed(2)} mi`;
+		const farthestLap = farthestItem.lap.number;
 
 		let avgPaceLabel: string;
 		if (isCycling) {
 			const avgSpeed = meanDist / (avgSecs / 3600);
-			avgPaceLabel = `${avgSpeed.toFixed(1)} mph`;
+			avgPaceLabel = `${avgSpeed.toFixed(2)} mph`;
 		} else {
 			const pace = avgSecs / 60 / meanDist;
 			avgPaceLabel = `${formatPace(pace) ?? "—"} /mi`;
@@ -118,14 +158,47 @@ function computeIntervalSummary(laps: Lap[], sport: string, groupBy: "distance" 
 		const avgHr = hrs.length > 0 ? Math.round(hrs.reduce((a, b) => a + b, 0) / hrs.length) : null;
 		const firstLap = Math.min(...group.map((g) => g.lap.number));
 
+		// Deviation trends: sort by lap order, compute deviation from median
+		const byOrder = [...group].sort((a, b) => a.lap.number - b.lap.number);
+		let timeDevTrend: string | null = null;
+		let timeDevTrendValue: number | null = null;
+		if (byOrder.length >= 2) {
+			const times = byOrder.map((g) => g.secs);
+			const medTime = median(times);
+			const deviations = times.map((t) => t - medTime);
+			const trend = deviations[deviations.length - 1]! - deviations[0]!;
+			timeDevTrend = formatDevTrend(trend, "time");
+			timeDevTrendValue = trend;
+		}
+
+		let distDevTrend: string | null = null;
+		let distDevTrendValue: number | null = null;
+		if (byOrder.length >= 2) {
+			const dists = byOrder.map((g) => g.dist);
+			const medDist = median(dists);
+			const deviations = dists.map((d) => d - medDist);
+			const trend = deviations[deviations.length - 1]! - deviations[0]!;
+			distDevTrend = formatDevTrend(trend, "dist");
+			distDevTrendValue = trend;
+		}
+
 		results.push({
 			count: group.length,
 			label,
 			avgDuration: convertSecondsToHms(avgSecs),
 			avgPaceLabel,
 			fastestSplit: convertSecondsToHms(fastestSecs),
+			fastestLap,
 			avgHr,
 			firstLap,
+			avgDistLabel: meanDist.toFixed(2),
+			meanDist,
+			farthestSplit,
+			farthestLap,
+			timeDevTrend,
+			distDevTrend,
+			timeDevTrendValue,
+			distDevTrendValue,
 		});
 	}
 
@@ -292,17 +365,46 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 						<div key={idx} className="mb-4 bg-gray-900 border border-gray-800 rounded-xl p-5">
 							<p className="text-lg font-bold text-gray-50 mb-2">{set.count}×{set.label}</p>
 							<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-								<div>
-									<p className="text-xs text-gray-500 uppercase tracking-wide">Avg Time</p>
-									<p className="text-gray-200 font-medium tabular-nums">{set.avgDuration ?? "—"}</p>
-								</div>
+								{groupBy === "distance" ? (
+									<>
+										<div>
+											<p className="text-xs text-gray-500 uppercase tracking-wide">Avg Time</p>
+											<p className="text-gray-200 font-medium tabular-nums">
+												{set.avgDuration ?? "—"}
+												{set.timeDevTrend != null && set.timeDevTrendValue != null && (
+													<span className={`ml-1.5 text-xs ${set.timeDevTrendValue < 0 ? "text-green-400" : set.timeDevTrendValue > 0 ? "text-red-400" : "text-gray-500"}`}>
+														{set.timeDevTrend}
+													</span>
+												)}
+											</p>
+										</div>
+										<div>
+											<p className="text-xs text-gray-500 uppercase tracking-wide">Fastest Split (Lap {set.fastestLap})</p>
+											<p className="text-gray-200 font-medium tabular-nums">{set.fastestSplit ?? "—"}</p>
+										</div>
+									</>
+								) : (
+									<>
+										<div>
+											<p className="text-xs text-gray-500 uppercase tracking-wide">Avg Distance</p>
+											<p className="text-gray-200 font-medium tabular-nums">
+												{set.avgDistLabel} mi
+												{set.distDevTrend != null && set.distDevTrendValue != null && (
+													<span className={`ml-1.5 text-xs ${set.distDevTrendValue > 0 ? "text-green-400" : set.distDevTrendValue < 0 ? "text-red-400" : "text-gray-500"}`}>
+														{set.distDevTrend}
+													</span>
+												)}
+											</p>
+										</div>
+										<div>
+											<p className="text-xs text-gray-500 uppercase tracking-wide">Farthest (Lap {set.farthestLap})</p>
+											<p className="text-gray-200 font-medium tabular-nums">{set.farthestSplit}</p>
+										</div>
+									</>
+								)}
 								<div>
 									<p className="text-xs text-gray-500 uppercase tracking-wide">{isCycling ? "Avg Speed" : "Avg Pace"}</p>
 									<p className="text-gray-200 font-medium tabular-nums">{set.avgPaceLabel}</p>
-								</div>
-								<div>
-									<p className="text-xs text-gray-500 uppercase tracking-wide">Fastest Split</p>
-									<p className="text-gray-200 font-medium tabular-nums">{set.fastestSplit ?? "—"}</p>
 								</div>
 								{set.avgHr != null && (
 									<div>
