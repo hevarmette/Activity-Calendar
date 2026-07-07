@@ -139,56 +139,90 @@ export function ActivitySearchPage() {
 	if (isLoading) return <div className="text-center py-10 text-gray-400">Loading search data…</div>;
 
 	const filterPanel = (
-		<div className="space-y-3">
+		<div className="space-y-4">
 			<div>
-				<label className="text-xs font-medium text-gray-400 block mb-1.5">Sport</label>
-				<select
-					multiple
-					value={sports}
-					onChange={(e) => updateParam("sports", Array.from(e.target.selectedOptions, (o) => o.value).join(","))}
-					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
-				>
-					{availableSports.map((s) => <option key={s} value={s}>{s}</option>)}
-				</select>
+				<label className="text-xs font-medium text-gray-400 block mb-2">Sport</label>
+				<div className="flex flex-wrap gap-1.5">
+					{availableSports.map((s) => {
+						const isSelected = sports.includes(s);
+						const sportColor = SPORT_COLORS[s];
+						return (
+							<button
+								key={s}
+								type="button"
+								onClick={() => {
+									const next = isSelected
+										? sports.filter((sp) => sp !== s)
+										: [...sports, s];
+									updateParam("sports", next.join(","));
+								}}
+								className={`capitalize px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
+									isSelected
+										? "text-white shadow-sm"
+										: "bg-gray-800 text-gray-400 border border-gray-700 hover:text-gray-200 hover:border-gray-600"
+								}`}
+								style={isSelected ? { backgroundColor: `${sportColor ?? "#f97316"}cc`, borderColor: sportColor ?? "#f97316", border: `1px solid ${sportColor ?? "#f97316"}80` } : undefined}
+							>
+								{s}
+							</button>
+						);
+					})}
+				</div>
 			</div>
 			<div>
-				<label className="text-xs font-medium text-gray-400 block mb-1.5">Category</label>
-				<select
-					multiple
-					value={categories}
-					onChange={(e) => updateParam("categories", Array.from(e.target.selectedOptions, (o) => o.value).join(","))}
-					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
-				>
-					{availableCategories.map((c) => <option key={c} value={c}>{c}</option>)}
-				</select>
+				<label className="text-xs font-medium text-gray-400 block mb-2">Category</label>
+				<div className="flex flex-wrap gap-1.5">
+					{availableCategories.map((c) => {
+						const isSelected = categories.includes(c);
+						return (
+							<button
+								key={c}
+								type="button"
+								onClick={() => {
+									const next = isSelected
+										? categories.filter((cat) => cat !== c)
+										: [...categories, c];
+									updateParam("categories", next.join(","));
+								}}
+								className={`capitalize px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap border ${
+									isSelected
+										? "bg-orange-500/20 text-orange-300 border-orange-500/50"
+										: "bg-gray-800 text-gray-400 border-gray-700 hover:text-gray-200 hover:border-gray-600"
+								}`}
+							>
+								{c}
+							</button>
+						);
+					})}
+				</div>
 			</div>
 			<div className="grid grid-cols-2 gap-2">
 				<div>
-					<label className="text-xs font-medium text-gray-400 block mb-1.5">From</label>
+					<label className="text-xs font-medium text-gray-400 block mb-2">From</label>
 					<input type="date" value={dateFrom} onChange={(e) => updateParam("from", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors" />
 				</div>
 				<div>
-					<label className="text-xs font-medium text-gray-400 block mb-1.5">To</label>
+					<label className="text-xs font-medium text-gray-400 block mb-2">To</label>
 					<input type="date" value={dateTo} onChange={(e) => updateParam("to", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors" />
 				</div>
 			</div>
 			<div className="grid grid-cols-2 gap-2">
 				<div>
-					<label className="text-xs font-medium text-gray-400 block mb-1.5">Min Dist (mi)</label>
+					<label className="text-xs font-medium text-gray-400 block mb-2">Min Dist (mi)</label>
 					<input type="number" step="0.5" value={minDist || ""} onChange={(e) => updateParam("minDist", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors" />
 				</div>
 				<div>
-					<label className="text-xs font-medium text-gray-400 block mb-1.5">Max Dist (mi)</label>
+					<label className="text-xs font-medium text-gray-400 block mb-2">Max Dist (mi)</label>
 					<input type="number" step="0.5" value={maxDist || ""} onChange={(e) => updateParam("maxDist", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors" />
 				</div>
 			</div>
 			<div className="grid grid-cols-2 gap-2">
 				<div>
-					<label className="text-xs font-medium text-gray-400 block mb-1.5">Min Dur (min)</label>
+					<label className="text-xs font-medium text-gray-400 block mb-2">Min Dur (min)</label>
 					<input type="number" step="5" value={minDur || ""} onChange={(e) => updateParam("minDur", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors" />
 				</div>
 				<div>
-					<label className="text-xs font-medium text-gray-400 block mb-1.5">Max Dur (min)</label>
+					<label className="text-xs font-medium text-gray-400 block mb-2">Max Dur (min)</label>
 					<input type="number" step="5" value={maxDur || ""} onChange={(e) => updateParam("maxDur", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors" />
 				</div>
 			</div>
@@ -202,9 +236,9 @@ export function ActivitySearchPage() {
 				<p className="text-sm text-gray-500 mt-1">Find and filter activities across your history</p>
 			</div>
 
-			<div className={hasFilters ? "grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6" : ""}>
+			<div className={hasFilters ? "grid grid-cols-1 lg:grid-cols-[minmax(280px,auto)_1fr] gap-6" : ""}>
 				{/* Filters */}
-				<div className={hasFilters ? "" : "max-w-md"}>
+				<div className={hasFilters ? "min-w-0" : "max-w-md"}>
 					<div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
 						{filterPanel}
 						<div className="flex gap-2 mt-4">
