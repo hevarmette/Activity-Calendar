@@ -85,3 +85,6 @@
   - [] show swim activity dialog in meters and pace is time/100m
   - [] the search page is not working at all, null pointer error
   - [] the report page sport selection widget is a bad widget
+  - [] pace y axis does not match the streamlit app logic
+  - [] the logic for interval cards does not match streamlit. for example when switching to time based intervals, cards do not switch to avg distance and farthest distance. also the logic doesn't seem like it's there to auto detect distance or time based intervals. ensure this. this should also have the logic to indicate if the intervals of the same rep duration/distance sped up or slowed down and by how much like the st.metric function can do given my custom logic to determine this. ensure premature rounding is done because the avg pace differs slightly than from streamlit. display 2 decimal places on all the metrics
+  - [] only show the auto lap markers if there is 1 or less laps for the activity
