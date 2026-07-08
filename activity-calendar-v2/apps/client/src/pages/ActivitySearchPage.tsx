@@ -33,7 +33,7 @@ function aggregateActivities(rows: SearchRow[]): Activity[] {
 		} else {
 			map.set(row.activityId, {
 				activityId: row.activityId,
-				localTimestamp: row.localTimestamp,
+				localTimestamp: row.localTimestamp ?? "",
 				activityName: row.activityName ?? "Untitled",
 				category: row.category ?? "",
 				numSessions: row.numSessions,
@@ -45,7 +45,7 @@ function aggregateActivities(rows: SearchRow[]): Activity[] {
 			});
 		}
 	}
-	return [...map.values()].sort((a, b) => b.localTimestamp.localeCompare(a.localTimestamp));
+	return [...map.values()].sort((a, b) => (b.localTimestamp ?? "").localeCompare(a.localTimestamp ?? ""));
 }
 
 function canonicalSport(sport: string, numSessions: number): string {
@@ -111,7 +111,7 @@ export function ActivitySearchPage() {
 					const pB = b.totalDistance > 0 ? b.totalTimerTime / b.totalDistance : Infinity;
 					return dir * (pA - pB);
 				}
-				default: return dir * a.localTimestamp.localeCompare(b.localTimestamp);
+				default: return dir * (a.localTimestamp ?? "").localeCompare(b.localTimestamp ?? "");
 			}
 		});
 
