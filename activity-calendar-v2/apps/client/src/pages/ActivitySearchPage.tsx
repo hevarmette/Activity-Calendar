@@ -236,9 +236,9 @@ export function ActivitySearchPage() {
 				<p className="text-sm text-gray-500 mt-1">Find and filter activities across your history</p>
 			</div>
 
-			<div className={hasFilters ? "grid grid-cols-1 lg:grid-cols-[minmax(280px,auto)_1fr] gap-6" : ""}>
+			<div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,auto)_1fr] gap-6">
 				{/* Filters */}
-				<div className={hasFilters ? "min-w-0" : "max-w-md"}>
+				<div className="min-w-0">
 					<div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
 						{filterPanel}
 						<div className="flex gap-2 mt-4">
@@ -257,51 +257,57 @@ export function ActivitySearchPage() {
 				</div>
 
 				{/* Results */}
-				{hasFilters && (
-					<div className="space-y-3">
-						<p className="text-sm text-gray-500">{activities.length} activities found — showing {((currentPage - 1) * RESULTS_PER_PAGE) + 1}–{Math.min(currentPage * RESULTS_PER_PAGE, activities.length)}</p>
+				<div className="space-y-3">
+					{hasFilters ? (
+						<>
+							<p className="text-sm text-gray-500">{activities.length} activities found — showing {((currentPage - 1) * RESULTS_PER_PAGE) + 1}–{Math.min(currentPage * RESULTS_PER_PAGE, activities.length)}</p>
 
-						{pageActivities.map((a) => {
-							const sport = canonicalSport(a.sport, a.numSessions);
-							const miles = a.totalDistance / METERS_PER_MILE;
-							const paceSpeed = formatPaceSpeed(sport, a.totalDistance, a.totalTimerTime);
-							const date = new Date(a.localTimestamp).toLocaleDateString();
-							const sportColor = SPORT_COLORS[sport] ?? "#6b7280";
-							return (
-								<div key={a.activityId} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center gap-4 hover:border-gray-700 transition-colors">
-									<div className="w-1 h-12 rounded-full" style={{ backgroundColor: sportColor }} />
-									<div className="flex-1 min-w-0">
-										<p className="font-medium text-gray-200 truncate">{a.activityName} <span className="text-xs text-gray-500 capitalize">· {sport} · {date}</span></p>
-										<div className="flex gap-4 mt-1 text-sm text-gray-400">
-											<span>{miles.toFixed(2)} mi</span>
-											<span>{convertSecondsToHms(a.totalTimerTime) ?? "—"}</span>
-											<span>{paceSpeed}</span>
+							{pageActivities.map((a) => {
+								const sport = canonicalSport(a.sport, a.numSessions);
+								const miles = a.totalDistance / METERS_PER_MILE;
+								const paceSpeed = formatPaceSpeed(sport, a.totalDistance, a.totalTimerTime);
+								const date = new Date(a.localTimestamp).toLocaleDateString();
+								const sportColor = SPORT_COLORS[sport] ?? "#6b7280";
+								return (
+									<div key={a.activityId} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center gap-4 hover:border-gray-700 transition-colors">
+										<div className="w-1 h-12 rounded-full" style={{ backgroundColor: sportColor }} />
+										<div className="flex-1 min-w-0">
+											<p className="font-medium text-gray-200 truncate">{a.activityName} <span className="text-xs text-gray-500 capitalize">· {sport} · {date}</span></p>
+											<div className="flex gap-4 mt-1 text-sm text-gray-400">
+												<span>{miles.toFixed(2)} mi</span>
+												<span>{convertSecondsToHms(a.totalTimerTime) ?? "—"}</span>
+												<span>{paceSpeed}</span>
+											</div>
 										</div>
+										<Link
+											to={`/activity/${a.activityId}?sport=${sport}`}
+											className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+										>
+											View
+										</Link>
 									</div>
-									<Link
-										to={`/activity/${a.activityId}?sport=${sport}`}
-										className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-									>
-										View
-									</Link>
-								</div>
-							);
-						})}
+								);
+							})}
 
-						{/* Pagination */}
-						{totalPages > 1 && (
-							<div className="flex items-center justify-center gap-4 pt-4">
-								<button onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-									← Prev
-								</button>
-								<span className="text-sm text-gray-500">Page {currentPage} of {totalPages}</span>
-								<button onClick={() => setPage(currentPage + 1)} disabled={currentPage >= totalPages} className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-									Next →
-								</button>
-							</div>
-						)}
-					</div>
-				)}
+							{/* Pagination */}
+							{totalPages > 1 && (
+								<div className="flex items-center justify-center gap-4 pt-4">
+									<button onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+										← Prev
+									</button>
+									<span className="text-sm text-gray-500">Page {currentPage} of {totalPages}</span>
+									<button onClick={() => setPage(currentPage + 1)} disabled={currentPage >= totalPages} className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+										Next →
+									</button>
+								</div>
+							)}
+						</>
+					) : (
+						<div className="flex items-center justify-center py-16 text-gray-500 text-sm">
+							Select filters to search activities
+						</div>
+					)}
+				</div>
 			</div>
 		</div>
 	);

@@ -6,7 +6,7 @@ import { SpeedColorLine } from "./SpeedColorLine.js";
 import { LapMarkers } from "./LapMarkers.js";
 import { MileMarkers } from "./MileMarkers.js";
 import "leaflet/dist/leaflet.css";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const startIcon = L.divIcon({
 	className: "",
@@ -51,6 +51,23 @@ interface Props {
 }
 
 export function DetailMap({ points, sport, sessions, hoveredIndex, autoLapDist: autoLapDistProp, selectedRange, lapCount }: Props) {
+	const containerRef = useRef<HTMLDivElement>(null);
+	const [isFullscreen, setIsFullscreen] = useState(false);
+
+	const toggleFullscreen = useCallback(() => {
+		if (!document.fullscreenElement) {
+			containerRef.current?.requestFullscreen();
+		} else {
+			document.exitFullscreen();
+		}
+	}, []);
+
+	useEffect(() => {
+		const handler = () => setIsFullscreen(!!document.fullscreenElement);
+		document.addEventListener("fullscreenchange", handler);
+		return () => document.removeEventListener("fullscreenchange", handler);
+	}, []);
+
 	const coords = useMemo(
 		() =>
 			points
@@ -80,7 +97,16 @@ export function DetailMap({ points, sport, sessions, hoveredIndex, autoLapDist: 
 	}, [points, selectedRange]);
 
 	return (
-		<MapContainer bounds={bounds} scrollWheelZoom preferCanvas className="h-[500px] w-full rounded-lg">
+		<div ref={containerRef} className="relative h-full w-full">
+			<button
+				type="button"
+				onClick={toggleFullscreen}
+				aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+				className="absolute top-2 left-2 z-[1000] rounded-md bg-white border border-gray-300 shadow-md px-2 py-1.5 text-gray-700 hover:bg-gray-100 transition-colors text-sm leading-none"
+			>
+				{isFullscreen ? "⤓" : "⤢"}
+			</button>
+			<MapContainer bounds={bounds} scrollWheelZoom preferCanvas className={`${isFullscreen ? "h-full" : "h-[500px]"} w-full rounded-lg`}>
 			<LayersControl position="topright">
 				<LayersControl.BaseLayer checked name="OpenStreetMap">
 					<TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
@@ -145,5 +171,6 @@ export function DetailMap({ points, sport, sessions, hoveredIndex, autoLapDist: 
 				/>
 			)}
 		</MapContainer>
+		</div>
 	);
 }

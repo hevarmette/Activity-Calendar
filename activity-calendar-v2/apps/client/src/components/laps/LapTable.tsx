@@ -5,6 +5,7 @@ import {
 	Sport,
 	TRACK_DISTANCES,
 	formatPace,
+	formatPacePrecise,
 	convertSecondsToHms,
 } from "@activity-calendar/shared";
 import type { Lap } from "@activity-calendar/shared";
@@ -151,7 +152,7 @@ function computeIntervalSummary(laps: Lap[], sport: string, groupBy: "distance" 
 			avgPaceLabel = `${avgSpeed.toFixed(2)} mph`;
 		} else {
 			const pace = avgSecs / 60 / meanDist;
-			avgPaceLabel = `${formatPace(pace) ?? "—"} /mi`;
+			avgPaceLabel = `${formatPacePrecise(pace) ?? "—"} /mi`;
 		}
 
 		const hrs = group.map((g) => g.lap.avgHeartRate).filter((h): h is number => h != null);

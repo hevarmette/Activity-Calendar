@@ -38,10 +38,7 @@ function periodKey(date: Date, grouping: Grouping): string {
 			const day = date.getDay(); // 0=Sun
 			const sun = new Date(date);
 			sun.setDate(date.getDate() - day);
-			const startOfYear = new Date(sun.getFullYear(), 0, 1);
-			const dayOfYear = Math.floor((sun.getTime() - startOfYear.getTime()) / 86400000);
-			const weekNum = Math.floor(dayOfYear / 7) + 1;
-			return `${sun.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
+			return `${sun.getFullYear()}-${String(sun.getMonth() + 1).padStart(2, "0")}-${String(sun.getDate()).padStart(2, "0")}`;
 		}
 		case "Monthly":
 			return `${y}-${String(m + 1).padStart(2, "0")}`;
@@ -138,6 +135,8 @@ export function ActivityReportPage() {
 	const metric = (searchParams.get("metric") as ChartMetric) || "Distance (mi)";
 	const sportsParam = searchParams.get("sports");
 	const groupBySport = searchParams.get("groupBySport") !== "true";
+	const dateFrom = searchParams.get("from") ?? "";
+	const dateTo = searchParams.get("to") ?? "";
 
 	const availableSports = useMemo(() => {
 		if (!data) return [];
@@ -149,10 +148,22 @@ export function ActivityReportPage() {
 		return availableSports.includes(Sport.Running) ? [Sport.Running] : availableSports;
 	}, [sportsParam, availableSports]);
 
-	const agg = useMemo(() => {
+	/** Whether only running is selected — controls pace column display */
+	const isRunningOnly = selectedSports.length === 1 && selectedSports[0] === Sport.Running;
+
+	/** Filter data by date range before aggregation */
+	const filteredData = useMemo(() => {
 		if (!data) return [];
-		return aggregate(data, grouping, selectedSports, groupBySport);
-	}, [data, grouping, selectedSports, groupBySport]);
+		let result = data;
+		if (dateFrom) result = result.filter((r) => r.localTimestamp >= dateFrom);
+		if (dateTo) result = result.filter((r) => r.localTimestamp.slice(0, 10) <= dateTo);
+		return result;
+	}, [data, dateFrom, dateTo]);
+
+	const agg = useMemo(() => {
+		if (filteredData.length === 0) return [];
+		return aggregate(filteredData, grouping, selectedSports, groupBySport);
+	}, [filteredData, grouping, selectedSports, groupBySport]);
 
 	const chartData = useMemo(() => buildChartData(agg, metric), [agg, metric]);
 	const chartSports = [...new Set(agg.map((r) => r.sport))];
@@ -164,7 +175,8 @@ export function ActivityReportPage() {
 
 	function updateParam(key: string, value: string) {
 		const params = new URLSearchParams(searchParams);
-		params.set(key, value);
+		if (value) params.set(key, value);
+		else params.delete(key);
 		setSearchParams(params);
 	}
 
@@ -258,6 +270,26 @@ export function ActivityReportPage() {
 					>
 						Combine sports
 					</button>
+					<div>
+						<label className="text-xs font-medium text-gray-400 block mb-1.5">From</label>
+						<input
+							type="date"
+							value={dateFrom}
+							onChange={(e) => updateParam("from", e.target.value)}
+							className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
+							aria-label="Filter from date"
+						/>
+					</div>
+					<div>
+						<label className="text-xs font-medium text-gray-400 block mb-1.5">To</label>
+						<input
+							type="date"
+							value={dateTo}
+							onChange={(e) => updateParam("to", e.target.value)}
+							className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
+							aria-label="Filter to date"
+						/>
+					</div>
 				</div>
 			</div>
 
@@ -295,7 +327,7 @@ export function ActivityReportPage() {
 							<th className="px-4 py-3">Activities</th>
 							<th className="px-4 py-3">Distance (mi)</th>
 							<th className="px-4 py-3">Time</th>
-							<th className="px-4 py-3">Avg Pace/Speed</th>
+							<th className="px-4 py-3">{isRunningOnly ? "Avg Pace" : "Avg Pace/Speed"}</th>
 							<th className="px-4 py-3">Calories</th>
 							<th className="px-4 py-3">Elev Gain (ft)</th>
 							<th className="px-4 py-3">Avg HR</th>
@@ -304,9 +336,11 @@ export function ActivityReportPage() {
 					<tbody>
 						{agg.map((row, i) => {
 							const paceSpeed = row.distanceMi > 0 && row.timeS > 0
-								? row.sport === Sport.Cycling || row.sport === "All Sports"
-									? `${(row.distanceMi / (row.timeS / 3600)).toFixed(1)} mph`
-									: `${formatPace(row.timeS / 60 / row.distanceMi)} /mi`
+								? isRunningOnly
+									? `${formatPace(row.timeS / 60 / row.distanceMi)} /mi`
+									: row.sport === Sport.Cycling || row.sport === "All Sports"
+										? `${(row.distanceMi / (row.timeS / 3600)).toFixed(1)} mph`
+										: `${formatPace(row.timeS / 60 / row.distanceMi)} /mi`
 								: "—";
 							return (
 								<tr key={i} className="border-t border-gray-800 hover:bg-gray-800/30 transition-colors">
