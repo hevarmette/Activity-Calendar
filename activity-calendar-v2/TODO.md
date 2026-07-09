@@ -95,3 +95,6 @@
   - [x] the activity report should have a selectable time frame that filters the visuals
   - [x] the period column in the acitivity report should show the start date for the week (on sundays)
   - [x] pace per mile should be shown if running is selected and only running in the acitivity report.
+  - [] the streamlit lap editor only rounds in the display, but when i click on a cell, it does not round the decimal places. this is helpful for copying information to other laps.
+  - [] it seems like the map shows auto lap markers even when there are lap points present. this should not be the case and it should match the streamlit app, so i should be able to toggle to show auto lap marks or the lap markers defined by the watch.
+  - [] show 2 decimal places in the interval rep cards for the logic that shows how much i slowed down or sped up
