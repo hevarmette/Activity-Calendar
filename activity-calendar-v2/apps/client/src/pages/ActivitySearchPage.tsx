@@ -17,7 +17,6 @@ interface Activity {
 	subSport: string;
 	totalDistance: number;
 	totalTimerTime: number;
-	totalCalories: number;
 }
 
 function aggregateActivities(rows: SearchRow[]): Activity[] {
@@ -29,7 +28,6 @@ function aggregateActivities(rows: SearchRow[]): Activity[] {
 			existing.sport += `,${row.sport}`;
 			existing.totalDistance += row.totalDistance ?? 0;
 			existing.totalTimerTime += row.totalTimerTime ?? 0;
-			existing.totalCalories += row.totalCalories ?? 0;
 		} else {
 			map.set(row.activityId, {
 				activityId: row.activityId,
@@ -41,7 +39,6 @@ function aggregateActivities(rows: SearchRow[]): Activity[] {
 				subSport: row.subSport ?? "",
 				totalDistance: row.totalDistance ?? 0,
 				totalTimerTime: row.totalTimerTime ?? 0,
-				totalCalories: row.totalCalories ?? 0,
 			});
 		}
 	}

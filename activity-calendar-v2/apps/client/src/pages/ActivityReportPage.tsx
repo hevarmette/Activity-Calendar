@@ -24,7 +24,7 @@ import { MetricCard } from "../components/ui/MetricCard.js";
 
 const GROUPINGS = ["Daily", "Weekly", "Monthly", "Yearly"] as const;
 type Grouping = (typeof GROUPINGS)[number];
-const METRICS = ["Distance (mi)", "Time (hours)", "Activities", "Calories"] as const;
+const METRICS = ["Distance (mi)", "Time (hours)", "Activities"] as const;
 type ChartMetric = (typeof METRICS)[number];
 
 function periodKey(date: Date, grouping: Grouping): string {
@@ -55,7 +55,6 @@ interface AggRow {
 	distanceM: number;
 	timeS: number;
 	timeHours: number;
-	calories: number;
 	ascent: number;
 	avgHr: number;
 	maxHr: number;
@@ -88,7 +87,6 @@ function aggregate(rows: ReportRow[], grouping: Grouping, sports: string[], grou
 		const ids = new Set(items.map((r) => r.activityId));
 		const totalDist = items.reduce((s, r) => s + (r.totalDistance ?? 0), 0);
 		const totalTime = items.reduce((s, r) => s + (r.totalTimerTime ?? 0), 0);
-		const totalCal = items.reduce((s, r) => s + (r.totalCalories ?? 0), 0);
 		const totalAsc = items.reduce((s, r) => s + (r.totalAscent ?? 0), 0);
 		const hrs = items.filter((r) => r.avgHeartRate).map((r) => r.avgHeartRate!);
 		const maxHrs = items.filter((r) => r.maxHeartRate).map((r) => r.maxHeartRate!);
@@ -102,7 +100,6 @@ function aggregate(rows: ReportRow[], grouping: Grouping, sports: string[], grou
 			distanceM: totalDist,
 			timeS: totalTime,
 			timeHours: totalTime / 3600,
-			calories: totalCal,
 			ascent: totalAsc,
 			avgHr: hrs.length > 0 ? hrs.reduce((a, b) => a + b, 0) / hrs.length : 0,
 			maxHr: maxHrs.length > 0 ? Math.max(...maxHrs) : 0,
@@ -125,7 +122,6 @@ function buildChartData(agg: AggRow[], metric: ChartMetric) {
 				case "Distance (mi)": row[sport] = item?.distanceMi ?? 0; break;
 				case "Time (hours)": row[sport] = item?.timeHours ?? 0; break;
 				case "Activities": row[sport] = item?.activities ?? 0; break;
-				case "Calories": row[sport] = item?.calories ?? 0; break;
 			}
 		}
 		return row;
@@ -180,7 +176,6 @@ export function ActivityReportPage() {
 	const totalActivities = agg.reduce((s, r) => s + r.activities, 0);
 	const totalDistance = agg.reduce((s, r) => s + r.distanceMi, 0);
 	const totalTime = agg.reduce((s, r) => s + r.timeS, 0);
-	const totalCalories = agg.reduce((s, r) => s + r.calories, 0);
 
 	function updateParam(key: string, value: string) {
 		const params = new URLSearchParams(searchParams);
@@ -303,11 +298,10 @@ export function ActivityReportPage() {
 			</div>
 
 			{/* Summary */}
-			<div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+			<div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
 				<MetricCard label="Activities" value={`${totalActivities}`} />
 				<MetricCard label="Distance" value={`${totalDistance.toFixed(1)} mi`} />
 				<MetricCard label="Time" value={convertSecondsToHms(totalTime) ?? "—"} />
-				<MetricCard label="Calories" value={`${Math.round(totalCalories).toLocaleString()}`} />
 			</div>
 
 			{/* Chart */}
@@ -337,7 +331,6 @@ export function ActivityReportPage() {
 							<th className="px-4 py-3">Distance (mi)</th>
 							<th className="px-4 py-3">Time</th>
 							<th className="px-4 py-3">{isRunningOnly ? "Avg Pace" : isSwimmingOnly ? "Avg Pace" : isCyclingOnly ? "Avg Power/Speed" : "Avg Pace/Speed"}</th>
-							<th className="px-4 py-3">Calories</th>
 							<th className="px-4 py-3">Elev Gain (ft)</th>
 							<th className="px-4 py-3">Avg HR</th>
 						</tr>
@@ -387,7 +380,6 @@ export function ActivityReportPage() {
 									<td className="px-4 py-3 text-gray-300">{row.distanceMi.toFixed(2)}</td>
 									<td className="px-4 py-3 text-gray-300">{convertSecondsToHms(row.timeS)}</td>
 									<td className="px-4 py-3 text-gray-300">{paceSpeed}</td>
-									<td className="px-4 py-3 text-gray-300">{Math.round(row.calories)}</td>
 									<td className="px-4 py-3 text-gray-300">{Math.round(row.ascent * METERS_TO_FEET)}</td>
 									<td className="px-4 py-3 text-gray-300">{row.avgHr > 0 ? Math.round(row.avgHr) : "—"}</td>
 								</tr>
