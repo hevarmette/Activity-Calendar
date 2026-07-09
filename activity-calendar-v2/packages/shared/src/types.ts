@@ -110,6 +110,7 @@ export interface ReportRow {
 	totalDescent: number | null;
 	avgHeartRate: number | null;
 	maxHeartRate: number | null;
+	avgPower: number | null;
 }
 
 export interface SearchRow {

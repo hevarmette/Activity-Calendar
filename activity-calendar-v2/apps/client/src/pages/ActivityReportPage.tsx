@@ -52,12 +52,14 @@ interface AggRow {
 	sport: string;
 	activities: number;
 	distanceMi: number;
+	distanceM: number;
 	timeS: number;
 	timeHours: number;
 	calories: number;
 	ascent: number;
 	avgHr: number;
 	maxHr: number;
+	avgPower: number | null;
 }
 
 function aggregate(rows: ReportRow[], grouping: Grouping, sports: string[], groupBySport: boolean): AggRow[] {
@@ -90,18 +92,21 @@ function aggregate(rows: ReportRow[], grouping: Grouping, sports: string[], grou
 		const totalAsc = items.reduce((s, r) => s + (r.totalAscent ?? 0), 0);
 		const hrs = items.filter((r) => r.avgHeartRate).map((r) => r.avgHeartRate!);
 		const maxHrs = items.filter((r) => r.maxHeartRate).map((r) => r.maxHeartRate!);
+		const powers = items.filter((r) => r.avgPower != null && r.avgPower > 0).map((r) => r.avgPower!);
 
 		result.push({
 			period,
 			sport,
 			activities: ids.size,
 			distanceMi: totalDist / METERS_PER_MILE,
+			distanceM: totalDist,
 			timeS: totalTime,
 			timeHours: totalTime / 3600,
 			calories: totalCal,
 			ascent: totalAsc,
 			avgHr: hrs.length > 0 ? hrs.reduce((a, b) => a + b, 0) / hrs.length : 0,
 			maxHr: maxHrs.length > 0 ? Math.max(...maxHrs) : 0,
+			avgPower: powers.length > 0 ? Math.round(powers.reduce((a, b) => a + b, 0) / powers.length) : null,
 		});
 	}
 
@@ -150,6 +155,10 @@ export function ActivityReportPage() {
 
 	/** Whether only running is selected — controls pace column display */
 	const isRunningOnly = selectedSports.length === 1 && selectedSports[0] === Sport.Running;
+	/** Whether only swimming is selected — shows pace per 100m */
+	const isSwimmingOnly = selectedSports.length === 1 && selectedSports[0] === Sport.Swimming;
+	/** Whether only cycling is selected — shows avg power if available, else mph */
+	const isCyclingOnly = selectedSports.length === 1 && selectedSports[0] === Sport.Cycling;
 
 	/** Filter data by date range before aggregation */
 	const filteredData = useMemo(() => {
@@ -327,7 +336,7 @@ export function ActivityReportPage() {
 							<th className="px-4 py-3">Activities</th>
 							<th className="px-4 py-3">Distance (mi)</th>
 							<th className="px-4 py-3">Time</th>
-							<th className="px-4 py-3">{isRunningOnly ? "Avg Pace" : "Avg Pace/Speed"}</th>
+							<th className="px-4 py-3">{isRunningOnly ? "Avg Pace" : isSwimmingOnly ? "Avg Pace" : isCyclingOnly ? "Avg Power/Speed" : "Avg Pace/Speed"}</th>
 							<th className="px-4 py-3">Calories</th>
 							<th className="px-4 py-3">Elev Gain (ft)</th>
 							<th className="px-4 py-3">Avg HR</th>
@@ -335,13 +344,41 @@ export function ActivityReportPage() {
 					</thead>
 					<tbody>
 						{agg.map((row, i) => {
-							const paceSpeed = row.distanceMi > 0 && row.timeS > 0
-								? isRunningOnly
-									? `${formatPace(row.timeS / 60 / row.distanceMi)} /mi`
-									: row.sport === Sport.Cycling || row.sport === "All Sports"
-										? `${(row.distanceMi / (row.timeS / 3600)).toFixed(1)} mph`
-										: `${formatPace(row.timeS / 60 / row.distanceMi)} /mi`
-								: "—";
+							let paceSpeed = "—";
+							if (row.distanceMi > 0 && row.timeS > 0) {
+								if (isSwimmingOnly) {
+									// Pace per 100m
+									const secsPerHundred = row.timeS / (row.distanceM / 100);
+									const m = Math.floor(secsPerHundred / 60);
+									const s = Math.round(secsPerHundred % 60);
+									paceSpeed = `${m}:${String(s).padStart(2, "0")} /100m`;
+								} else if (isCyclingOnly) {
+									// Show avg power if available, otherwise speed
+									if (row.avgPower != null && row.avgPower > 0) {
+										paceSpeed = `${row.avgPower} W`;
+									} else {
+										paceSpeed = `${(row.distanceMi / (row.timeS / 3600)).toFixed(1)} mph`;
+									}
+								} else if (isRunningOnly) {
+									paceSpeed = `${formatPace(row.timeS / 60 / row.distanceMi)} /mi`;
+								} else {
+									// Mixed sports: determine per-row
+									if (row.sport === Sport.Swimming) {
+										const secsPerHundred = row.timeS / (row.distanceM / 100);
+										const m = Math.floor(secsPerHundred / 60);
+										const s = Math.round(secsPerHundred % 60);
+										paceSpeed = `${m}:${String(s).padStart(2, "0")} /100m`;
+									} else if (row.sport === Sport.Cycling || row.sport === "All Sports") {
+										if (row.avgPower != null && row.avgPower > 0) {
+											paceSpeed = `${row.avgPower} W`;
+										} else {
+											paceSpeed = `${(row.distanceMi / (row.timeS / 3600)).toFixed(1)} mph`;
+										}
+									} else {
+										paceSpeed = `${formatPace(row.timeS / 60 / row.distanceMi)} /mi`;
+									}
+								}
+							}
 							return (
 								<tr key={i} className="border-t border-gray-800 hover:bg-gray-800/30 transition-colors">
 									<td className="px-4 py-3 text-gray-300">{row.period}</td>
