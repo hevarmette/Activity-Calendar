@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import sql, { SCHEMA } from "../db.js";
@@ -7,12 +8,15 @@ export const recordsRoutes = new Hono();
 
 const METERS_TO_FEET = 3.28084;
 const CACHE_DIR = join(import.meta.dirname ?? ".", ".elevation-cache");
+const HELPER_SCRIPT = join(import.meta.dirname ?? ".", "..", "..", "elevation_helper.py");
+
+// ─── Elevation Cache ─────────────────────────────────────────────────────────
 
 function getCachePath(activityId: number): string {
 	return join(CACHE_DIR, `${activityId}.json`);
 }
 
-function readCache(activityId: number): number[] | null {
+function readCache(activityId: number): (number | null)[] | null {
 	const path = getCachePath(activityId);
 	if (!existsSync(path)) return null;
 	try {
@@ -22,94 +26,84 @@ function readCache(activityId: number): number[] | null {
 	}
 }
 
-function writeCache(activityId: number, elevations: number[]): void {
+function writeCache(activityId: number, elevations: (number | null)[]): void {
 	if (!existsSync(CACHE_DIR)) mkdirSync(CACHE_DIR, { recursive: true });
 	writeFileSync(getCachePath(activityId), JSON.stringify(elevations));
 }
 
+// ─── pyhigh Elevation via subprocess ─────────────────────────────────────────
+
 /**
- * Fetches corrected elevation data from the Open-Meteo API.
+ * Fetches corrected elevation data using pyhigh via a Python subprocess.
  *
  * From the original Streamlit db.py:
  * "Getting elevation data from 3rd party package because the garmin data is bad"
- * The Garmin barometric altitude is often inaccurate, so we fetch DEM-based
- * elevations for the GPS coordinates. Values are converted from meters to feet.
- * If the API call fails (rate limiting, network error), we fall back to the
- * raw altitude column from the FIT file (also converted to feet).
+ *
+ * pyhigh uses locally-cached SRTM .hgt files (downloaded on first use from
+ * ArduPilot). After initial download, lookups are entirely local and fast.
+ * Values are returned in meters and converted to feet here.
+ *
+ * If the subprocess fails (Python not available, pyhigh not installed),
+ * falls back to raw altitude from the FIT file.
  */
-async function fetchElevations(activityId: number, records: any[]): Promise<number[]> {
+function fetchElevationsPyhigh(activityId: number, records: any[]): (number | null)[] {
+	// Check cache first
 	const cached = readCache(activityId);
 	if (cached && cached.length === records.length) return cached;
 
-	const elevations = new Array(records.length).fill(null);
-	const BATCH = 80;
-	const MAX_RETRIES = 3;
-	const BASE_DELAY_MS = 500;
-
-	try {
-		for (let i = 0; i < records.length; i += BATCH) {
-			const batch = records.slice(i, i + BATCH);
-			const lats = batch.map((r: any) => r.latitude).join(",");
-			const lons = batch.map((r: any) => r.longitude).join(",");
-
-			let lastError: Error | null = null;
-			let success = false;
-
-			// Retry with exponential backoff on rate limit or transient errors
-			for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-				try {
-					const res = await fetch(
-						`https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`
-					);
-					if (res.status === 429 || res.status >= 500) {
-						// Rate limited or server error — retry after backoff
-						const delay = BASE_DELAY_MS * 2 ** attempt;
-						await new Promise((r) => setTimeout(r, delay));
-						continue;
-					}
-					if (!res.ok) throw new Error(`elevation API returned ${res.status}`);
-					const data = await res.json();
-					for (let j = 0; j < data.elevation.length; j++) {
-						elevations[i + j] = data.elevation[j] * METERS_TO_FEET;
-					}
-					success = true;
-					break;
-				} catch (err) {
-					lastError = err instanceof Error ? err : new Error(String(err));
-					if (attempt < MAX_RETRIES - 1) {
-						const delay = BASE_DELAY_MS * 2 ** attempt;
-						await new Promise((r) => setTimeout(r, delay));
-					}
-				}
-			}
-
-			if (!success) {
-				// If all retries failed for this batch, fall back to raw altitude
-				console.warn(
-					`Elevation fetch failed for batch at index ${i}: ${lastError?.message}. Using raw altitude.`
-				);
-				for (let j = 0; j < batch.length; j++) {
-					elevations[i + j] = records[i + j].altitude != null
-						? records[i + j].altitude * METERS_TO_FEET
-						: null;
-				}
-			}
-
-			// Delay between successful batches to avoid rate limiting (500ms)
-			if (i + BATCH < records.length) await new Promise((r) => setTimeout(r, 500));
-		}
-		// Only cache if all values were fetched from the API (no fallbacks)
-		if (elevations.every((e) => e !== null)) {
-			writeCache(activityId, elevations);
-		}
-	} catch {
-		// Fallback: use raw altitude from DB if available
-		for (let i = 0; i < records.length; i++) {
-			elevations[i] = records[i].altitude != null ? records[i].altitude * METERS_TO_FEET : null;
+	// Filter to records with valid coordinates
+	const coordsWithIndex: { idx: number; lat: number; lon: number }[] = [];
+	for (let i = 0; i < records.length; i++) {
+		const r = records[i];
+		if (r.latitude != null && r.longitude != null) {
+			coordsWithIndex.push({ idx: i, lat: r.latitude, lon: r.longitude });
 		}
 	}
-	return elevations;
+
+	if (coordsWithIndex.length === 0) {
+		// No coordinates at all — use raw altitude
+		return records.map((r) => (r.altitude != null ? r.altitude * METERS_TO_FEET : null));
+	}
+
+	try {
+		const input = JSON.stringify(coordsWithIndex.map((c) => [c.lat, c.lon]));
+
+		const result = execSync(`python3 "${HELPER_SCRIPT}"`, {
+			input,
+			encoding: "utf-8",
+			timeout: 30_000, // 30 second timeout
+			maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large activities
+		});
+
+		const elevationsMeters: number[] = JSON.parse(result.trim());
+
+		// Build full elevation array (feet) with nulls for records without coords
+		const elevations: (number | null)[] = new Array(records.length).fill(null);
+		for (let i = 0; i < coordsWithIndex.length; i++) {
+			const { idx } = coordsWithIndex[i]!;
+			elevations[idx] = elevationsMeters[i]! * METERS_TO_FEET;
+		}
+
+		// Fill null gaps with raw altitude fallback
+		for (let i = 0; i < elevations.length; i++) {
+			if (elevations[i] == null && records[i].altitude != null) {
+				elevations[i] = records[i].altitude * METERS_TO_FEET;
+			}
+		}
+
+		// Cache the result
+		writeCache(activityId, elevations as number[]);
+		return elevations as number[];
+	} catch (err) {
+		console.warn(
+			`pyhigh elevation fetch failed for activity ${activityId}: ${err instanceof Error ? err.message : String(err)}. Using raw altitude.`
+		);
+		// Fallback to raw altitude from the FIT file
+		return records.map((r: any) => (r.altitude != null ? r.altitude * METERS_TO_FEET : null));
+	}
 }
+
+// ─── Elapsed Time Computation ────────────────────────────────────────────────
 
 /**
  * Computes pause-removed elapsed time for each record point.
@@ -120,8 +114,6 @@ async function fetchElevations(activityId: number, records: any[]): Promise<numb
  *
  * The algorithm builds pause intervals from stop_all/start event pairs,
  * then subtracts the total paused duration from each point's raw elapsed time.
- * This ensures performance charts (pace over time, HR over time) show continuous
- * moving time without misleading flat sections during pauses.
  */
 function computeElapsedTimes(records: any[], events: any[]): number[] {
 	if (records.length === 0) return [];
@@ -149,6 +141,8 @@ function computeElapsedTimes(records: any[], events: any[]): number[] {
 		return ts - firstTs - pausedSeconds;
 	});
 }
+
+// ─── Route ───────────────────────────────────────────────────────────────────
 
 /**
  * GET /api/records/:activityId - fetch GPS points with imputed lat/lon.
@@ -202,13 +196,7 @@ recordsRoutes.get("/:activityId", async (c) => {
 		`,
 	]);
 
-	// DISABLED: Elevation API calls are too slow and can cause the entire
-	// records endpoint to time out, preventing the map from loading.
-	// Using raw altitude from the FIT file instead until a better solution is found.
-	// const elevations = await fetchElevations(activityId, rows as any[]);
-	const elevations = (rows as any[]).map((r) =>
-		r.altitude != null ? r.altitude * METERS_TO_FEET : null
-	);
+	const elevations = fetchElevationsPyhigh(activityId, rows as any[]);
 	const elapsedTimes = computeElapsedTimes(rows as any[], events as any[]);
 
 	const result = (rows as any[]).map((r, i) => ({

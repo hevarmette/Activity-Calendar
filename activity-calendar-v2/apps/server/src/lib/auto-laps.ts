@@ -59,6 +59,27 @@ export function computeAutoLaps(records: RecordPoint[], events: TimerEvent[], sp
 		}
 	}
 
+	// Smooth altitude values to reduce noise before computing ascent/descent.
+	// Raw altitude from FIT files or SRTM has ~1-3m noise per point which
+	// accumulates into heavily inflated ascent/descent over many points.
+	const SMOOTH_WINDOW = 5;
+	const rawAlt = records.map((r) => r.altitude ?? 0);
+	const smoothedAlt: number[] = new Array(rawAlt.length);
+	const half = Math.floor(SMOOTH_WINDOW / 2);
+	for (let i = 0; i < rawAlt.length; i++) {
+		let sum = 0;
+		let count = 0;
+		for (let j = Math.max(0, i - half); j <= Math.min(rawAlt.length - 1, i + half); j++) {
+			sum += rawAlt[j]!;
+			count++;
+		}
+		smoothedAlt[i] = sum / count;
+	}
+
+	// Dead-band threshold: ignore altitude changes smaller than this (in meters).
+	// Equivalent to ~2ft which is what Garmin/Strava use.
+	const ELEV_THRESHOLD_M = 0.6;
+
 	// Compute cumulative moving seconds and ascent
 	const dists: number[] = [];
 	const cumMoving: number[] = [];
@@ -76,8 +97,7 @@ export function computeAutoLaps(records: RecordPoint[], events: TimerEvent[], sp
 		const ts = new Date(r.timestamp).getTime() / 1000;
 
 		if (i > 0) {
-			const prev = records[i - 1]!;
-			const prevTs = new Date(prev.timestamp).getTime() / 1000;
+			const prevTs = new Date(records[i - 1]!.timestamp).getTime() / 1000;
 			let diff = ts - prevTs;
 			for (const p of pauses) {
 				const overlapStart = Math.max(prevTs, p.start);
@@ -86,11 +106,9 @@ export function computeAutoLaps(records: RecordPoint[], events: TimerEvent[], sp
 			}
 			if (diff > 0) totalMoving += diff;
 
-			const alt = r.altitude ?? 0;
-			const prevAlt = prev.altitude ?? 0;
-			const altDiff = alt - prevAlt;
-			if (altDiff > 0) totalAscent += altDiff;
-			else totalDescent += Math.abs(altDiff);
+			const altDiff = smoothedAlt[i]! - smoothedAlt[i - 1]!;
+			if (altDiff > ELEV_THRESHOLD_M) totalAscent += altDiff;
+			else if (altDiff < -ELEV_THRESHOLD_M) totalDescent += Math.abs(altDiff);
 		}
 
 		dists.push(r.distance ?? 0);

@@ -33,6 +33,10 @@ export function ActivityStatsGrid({ distance, duration, sport, points, laps, avg
 	const maxHr = hrValues.length > 0 ? Math.max(...hrValues) : null;
 
 	// Elevation from points
+	// A dead-band threshold prevents small SRTM noise from inflating totals.
+	// Garmin/Strava use ~2-3ft thresholds; we use 2ft since we already smooth
+	// the elevation data server-side.
+	const ELEV_THRESHOLD_FT = 2;
 	const altValues = points.map((p) => p.correctedAltitude).filter((v): v is number => v != null);
 	let totalAscent: number | null = null;
 	let totalDescent: number | null = null;
@@ -40,8 +44,8 @@ export function ActivityStatsGrid({ distance, duration, sport, points, laps, avg
 		let asc = 0, desc = 0;
 		for (let i = 1; i < altValues.length; i++) {
 			const diff = altValues[i]! - altValues[i - 1]!;
-			if (diff > 0) asc += diff;
-			else desc += Math.abs(diff);
+			if (diff > ELEV_THRESHOLD_FT) asc += diff;
+			else if (diff < -ELEV_THRESHOLD_FT) desc += Math.abs(diff);
 		}
 		totalAscent = asc;
 		totalDescent = desc;
