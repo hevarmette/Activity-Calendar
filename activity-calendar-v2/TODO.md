@@ -101,3 +101,4 @@
   - [] performance graph for cycling should show power if available on top
   - [] when adjusting the calendar year, while i am typing it will try and reload and throw an error such as when deleting the 6 from 2026 it tries to load the year 202 and errors out. would be better if it didn't do anything if the year was invalid
   - [] show start and stop points and lap markers on the map in the acitivty dialog box
+  - [] cumulative dist and time on the lap tab
