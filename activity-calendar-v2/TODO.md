@@ -94,11 +94,11 @@
   - [x] before an activity is searched on the details page, the widgets are in a smaller box and after a search the search box is bigger. make them consistent
   - [x] the activity report should have a selectable time frame that filters the visuals
   - [x] the period column in the acitivity report should show the start date for the week (on sundays)
-  - [] pace per mile should be shown if running is selected and only running in the acitivity report. power should be prioritized for cycling activities, and pace per 100m for swimming. otherwise mph is fine. this should be in the acitivity dialog popup and anywhere else
-  - [] the streamlit lap editor only rounds in the display, but when i click on a cell, it does not round the decimal places. this is helpful for copying information to other laps.
-  - [] it seems like the map shows auto lap markers even when there are lap points present. this should not be the case and it should match the streamlit app, so i should be able to toggle to show auto lap marks or the lap markers defined by the watch.
-  - [] show 2 decimal places in the interval rep cards for the logic that shows how much i slowed down or sped up
-  - [] performance graph for cycling should show power if available on top
-  - [] when adjusting the calendar year, while i am typing it will try and reload and throw an error such as when deleting the 6 from 2026 it tries to load the year 202 and errors out. would be better if it didn't do anything if the year was invalid
-  - [] show start and stop points and lap markers on the map in the acitivty dialog box
-  - [] cumulative dist and time on the lap tab
+  - [x] pace per mile should be shown if running is selected and only running in the acitivity report. power should be prioritized for cycling activities, and pace per 100m for swimming. otherwise mph is fine. this should be in the acitivity dialog popup and anywhere else
+  - [x] the streamlit lap editor only rounds in the display, but when i click on a cell, it does not round the decimal places. this is helpful for copying information to other laps.
+  - [x] it seems like the map shows auto lap markers even when there are lap points present. this should not be the case and it should match the streamlit app, so i should be able to toggle to show auto lap marks or the lap markers defined by the watch.
+  - [x] show 2 decimal places in the interval rep cards for the logic that shows how much i slowed down or sped up
+  - [x] performance graph for cycling should show power if available on top
+  - [x] when adjusting the calendar year, while i am typing it will try and reload and throw an error such as when deleting the 6 from 2026 it tries to load the year 202 and errors out. would be better if it didn't do anything if the year was invalid
+  - [x] show start and stop points and lap markers on the map in the acitivty dialog box
+  - [x] cumulative dist and time on the lap tab

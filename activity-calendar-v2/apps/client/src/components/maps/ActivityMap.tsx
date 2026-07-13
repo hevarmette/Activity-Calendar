@@ -1,9 +1,25 @@
 import { useEffect } from "react";
-import { MapContainer, TileLayer, Polyline, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Polyline, Marker, useMap } from "react-leaflet";
+import L from "leaflet";
 import type { LatLngBoundsExpression } from "leaflet";
 import type { RecordPoint, Session } from "@activity-calendar/shared";
 import { SPORT_COLORS } from "@activity-calendar/shared";
+import { LapMarkers } from "./LapMarkers.js";
 import "leaflet/dist/leaflet.css";
+
+const startIcon = L.divIcon({
+	className: "",
+	html: `<div style="background:#1EB300;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;border:2px solid #1EB300;color:white;font-size:12px;">▶</div>`,
+	iconSize: [22, 22],
+	iconAnchor: [11, 11],
+});
+
+const endIcon = L.divIcon({
+	className: "",
+	html: `<div style="background:#e53e3e;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;border:2px solid #e53e3e;color:white;font-size:12px;">■</div>`,
+	iconSize: [22, 22],
+	iconAnchor: [11, 11],
+});
 
 function FitBounds({ bounds }: { bounds: LatLngBoundsExpression }) {
 	const map = useMap();
@@ -75,6 +91,9 @@ export function ActivityMap({ points, sessions }: Props) {
 						) : null;
 					})
 				: <Polyline positions={coords} pathOptions={{ color: "#FF4B4B", weight: 4 }} />}
+			<LapMarkers points={points} />
+			<Marker position={coords[0]!} icon={startIcon} />
+			<Marker position={coords[coords.length - 1]!} icon={endIcon} />
 		</MapContainer>
 	);
 }

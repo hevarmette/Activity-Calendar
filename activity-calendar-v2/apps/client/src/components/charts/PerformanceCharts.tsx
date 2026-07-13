@@ -22,6 +22,8 @@ interface Props {
 	onHover?: (index: number | null) => void;
 	/** Callback when user selects a range on any chart. Returns [startPointIndex, endPointIndex] or null to clear. */
 	onRangeSelect?: (range: [number, number] | null) => void;
+	/** Per-lap power data for cycling power chart. */
+	laps?: { number: number; avgPower: number | null; totalDistance: number | null; totalTimerTime: number | null }[];
 }
 
 interface ChartPoint {
@@ -259,7 +261,7 @@ function Chart({
  * All charts zoom to that range and the map highlights the corresponding segment.
  * Click without dragging to clear the selection.
  */
-export function PerformanceCharts({ points, sport, category, onHover, onRangeSelect }: Props) {
+export function PerformanceCharts({ points, sport, category, onHover, onRangeSelect, laps }: Props) {
 	const [xMode, setXMode] = useState<XMode>("distance");
 	const [selectionRange, setSelectionRange] = useState<[number, number] | null>(null);
 	const selectionStartRef = useRef<number | null>(null);
@@ -267,6 +269,32 @@ export function PerformanceCharts({ points, sport, category, onHover, onRangeSel
 	const data = useMemo(() => buildChartData(points, xMode, sport), [points, xMode, sport]);
 	const xLabel = xMode === "distance" ? "Distance (mi)" : "Time (min)";
 	const isCycling = sport === Sport.Cycling;
+
+	// Build per-lap power chart data for cycling
+	const powerData = useMemo(() => {
+		if (!isCycling || !laps || laps.length === 0) return null;
+		const withPower = laps.filter((l) => l.avgPower != null && l.avgPower > 0);
+		if (withPower.length === 0) return null;
+
+		// Build step data: each lap becomes a segment from its start to end on the x-axis
+		let cumulativeDist = 0;
+		let cumulativeTime = 0;
+		const points: { x: number; power: number }[] = [];
+		for (const lap of laps) {
+			const dist = (lap.totalDistance ?? 0) / METERS_PER_MILE;
+			const time = (lap.totalTimerTime ?? 0) / 60;
+			const power = lap.avgPower;
+			if (power != null && power > 0) {
+				const startX = xMode === "distance" ? cumulativeDist : cumulativeTime;
+				const endX = xMode === "distance" ? cumulativeDist + dist : cumulativeTime + time;
+				points.push({ x: startX, power });
+				points.push({ x: endX, power });
+			}
+			cumulativeDist += dist;
+			cumulativeTime += time;
+		}
+		return points.length > 0 ? points : null;
+	}, [isCycling, laps, xMode]);
 
 	const paceDomain = useMemo(() => {
 		if (isCycling || !category) return null;
@@ -336,7 +364,49 @@ export function PerformanceCharts({ points, sport, category, onHover, onRangeSel
 			)}
 
 			{isCycling ? (
-				<Chart data={data} dataKey="speed" metric="speed" color="#1F77B4" yLabel="Speed (mph)" xLabel={xLabel} xMode={xMode} isCycling={isCycling} avgValue={avg(data, "speed")} onHover={onHover} selectionRange={selectionRange} onSelectionStart={handleSelectionStart} onSelectionEnd={handleSelectionEnd} />
+				<>
+					{/* Power chart on top for cycling if lap power data is available */}
+					{powerData && (
+						<div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+							<p className="text-sm text-gray-400 mb-2">Power (W)</p>
+							<ResponsiveContainer width="100%" height={200}>
+								<LineChart data={powerData}>
+									<CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+									<XAxis
+										dataKey="x"
+										type="number"
+										domain={[0, "dataMax"]}
+										ticks={getXTicks(data, xMode)}
+										tick={{ fontSize: 11, fill: "#6b7280" }}
+										label={{ value: xLabel, position: "bottom", fill: "#6b7280", fontSize: 11 }}
+									/>
+									<YAxis tick={{ fontSize: 11, fill: "#6b7280" }} />
+									<Tooltip
+										content={({ active, payload }) => {
+											if (!active || !payload?.[0]) return null;
+											const d = payload[0].payload as { x: number; power: number };
+											return (
+												<div className="rounded-lg border border-gray-700 bg-gray-800/95 px-3 py-2 text-xs shadow-lg backdrop-blur-sm">
+													<p className="text-gray-400">Mile {d.x.toFixed(2)}</p>
+													<p className="mt-0.5 font-medium text-gray-100">{Math.round(d.power)} W</p>
+												</div>
+											);
+										}}
+										cursor={{ stroke: "#f97316", strokeWidth: 1 }}
+									/>
+									<Line type="stepAfter" dataKey="power" stroke="#FF8C00" dot={false} strokeWidth={2} />
+									<ReferenceLine
+										y={Math.round(powerData.reduce((s, p) => s + p.power, 0) / powerData.length)}
+										stroke="#FF8C00"
+										strokeDasharray="5 5"
+										label={{ value: `Avg: ${Math.round(powerData.reduce((s, p) => s + p.power, 0) / powerData.length)} W`, fill: "#6b7280", fontSize: 11, position: "insideBottomRight" }}
+									/>
+								</LineChart>
+							</ResponsiveContainer>
+						</div>
+					)}
+					<Chart data={data} dataKey="speed" metric="speed" color="#1F77B4" yLabel="Speed (mph)" xLabel={xLabel} xMode={xMode} isCycling={isCycling} avgValue={avg(data, "speed")} onHover={onHover} selectionRange={selectionRange} onSelectionStart={handleSelectionStart} onSelectionEnd={handleSelectionEnd} />
+				</>
 			) : (
 				<Chart
 					data={data}

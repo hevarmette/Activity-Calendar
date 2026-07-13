@@ -73,16 +73,16 @@ function median(arr: number[]): number {
 }
 
 /**
- * Format a deviation trend value as a signed string.
+ * Format a deviation trend value as a signed string with 2 decimal places.
  */
 function formatDevTrend(value: number, mode: "time" | "dist"): string {
-	const sign = value < 0 ? "-" : "";
+	const sign = value < 0 ? "-" : "+";
 	const absVal = Math.abs(value);
 	if (mode === "time") {
-		const totalSec = Math.round(absVal);
+		const totalSec = absVal;
 		const m = Math.floor(totalSec / 60);
 		const s = totalSec % 60;
-		return `${sign}${m}:${String(s).padStart(2, "0")}`;
+		return `${sign}${m}:${s.toFixed(2).padStart(5, "0")}`;
 	}
 	return `${sign}${absVal.toFixed(2)}`;
 }
@@ -222,6 +222,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 	const [edits, setEdits] = useState<Map<string, LapEdit>>(new Map());
 	const defaultGroup = useMemo(() => detectDefaultGroup(laps), [laps]);
 	const [groupBy, setGroupBy] = useState<"distance" | "time">(defaultGroup);
+	const [focusedCell, setFocusedCell] = useState<string | null>(null);
 
 	const filtered = filters.size > 0 ? laps.filter((l) => l.intensity != null && filters.has(l.intensity)) : laps;
 	const isCycling = sport === Sport.Cycling;
@@ -273,7 +274,9 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 						<tr>
 							<th className="px-4 py-3">Lap</th>
 							<th className="px-4 py-3">Distance (mi)</th>
+							<th className="px-4 py-3">Cum. Dist</th>
 							<th className="px-4 py-3">Time</th>
+							<th className="px-4 py-3">Cum. Time</th>
 							<th className="px-4 py-3">{isCycling ? "Speed (mph)" : "Pace"}</th>
 							<th className="px-4 py-3">Avg HR</th>
 							<th className="px-4 py-3">Max HR</th>
@@ -282,65 +285,81 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 						</tr>
 					</thead>
 					<tbody>
-						{filtered.map((lap) => {
-							const miles = (lap.totalDistance ?? 0) / METERS_PER_MILE;
-							const time = lap.totalTimerTime ?? 0;
-							const paceVal = miles > 0 ? time / 60 / miles : null;
-							const speedMph = time > 0 ? miles / (time / 3600) : null;
+						{(() => {
+							let cumDist = 0;
+							let cumTime = 0;
+							return filtered.map((lap) => {
+								const miles = (lap.totalDistance ?? 0) / METERS_PER_MILE;
+								const time = lap.totalTimerTime ?? 0;
+								cumDist += miles;
+								cumTime += time;
+								const paceVal = miles > 0 ? time / 60 / miles : null;
+								const speedMph = time > 0 ? miles / (time / 3600) : null;
 
-							return (
-								<tr key={lap.lapId} className="border-t border-gray-800 hover:bg-gray-800/30 transition-colors">
-									<td className="px-4 py-3 text-gray-300">{lap.number}</td>
-									<td className="px-4 py-3 text-gray-300">
-										<input
-											type="number"
-											step="0.01"
-											defaultValue={miles.toFixed(2)}
-											onBlur={(e) => handleEdit(lap.lapId, "totalDistance", Number(e.target.value) * METERS_PER_MILE)}
-											className="w-20 bg-transparent border-b border-dashed border-gray-700 focus:border-orange-500 outline-none text-gray-200 tabular-nums"
-										/>
-									</td>
-									<td className="px-4 py-3 text-gray-300">
-										<input
-											type="text"
-											defaultValue={convertSecondsToHms(time) ?? ""}
-											onBlur={(e) => {
-												const parts = e.target.value.split(":").map(Number);
-												const secs = parts.length === 3 ? parts[0]! * 3600 + parts[1]! * 60 + parts[2]! :
-													parts.length === 2 ? parts[0]! * 60 + parts[1]! : parts[0] ?? 0;
-												handleEdit(lap.lapId, "totalTimerTime", secs);
-											}}
-											className="w-24 bg-transparent border-b border-dashed border-gray-700 focus:border-orange-500 outline-none text-gray-200 tabular-nums"
-										/>
-									</td>
-									<td className="px-4 py-3 text-gray-300">
-										{isCycling ? (speedMph?.toFixed(1) ?? "—") : (formatPace(paceVal) ?? "—")}
-									</td>
-									<td className="px-4 py-3 text-gray-300">
-										<input
-											type="number"
-											defaultValue={lap.avgHeartRate ?? ""}
-											onBlur={(e) => handleEdit(lap.lapId, "avgHeartRate", Number(e.target.value))}
-											className="w-14 bg-transparent border-b border-dashed border-gray-700 focus:border-orange-500 outline-none text-gray-200 tabular-nums"
-										/>
-									</td>
-									<td className="px-4 py-3 text-gray-300">{lap.maxHeartRate ?? "—"}</td>
-									<td className="px-4 py-3 text-gray-300">{lap.totalAscent ?? "—"}</td>
-									<td className="px-4 py-3 text-gray-300">
-										<select
-											defaultValue={lap.intensity ?? ""}
-											onChange={(e) => handleEdit(lap.lapId, "intensity", e.target.value)}
-											className="rounded-lg bg-gray-800 border border-gray-700 text-xs px-2 py-1 text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500"
-										>
-											<option value="">—</option>
-											{INTENSITIES.map((i) => (
-												<option key={i} value={i}>{i}</option>
-											))}
-										</select>
-									</td>
-								</tr>
-							);
-						})}
+								return (
+									<tr key={lap.lapId} className="border-t border-gray-800 hover:bg-gray-800/30 transition-colors">
+										<td className="px-4 py-3 text-gray-300">{lap.number}</td>
+										<td className="px-4 py-3 text-gray-300">
+											<input
+												type="number"
+												step="0.01"
+												defaultValue={focusedCell === `${lap.lapId}-dist` ? miles.toString() : miles.toFixed(2)}
+												key={`${lap.lapId}-dist-${focusedCell === `${lap.lapId}-dist` ? "full" : "rounded"}`}
+												onFocus={() => setFocusedCell(`${lap.lapId}-dist`)}
+												onBlur={(e) => {
+													setFocusedCell(null);
+													handleEdit(lap.lapId, "totalDistance", Number(e.target.value) * METERS_PER_MILE);
+												}}
+												className="w-20 bg-transparent border-b border-dashed border-gray-700 focus:border-orange-500 outline-none text-gray-200 tabular-nums"
+											/>
+										</td>
+										<td className="px-4 py-3 text-gray-400 tabular-nums">{cumDist.toFixed(2)}</td>
+										<td className="px-4 py-3 text-gray-300">
+											<input
+												type="text"
+												defaultValue={focusedCell === `${lap.lapId}-time` ? convertSecondsToHms(time) ?? "" : (convertSecondsToHms(Math.round(time)) ?? "")}
+												key={`${lap.lapId}-time-${focusedCell === `${lap.lapId}-time` ? "full" : "rounded"}`}
+												onFocus={() => setFocusedCell(`${lap.lapId}-time`)}
+												onBlur={(e) => {
+													setFocusedCell(null);
+													const parts = e.target.value.split(":").map(Number);
+													const secs = parts.length === 3 ? parts[0]! * 3600 + parts[1]! * 60 + parts[2]! :
+														parts.length === 2 ? parts[0]! * 60 + parts[1]! : parts[0] ?? 0;
+													handleEdit(lap.lapId, "totalTimerTime", secs);
+												}}
+												className="w-24 bg-transparent border-b border-dashed border-gray-700 focus:border-orange-500 outline-none text-gray-200 tabular-nums"
+											/>
+										</td>
+										<td className="px-4 py-3 text-gray-400 tabular-nums">{convertSecondsToHms(Math.round(cumTime))}</td>
+										<td className="px-4 py-3 text-gray-300">
+											{isCycling ? (speedMph?.toFixed(1) ?? "—") : (formatPace(paceVal) ?? "—")}
+										</td>
+										<td className="px-4 py-3 text-gray-300">
+											<input
+												type="number"
+												defaultValue={lap.avgHeartRate ?? ""}
+												onBlur={(e) => handleEdit(lap.lapId, "avgHeartRate", Number(e.target.value))}
+												className="w-14 bg-transparent border-b border-dashed border-gray-700 focus:border-orange-500 outline-none text-gray-200 tabular-nums"
+											/>
+										</td>
+										<td className="px-4 py-3 text-gray-300">{lap.maxHeartRate ?? "—"}</td>
+										<td className="px-4 py-3 text-gray-300">{lap.totalAscent ?? "—"}</td>
+										<td className="px-4 py-3 text-gray-300">
+											<select
+												defaultValue={lap.intensity ?? ""}
+												onChange={(e) => handleEdit(lap.lapId, "intensity", e.target.value)}
+												className="rounded-lg bg-gray-800 border border-gray-700 text-xs px-2 py-1 text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500"
+											>
+												<option value="">—</option>
+												{INTENSITIES.map((i) => (
+													<option key={i} value={i}>{i}</option>
+												))}
+											</select>
+										</td>
+									</tr>
+								);
+							});
+						})()}
 					</tbody>
 				</table>
 			</div>

@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useSearchParams } from "react-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../api/queries.js";
 
@@ -15,10 +16,40 @@ export function PageLayout() {
 	const year = Number(searchParams.get("year")) || Number(sessionStorage.getItem("cal_year")) || now.getFullYear();
 	const month = Number(searchParams.get("month")) || Number(sessionStorage.getItem("cal_month")) || now.getMonth() + 1;
 
+	const [yearInput, setYearInput] = useState(String(year));
+	const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	// Sync yearInput when year changes from URL params
+	useEffect(() => {
+		setYearInput(String(year));
+	}, [year]);
+
+	const applyYear = useCallback((val: string) => {
+		const parsed = Number(val);
+		if (!Number.isNaN(parsed) && parsed >= 1900 && parsed <= 2100 && String(parsed).length === 4) {
+			sessionStorage.setItem("cal_year", val);
+			sessionStorage.setItem("cal_month", String(month));
+			setSearchParams({ year: val, month: String(month) });
+		}
+	}, [month, setSearchParams]);
+
 	function handleYearChange(e: React.ChangeEvent<HTMLInputElement>) {
-		sessionStorage.setItem("cal_year", e.target.value);
-		sessionStorage.setItem("cal_month", String(month));
-		setSearchParams({ year: e.target.value, month: String(month) });
+		const val = e.target.value;
+		setYearInput(val);
+		if (debounceRef.current) clearTimeout(debounceRef.current);
+		debounceRef.current = setTimeout(() => applyYear(val), 600);
+	}
+
+	function handleYearBlur() {
+		if (debounceRef.current) clearTimeout(debounceRef.current);
+		applyYear(yearInput);
+	}
+
+	function handleYearKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+		if (e.key === "Enter") {
+			if (debounceRef.current) clearTimeout(debounceRef.current);
+			applyYear(yearInput);
+		}
 	}
 
 	function handleMonthChange(e: React.ChangeEvent<HTMLSelectElement>) {
@@ -33,8 +64,10 @@ export function PageLayout() {
 				<div className="flex flex-row items-center gap-3">
 					<input
 						type="number"
-						value={year}
+						value={yearInput}
 						onChange={handleYearChange}
+						onBlur={handleYearBlur}
+						onKeyDown={handleYearKeyDown}
 						className="w-20 rounded-lg bg-gray-800 border border-gray-700 px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
 						aria-label="Year"
 					/>

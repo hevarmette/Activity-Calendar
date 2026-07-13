@@ -35,12 +35,19 @@ export function ActivityDialog({ activityId, title, sport, numSessions, open, on
 	const isSwimming = sport === Sport.Swimming;
 
 	let thirdMetric: { label: string; value: string };
-	if (isMultisport || sport === Sport.Cycling) {
+	if (isMultisport) {
 		const mph = duration > 0 ? miles / (duration / 3600) : 0;
 		thirdMetric = {
-			label: sport === Sport.Cycling ? "Speed" : "Avg Speed",
+			label: "Avg Speed",
 			value: mph > 0 ? `${mph.toFixed(1)} mph` : "—",
 		};
+	} else if (sport === Sport.Cycling) {
+		if (activity?.avgPower != null && activity.avgPower > 0) {
+			thirdMetric = { label: "Power", value: `${activity.avgPower} W` };
+		} else {
+			const mph = duration > 0 ? miles / (duration / 3600) : 0;
+			thirdMetric = { label: "Speed", value: mph > 0 ? `${mph.toFixed(1)} mph` : "—" };
+		}
 	} else if (isSwimming) {
 		thirdMetric = {
 			label: "Pace",

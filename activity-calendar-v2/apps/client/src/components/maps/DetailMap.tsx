@@ -46,11 +46,15 @@ interface Props {
 	autoLapDist?: number | null;
 	/** Optional selected range [startIndex, endIndex] to highlight on the map (TODO #10). */
 	selectedRange?: [number, number] | null;
-	/** Number of laps in the session. When > 1, auto-generated LapMarkers are hidden. */
+	/** Number of laps in the session. When > 1, auto-generated LapMarkers are hidden by default. */
 	lapCount?: number;
+	/** Whether to show auto lap markers instead of watch-defined lap markers. */
+	showAutoLapMarkers?: boolean;
+	/** Callback to toggle between auto and watch lap markers. */
+	onToggleLapMarkers?: () => void;
 }
 
-export function DetailMap({ points, sport, sessions, hoveredIndex, autoLapDist: autoLapDistProp, selectedRange, lapCount }: Props) {
+export function DetailMap({ points, sport, sessions, hoveredIndex, autoLapDist: autoLapDistProp, selectedRange, lapCount, showAutoLapMarkers, onToggleLapMarkers }: Props) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -106,6 +110,17 @@ export function DetailMap({ points, sport, sessions, hoveredIndex, autoLapDist: 
 			>
 				{isFullscreen ? "⤓" : "⤢"}
 			</button>
+			{/* Lap markers toggle - only show when watch-defined laps exist */}
+			{lapCount != null && lapCount > 1 && onToggleLapMarkers && (
+				<button
+					type="button"
+					onClick={onToggleLapMarkers}
+					aria-label={showAutoLapMarkers ? "Show watch lap markers" : "Show auto lap markers"}
+					className="absolute top-2 left-12 z-[1000] rounded-md bg-white border border-gray-300 shadow-md px-2 py-1.5 text-gray-700 hover:bg-gray-100 transition-colors text-xs leading-none"
+				>
+					{showAutoLapMarkers ? "Auto Laps" : "Watch Laps"}
+				</button>
+			)}
 			<MapContainer bounds={bounds} scrollWheelZoom preferCanvas className={`${isFullscreen ? "h-full" : "h-[500px]"} w-full rounded-lg`}>
 			<LayersControl position="topright">
 				<LayersControl.BaseLayer checked name="OpenStreetMap">
@@ -149,8 +164,8 @@ export function DetailMap({ points, sport, sessions, hoveredIndex, autoLapDist: 
 				</LayersControl.Overlay>
 			</LayersControl>
 
-			{(lapCount == null || lapCount <= 1) && <LapMarkers points={points} />}
-			<MileMarkers points={points} interval={autoLapDist} />
+			{(lapCount == null || lapCount <= 1 || showAutoLapMarkers) && <MileMarkers points={points} interval={autoLapDist} />}
+			{lapCount != null && lapCount > 1 && !showAutoLapMarkers && <LapMarkers points={points} />}
 
 			<Marker position={coords[0]!} icon={startIcon} />
 			<Marker position={coords[coords.length - 1]!} icon={endIcon} />
