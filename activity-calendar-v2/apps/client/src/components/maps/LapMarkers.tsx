@@ -1,5 +1,5 @@
 import React from "react";
-import { Marker, Tooltip } from "react-leaflet";
+import { FeatureGroup, Marker, Tooltip } from "react-leaflet";
 import L from "leaflet";
 import type { RecordPoint } from "@activity-calendar/shared";
 
@@ -28,24 +28,25 @@ interface Props {
  * If there's only 1 unique lap number in the data, we skip markers entirely.
  * The first lap marker is at the start of lap 2 (= end of lap 1); the start
  * of the activity is covered by the green start marker.
+ *
+ * Returns a FeatureGroup so it can be used as a child of LayersControl.Overlay.
  */
 export function LapMarkers({ points }: Props) {
-	if (points.length === 0) return null;
-
-	const maxLap = points[points.length - 1]!.lap;
+	const maxLap = points.length > 0 ? points[points.length - 1]!.lap : 0;
 	const uniqueLaps = new Set(points.map((p) => p.lap));
-	if (uniqueLaps.size <= 1) return null;
 
 	const markers: React.ReactElement[] = [];
-	for (let lapNum = 2; lapNum <= maxLap; lapNum++) {
-		const first = points.find((p) => p.lap === lapNum);
-		if (!first || first.latitude == null || first.longitude == null) continue;
-		markers.push(
-			<Marker key={lapNum} position={[first.latitude, first.longitude]} icon={numberedIcon(lapNum - 1)}>
-				<Tooltip>Lap {lapNum - 1}</Tooltip>
-			</Marker>,
-		);
+	if (uniqueLaps.size > 1) {
+		for (let lapNum = 2; lapNum <= maxLap; lapNum++) {
+			const first = points.find((p) => p.lap === lapNum);
+			if (!first || first.latitude == null || first.longitude == null) continue;
+			markers.push(
+				<Marker key={lapNum} position={[first.latitude, first.longitude]} icon={numberedIcon(lapNum - 1)}>
+					<Tooltip>Lap {lapNum - 1}</Tooltip>
+				</Marker>,
+			);
+		}
 	}
 
-	return <>{markers}</>;
+	return <FeatureGroup>{markers}</FeatureGroup>;
 }

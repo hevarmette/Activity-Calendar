@@ -317,7 +317,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 										<td className="px-4 py-3 text-gray-300">
 											<input
 												type="text"
-												defaultValue={focusedCell === `${lap.lapId}-time` ? convertSecondsToHms(time) ?? "" : (convertSecondsToHms(Math.round(time)) ?? "")}
+												defaultValue={focusedCell === `${lap.lapId}-time` ? convertSecondsToHms(time) ?? "" : (convertSecondsToHms(Math.round(time * 100) / 100) ?? "")}
 												key={`${lap.lapId}-time-${focusedCell === `${lap.lapId}-time` ? "full" : "rounded"}`}
 												onFocus={() => setFocusedCell(`${lap.lapId}-time`)}
 												onBlur={(e) => {
@@ -330,7 +330,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 												className="w-24 bg-transparent border-b border-dashed border-gray-700 focus:border-orange-500 outline-none text-gray-200 tabular-nums"
 											/>
 										</td>
-										<td className="px-4 py-3 text-gray-400 tabular-nums">{convertSecondsToHms(Math.round(cumTime))}</td>
+										<td className="px-4 py-3 text-gray-400 tabular-nums">{convertSecondsToHms(Math.round(cumTime * 100) / 100)}</td>
 										<td className="px-4 py-3 text-gray-300">
 											{isCycling ? (speedMph?.toFixed(1) ?? "—") : (formatPace(paceVal) ?? "—")}
 										</td>

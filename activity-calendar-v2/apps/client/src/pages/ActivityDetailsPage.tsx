@@ -73,10 +73,8 @@ export function ActivityDetailsPage() {
 	// Toast state for save error feedback (TODO #4)
 	const [saveError, setSaveError] = useState<string | null>(null);
 
-	// Auto-lap distance state lifted for sharing between AutoLapTable and DetailMap (TODO #12)
+	// Auto-lap distance state lifted for sharing between AutoLapTable and DetailMap
 	const [autoLapDist, setAutoLapDist] = useState<number | null>(null);
-	// Toggle between auto-lap markers and watch-defined lap markers
-	const [showAutoLapMarkers, setShowAutoLapMarkers] = useState(false);
 
 	async function handleSave() {
 		setSaveError(null);
@@ -290,8 +288,6 @@ export function ActivityDetailsPage() {
 							autoLapDist={autoLapDist}
 							selectedRange={selectedRange}
 							lapCount={sessionLaps.length}
-							showAutoLapMarkers={showAutoLapMarkers}
-							onToggleLapMarkers={() => setShowAutoLapMarkers((v) => !v)}
 						/>
 					) : (
 						<div className="flex items-center justify-center h-full min-h-[500px] bg-gray-900 border border-gray-800 rounded-xl text-gray-500 text-sm">

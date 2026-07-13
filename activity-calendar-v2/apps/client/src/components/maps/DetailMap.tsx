@@ -1,4 +1,4 @@
-import { MapContainer, TileLayer, Polyline, Marker, CircleMarker, LayersControl } from "react-leaflet";
+import { MapContainer, TileLayer, Polyline, Marker, CircleMarker, LayersControl, FeatureGroup } from "react-leaflet";
 import L from "leaflet";
 import type { RecordPoint, Session } from "@activity-calendar/shared";
 import { SPORT_COLORS, AUTO_LAP_DISTANCES } from "@activity-calendar/shared";
@@ -44,17 +44,13 @@ interface Props {
 	hoveredIndex?: number | null;
 	/** Dynamic auto-lap distance in miles. Overrides the sport default when provided. */
 	autoLapDist?: number | null;
-	/** Optional selected range [startIndex, endIndex] to highlight on the map (TODO #10). */
+	/** Optional selected range [startIndex, endIndex] to highlight on the map. */
 	selectedRange?: [number, number] | null;
-	/** Number of laps in the session. When > 1, auto-generated LapMarkers are hidden by default. */
+	/** Number of laps in the session. Controls default visibility of Laps vs Auto Mile Markers. */
 	lapCount?: number;
-	/** Whether to show auto lap markers instead of watch-defined lap markers. */
-	showAutoLapMarkers?: boolean;
-	/** Callback to toggle between auto and watch lap markers. */
-	onToggleLapMarkers?: () => void;
 }
 
-export function DetailMap({ points, sport, sessions, hoveredIndex, autoLapDist: autoLapDistProp, selectedRange, lapCount, showAutoLapMarkers, onToggleLapMarkers }: Props) {
+export function DetailMap({ points, sport, sessions, hoveredIndex, autoLapDist: autoLapDistProp, selectedRange, lapCount }: Props) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -89,7 +85,12 @@ export function DetailMap({ points, sport, sessions, hoveredIndex, autoLapDist: 
 	const isMultisport = sessions && sessions.length > 1;
 	const autoLapDist = autoLapDistProp ?? AUTO_LAP_DISTANCES[sport] ?? AUTO_LAP_DISTANCES["default"]!;
 
-	// Build highlighted segment coords from selectedRange (TODO #10)
+	// Determine default visibility for Laps vs Auto Mile Markers (matches Streamlit logic)
+	const hasWatchLaps = lapCount != null && lapCount > 1;
+	const showLapsByDefault = hasWatchLaps;
+	const showAutoMilesByDefault = !hasWatchLaps;
+
+	// Build highlighted segment coords from selectedRange
 	const highlightCoords = useMemo(() => {
 		if (!selectedRange) return null;
 		const [startIdx, endIdx] = selectedRange;
@@ -110,67 +111,79 @@ export function DetailMap({ points, sport, sessions, hoveredIndex, autoLapDist: 
 			>
 				{isFullscreen ? "⤓" : "⤢"}
 			</button>
-			{/* Lap markers toggle - only show when watch-defined laps exist */}
-			{lapCount != null && lapCount > 1 && onToggleLapMarkers && (
-				<button
-					type="button"
-					onClick={onToggleLapMarkers}
-					aria-label={showAutoLapMarkers ? "Show watch lap markers" : "Show auto lap markers"}
-					className="absolute top-2 left-12 z-[1000] rounded-md bg-white border border-gray-300 shadow-md px-2 py-1.5 text-gray-700 hover:bg-gray-100 transition-colors text-xs leading-none"
-				>
-					{showAutoLapMarkers ? "Auto Laps" : "Watch Laps"}
-				</button>
-			)}
 			<MapContainer bounds={bounds} scrollWheelZoom preferCanvas className={`${isFullscreen ? "h-full" : "h-[500px]"} w-full rounded-lg`}>
 			<LayersControl position="topright">
+				{/* ─── Base Layers ─── */}
 				<LayersControl.BaseLayer checked name="OpenStreetMap">
 					<TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+				</LayersControl.BaseLayer>
+				<LayersControl.BaseLayer name="USGS Topo">
+					<TileLayer url="https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}" />
 				</LayersControl.BaseLayer>
 				<LayersControl.BaseLayer name="Esri Satellite">
 					<TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
 				</LayersControl.BaseLayer>
 
+				{/* ─── Route Overlays ─── */}
 				{isMultisport ? (
-					<LayersControl.Overlay checked name="Route by Sport">
-						<>
-							{sessions.map((session) => {
-								const start = new Date(session.startTime).getTime();
-								const end = start + (session.totalTimerTime ?? 0) * 1000;
-								const seg = points
-									.filter((p) => {
-										const t = new Date(p.timestamp).getTime();
-										return t >= start && t <= end && p.latitude != null && p.longitude != null;
-									})
-									.map((p) => [p.latitude!, p.longitude!] as [number, number]);
-								const displaySeg = downsample(seg, 1000);
-								return displaySeg.length > 1 ? (
-									<Polyline
-										key={session.sessionId}
-										positions={displaySeg}
-										pathOptions={{ color: SPORT_COLORS[session.sport] ?? "#7F7F7F", weight: 5 }}
-									/>
-								) : null;
-							})}
-						</>
-					</LayersControl.Overlay>
+					<>
+						<LayersControl.Overlay checked name="Route by Sport">
+							<FeatureGroup>
+								{sessions.map((session) => {
+									const start = new Date(session.startTime).getTime();
+									const end = start + (session.totalTimerTime ?? 0) * 1000;
+									const seg = points
+										.filter((p) => {
+											const t = new Date(p.timestamp).getTime();
+											return t >= start && t <= end && p.latitude != null && p.longitude != null;
+										})
+										.map((p) => [p.latitude!, p.longitude!] as [number, number]);
+									const displaySeg = downsample(seg, 1000);
+									return displaySeg.length > 1 ? (
+										<Polyline
+											key={session.sessionId}
+											positions={displaySeg}
+											pathOptions={{ color: SPORT_COLORS[session.sport] ?? "#7F7F7F", weight: 5 }}
+										/>
+									) : null;
+								})}
+							</FeatureGroup>
+						</LayersControl.Overlay>
+						<LayersControl.Overlay name="Default Line Color">
+							<FeatureGroup>
+								<Polyline positions={displayCoords} pathOptions={{ color: "#FF4B4B", weight: 5 }} />
+							</FeatureGroup>
+						</LayersControl.Overlay>
+					</>
 				) : (
-					<LayersControl.Overlay checked name="Route">
-						<Polyline positions={displayCoords} pathOptions={{ color: "#FF4B4B", weight: 5 }} />
+					<LayersControl.Overlay checked name="Default Line Color">
+						<FeatureGroup>
+							<Polyline positions={displayCoords} pathOptions={{ color: "#FF4B4B", weight: 5 }} />
+						</FeatureGroup>
 					</LayersControl.Overlay>
 				)}
 
+				{/* ─── Speed Color Overlay ─── */}
 				<LayersControl.Overlay name="Speed">
 					<SpeedColorLine points={points} />
 				</LayersControl.Overlay>
+
+				{/* ─── Lap Markers Overlay ─── */}
+				<LayersControl.Overlay checked={showLapsByDefault} name="Laps">
+					<LapMarkers points={points} />
+				</LayersControl.Overlay>
+
+				{/* ─── Auto Mile Markers Overlay ─── */}
+				<LayersControl.Overlay checked={showAutoMilesByDefault} name="Auto Mile Markers">
+					<MileMarkers points={points} interval={autoLapDist} />
+				</LayersControl.Overlay>
 			</LayersControl>
 
-			{(lapCount == null || lapCount <= 1 || showAutoLapMarkers) && <MileMarkers points={points} interval={autoLapDist} />}
-			{lapCount != null && lapCount > 1 && !showAutoLapMarkers && <LapMarkers points={points} />}
-
+			{/* Start / End markers (always visible, not toggleable) */}
 			<Marker position={coords[0]!} icon={startIcon} />
 			<Marker position={coords[coords.length - 1]!} icon={endIcon} />
 
-			{/* Highlighted range segment (TODO #10) */}
+			{/* Highlighted range segment from chart selection */}
 			{highlightCoords && (
 				<Polyline
 					positions={highlightCoords}
@@ -178,6 +191,7 @@ export function DetailMap({ points, sport, sessions, hoveredIndex, autoLapDist: 
 				/>
 			)}
 
+			{/* Hovered point indicator */}
 			{hoveredIndex != null && points[hoveredIndex]?.latitude != null && (
 				<CircleMarker
 					center={[points[hoveredIndex]!.latitude!, points[hoveredIndex]!.longitude!]}
