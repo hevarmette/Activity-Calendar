@@ -102,4 +102,4 @@
   - [x] when adjusting the calendar year, while i am typing it will try and reload and throw an error such as when deleting the 6 from 2026 it tries to load the year 202 and errors out. would be better if it didn't do anything if the year was invalid
   - [x] show start and stop points and lap markers on the map in the acitivty dialog box
   - [x] cumulative dist and time on the lap tab
-  - [] show pace to two decimal places in the lap tables and auto lap table on details page
+  - [x] show pace to two decimal places in the lap tables and auto lap table on details page

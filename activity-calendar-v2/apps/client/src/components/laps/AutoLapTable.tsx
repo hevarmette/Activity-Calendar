@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { AUTO_LAP_DISTANCES, METERS_PER_MILE, Sport, convertSecondsToHms, formatPace } from "@activity-calendar/shared";
+import { AUTO_LAP_DISTANCES, METERS_PER_MILE, Sport, convertSecondsToHms, formatPacePrecise } from "@activity-calendar/shared";
 import { useAutoLaps } from "../../api/queries.js";
 
 type Unit = "mi" | "m";
@@ -93,7 +93,7 @@ export function AutoLapTable({ activityId, sport, onDistanceChange }: Props) {
 									<td className="px-2 py-1">{l.distanceMi.toFixed(2)} mi</td>
 									<td className="px-2 py-1">{l.cumulativeDistanceMi.toFixed(2)} mi</td>
 									<td className="px-2 py-1">
-										{isCycling ? `${l.speedMph?.toFixed(1)} mph` : `${formatPace(l.paceMinPerMile)} /mi`}
+										{isCycling ? `${l.speedMph?.toFixed(1)} mph` : `${formatPacePrecise(l.paceMinPerMile)} /mi`}
 									</td>
 									<td className="px-2 py-1">{convertSecondsToHms(l.cumulativeTimeSeconds)}</td>
 									<td className="px-2 py-1">{Math.round(l.totalAscentFt)}</td>

@@ -4,7 +4,6 @@ import {
 	Intensity,
 	Sport,
 	TRACK_DISTANCES,
-	formatPace,
 	formatPacePrecise,
 	convertSecondsToHms,
 } from "@activity-calendar/shared";
@@ -332,7 +331,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 										</td>
 										<td className="px-4 py-3 text-gray-400 tabular-nums">{convertSecondsToHms(Math.round(cumTime * 100) / 100)}</td>
 										<td className="px-4 py-3 text-gray-300">
-											{isCycling ? (speedMph?.toFixed(1) ?? "—") : (formatPace(paceVal) ?? "—")}
+											{isCycling ? (speedMph?.toFixed(1) ?? "—") : (formatPacePrecise(paceVal) ?? "—")}
 										</td>
 										<td className="px-4 py-3 text-gray-300">
 											<input
