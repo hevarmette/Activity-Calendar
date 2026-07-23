@@ -103,3 +103,4 @@
   - [x] show start and stop points and lap markers on the map in the acitivty dialog box
   - [x] cumulative dist and time on the lap tab
   - [x] show pace to two decimal places in the lap tables and auto lap table on details page
+  - [] Changes to the time in any column except intensity does not persist in the lap table
