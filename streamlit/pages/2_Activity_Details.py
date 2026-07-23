@@ -896,6 +896,9 @@ def _render_session_content(
                         "Distance (miles)": st.column_config.NumberColumn(
                             format="%.2f"
                         ),
+                        "Cumulative Distance (miles)": st.column_config.NumberColumn(
+                            format="%.2f"
+                        ),
                         "Avg Speed (mph)": st.column_config.NumberColumn(format="%.1f"),
                         "Max Speed (mph)": st.column_config.NumberColumn(format="%.1f"),
                     }
@@ -903,6 +906,9 @@ def _render_session_content(
                 else:
                     auto_laps_config = {
                         "Distance (miles)": st.column_config.NumberColumn(
+                            format="%.2f"
+                        ),
+                        "Cumulative Distance (miles)": st.column_config.NumberColumn(
                             format="%.2f"
                         ),
                     }

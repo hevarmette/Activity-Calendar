@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@theme {
+	--font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+.fc {
+	--fc-border-color: var(--color-gray-800);
+	--fc-page-bg-color: transparent;
+	--fc-neutral-bg-color: var(--color-gray-900);
+	--fc-list-event-hover-bg-color: var(--color-gray-800);
+	--fc-today-bg-color: oklch(0.7 0.15 45 / 0.05);
+}
+
+.fc .fc-daygrid-day-number {
+	color: var(--color-gray-400);
+	font-size: 0.75rem;
+}
+
+.fc .fc-col-header-cell-cushion {
+	color: var(--color-gray-500);
+	font-size: 0.75rem;
+	font-weight: 500;
+	text-transform: uppercase;
+}
+
+.fc .fc-toolbar-title {
+	color: var(--color-gray-50);
+	font-size: 1.125rem;
+	font-weight: 600;
+}
+
+.fc .fc-button {
+	background: var(--color-gray-800) !important;
+	border-color: var(--color-gray-700) !important;
+	color: var(--color-gray-300) !important;
+	font-size: 0.75rem;
+}
+
+.fc .fc-button:hover {
+	background: var(--color-gray-700) !important;
+	color: var(--color-gray-100) !important;
+}
+
+.fc .fc-button-active {
+	background: var(--color-orange-500) !important;
+	border-color: var(--color-orange-500) !important;
+	color: white !important;
+}
+
+::-webkit-scrollbar {
+	width: 6px;
+	height: 6px;
+}
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+::-webkit-scrollbar-thumb {
+	background: var(--color-gray-700);
+	border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+	background: var(--color-gray-600);
+}
+
+.effort-slider-unset {
+	accent-color: var(--color-gray-700);
+}
+
+.effort-slider-unset::-webkit-slider-thumb {
+	opacity: 0;
+}
+
+.effort-slider-unset::-moz-range-thumb {
+	opacity: 0;
+}

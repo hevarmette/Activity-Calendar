@@ -3,7 +3,6 @@ __pycache__/
 *.py[cod]
 *.egg
 *.egg-info/
-dist/
 build/
 .eggs/
 *.pyo
@@ -17,10 +16,22 @@ env/
 ENV/
 
 # --- Streamlit secrets ---
-.streamlit/secrets.toml
+streamlit/.streamlit/secrets.toml
 
 # --- Jupyter Notebooks ---
 .ipynb_checkpoints/
+
+# --- Node.js / TypeScript ---
+node_modules/
+*.tsbuildinfo
+.env
+
+# --- Build output ---
+dist/
+
+# --- Elevation cache ---
+.elevation-cache/
+.elevation-cache-srtm/
 
 # --- System files ---
 .DS_Store

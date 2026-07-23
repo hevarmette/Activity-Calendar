@@ -352,6 +352,7 @@ def create_auto_laps(points_df: pd.DataFrame, events_df: pd.DataFrame | None = N
     laps_df["Total Descent (ft)"] = laps_df["Total Descent (ft)"].round(0)
     laps_df["Time"] = laps_df["seconds_raw"].apply(convert_seconds_to_hms)
     laps_df["Cumulative Time"] = laps_df["seconds_raw"].cumsum().apply(convert_seconds_to_hms)
+    laps_df["Cumulative Distance (miles)"] = laps_df["Distance (miles)"].cumsum()
 
     return laps_df, target_dists
 
@@ -370,6 +371,7 @@ def build_running_auto_laps(laps_df: pd.DataFrame) -> pd.DataFrame:
         "Lap",
         "Time",
         "Distance (miles)",
+        "Cumulative Distance (miles)",
         "Pace (min/mile)",
         "Cumulative Time",
         "Total Ascent (ft)",
@@ -391,6 +393,7 @@ def build_cycling_auto_laps(laps_df: pd.DataFrame) -> pd.DataFrame:
         "Lap",
         "Time",
         "Distance (miles)",
+        "Cumulative Distance (miles)",
         "Cumulative Time",
         "Total Ascent (ft)",
         "Total Descent (ft)",
