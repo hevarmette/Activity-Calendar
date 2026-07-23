@@ -273,13 +273,13 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 						<tr>
 							<th className="px-4 py-3">Lap</th>
 							<th className="px-4 py-3">Distance (mi)</th>
-							<th className="px-4 py-3">Cum. Dist</th>
 							<th className="px-4 py-3">Time</th>
+							<th className="px-4 py-3">Cum. Dist</th>
 							<th className="px-4 py-3">Cum. Time</th>
 							<th className="px-4 py-3">{isCycling ? "Speed (mph)" : "Pace"}</th>
-							<th className="px-4 py-3">Avg HR</th>
-							<th className="px-4 py-3">Max HR</th>
 							<th className="px-4 py-3">Ascent</th>
+							<th className="px-4 py-3">Descent</th>
+							<th className="px-4 py-3">Cadence</th>
 							<th className="px-4 py-3">Intensity</th>
 						</tr>
 					</thead>
@@ -288,8 +288,10 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 							let cumDist = 0;
 							let cumTime = 0;
 							return filtered.map((lap) => {
-								const miles = (lap.totalDistance ?? 0) / METERS_PER_MILE;
-								const time = lap.totalTimerTime ?? 0;
+								const distEdit = edits.get(`${lap.lapId}-totalDistance`);
+								const timeEdit = edits.get(`${lap.lapId}-totalTimerTime`);
+								const miles = distEdit != null ? (distEdit.value as number) / METERS_PER_MILE : (lap.totalDistance ?? 0) / METERS_PER_MILE;
+								const time = timeEdit != null ? (timeEdit.value as number) : (lap.totalTimerTime ?? 0);
 								cumDist += miles;
 								cumTime += time;
 								const paceVal = miles > 0 ? time / 60 / miles : null;
@@ -303,7 +305,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 												type="number"
 												step="0.01"
 												defaultValue={focusedCell === `${lap.lapId}-dist` ? miles.toString() : miles.toFixed(2)}
-												key={`${lap.lapId}-dist-${focusedCell === `${lap.lapId}-dist` ? "full" : "rounded"}`}
+												key={`${lap.lapId}-dist-${focusedCell === `${lap.lapId}-dist` ? "full" : "rounded"}-${distEdit ? miles : ""}`}
 												onFocus={() => setFocusedCell(`${lap.lapId}-dist`)}
 												onBlur={(e) => {
 													setFocusedCell(null);
@@ -312,12 +314,11 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 												className="w-20 bg-transparent border-b border-dashed border-gray-700 focus:border-orange-500 outline-none text-gray-200 tabular-nums"
 											/>
 										</td>
-										<td className="px-4 py-3 text-gray-400 tabular-nums">{cumDist.toFixed(2)}</td>
 										<td className="px-4 py-3 text-gray-300">
 											<input
 												type="text"
 												defaultValue={focusedCell === `${lap.lapId}-time` ? convertSecondsToHms(time) ?? "" : (convertSecondsToHms(Math.round(time * 100) / 100) ?? "")}
-												key={`${lap.lapId}-time-${focusedCell === `${lap.lapId}-time` ? "full" : "rounded"}`}
+												key={`${lap.lapId}-time-${focusedCell === `${lap.lapId}-time` ? "full" : "rounded"}-${timeEdit ? time : ""}`}
 												onFocus={() => setFocusedCell(`${lap.lapId}-time`)}
 												onBlur={(e) => {
 													setFocusedCell(null);
@@ -329,20 +330,14 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 												className="w-24 bg-transparent border-b border-dashed border-gray-700 focus:border-orange-500 outline-none text-gray-200 tabular-nums"
 											/>
 										</td>
+										<td className="px-4 py-3 text-gray-400 tabular-nums">{cumDist.toFixed(2)}</td>
 										<td className="px-4 py-3 text-gray-400 tabular-nums">{convertSecondsToHms(Math.round(cumTime * 100) / 100)}</td>
 										<td className="px-4 py-3 text-gray-300">
 											{isCycling ? (speedMph?.toFixed(1) ?? "—") : (formatPacePrecise(paceVal) ?? "—")}
 										</td>
-										<td className="px-4 py-3 text-gray-300">
-											<input
-												type="number"
-												defaultValue={lap.avgHeartRate ?? ""}
-												onBlur={(e) => handleEdit(lap.lapId, "avgHeartRate", Number(e.target.value))}
-												className="w-14 bg-transparent border-b border-dashed border-gray-700 focus:border-orange-500 outline-none text-gray-200 tabular-nums"
-											/>
-										</td>
-										<td className="px-4 py-3 text-gray-300">{lap.maxHeartRate ?? "—"}</td>
 										<td className="px-4 py-3 text-gray-300">{lap.totalAscent ?? "—"}</td>
+										<td className="px-4 py-3 text-gray-300">{lap.totalDescent ?? "—"}</td>
+										<td className="px-4 py-3 text-gray-300">{lap.avgRunningCadence != null ? Math.round(lap.avgRunningCadence * (isCycling ? 1 : 2)) : "—"}</td>
 										<td className="px-4 py-3 text-gray-300">
 											<select
 												defaultValue={lap.intensity ?? ""}

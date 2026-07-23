@@ -41,7 +41,12 @@ export function ActivityDetailsPage() {
 
 	const [tab, setTab] = useState<Tab>("laps");
 	const [activityEdits, setActivityEdits] = useState<Partial<ActivityUpdatePayload>>({});
-	const [lapEdits, setLapEdits] = useState<LapEdit[]>([]);
+	const [lapEdits, setLapEditsState] = useState<LapEdit[]>([]);
+	const lapEditsRef = useRef<LapEdit[]>([]);
+	const setLapEdits = useCallback((edits: LapEdit[]) => {
+		lapEditsRef.current = edits;
+		setLapEditsState(edits);
+	}, []);
 	const [sessionIdx, setSessionIdx] = useState(0);
 	const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 	const [selectedRange, setSelectedRange] = useState<[number, number] | null>(null);
@@ -84,7 +89,8 @@ export function ActivityDetailsPage() {
 				const result = await saveActivity.mutateAsync(activityEdits as ActivityUpdatePayload);
 				if (result?.sql) sqls.push(result.sql);
 			}
-			for (const edit of lapEdits) {
+			const currentLapEdits = lapEditsRef.current;
+			for (const edit of currentLapEdits) {
 				await saveLap.mutateAsync({ lapId: edit.lapId, [edit.field]: edit.value } as Parameters<
 					typeof saveLap.mutateAsync
 				>[0]);
