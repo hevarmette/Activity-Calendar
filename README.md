@@ -1,8 +1,8 @@
 # Activity Calendar
 
-A personal fitness activity dashboard for visualizing, analyzing, and managing workout data stored in a PostgreSQL database. It renders activities on an interactive calendar and provides deep drill-down into lap data, GPS routes, performance graphs, and training metrics.
+A personal fitness activity dashboard for visualizing, analyzing, and managing workout data stored in a PostgreSQL database. I made this because I couldn't compare intervals reflect on proper training efforts once my training history became too large. This has an emphasis on comparing similar workouts to each other, and analyzing their splits.
 
-The real benefit of having my own database and UI, compared to Garmin Connect and Strava, is that I can quickly find past activities and compare workouts against each other. This helps to build my training plan.
+It renders activities on an interactive calendar and provides deep drill-down into lap data, GPS routes, performance graphs, and training metrics. The real benefit of having my own database and UI, compared to Garmin Connect and Strava, is that I can quickly find past activities and compare workouts against each other. This helps to build my training plan.
 
 > **Note:** Database setup and FIT file parsing are handled by the companion [Fitness-File-Parser](https://github.com/hevarmette/Fitness-File-Parser) repository.
 
