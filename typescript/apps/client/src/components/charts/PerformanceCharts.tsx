@@ -40,27 +40,30 @@ interface ChartPoint {
 
 function buildChartData(points: RecordPoint[], xMode: XMode, sport: string): ChartPoint[] {
 	const isCycling = sport === Sport.Cycling;
+	// Subtract the baseline distance/time of the first point so multisport
+	// sessions always start at 0 on the x-axis.
+	const filtered = points.filter((p) => p.latitude != null);
+	const baseDistance = filtered.length > 0 ? (filtered[0]!.distance ?? 0) : 0;
+	const baseTime = filtered.length > 0 ? filtered[0]!.elapsedTime : 0;
 	let idx = 0;
-	return points
-		.filter((p) => p.latitude != null)
-		.map((p) => {
-			const distMiles = (p.distance ?? 0) / METERS_PER_MILE;
-			const elapsedMin = p.elapsedTime / 60;
-			const paceMinPerMile =
-				p.enhancedSpeed && p.enhancedSpeed > 0 ? (1 / p.enhancedSpeed) * (METERS_PER_MILE / 60) : null;
-			const speedMph = p.enhancedSpeed ? p.enhancedSpeed * 2.23694 : null;
-			return {
-				x: xMode === "distance" ? distMiles : elapsedMin,
-				distMiles,
-				elapsedMin,
-				pointIndex: idx++,
-				pace: paceMinPerMile,
-				speed: speedMph,
-				hr: p.heartRate,
-				altitude: p.correctedAltitude ?? (p.altitude ? p.altitude * 3.28084 : null),
-				cadence: p.cadence ? (p.cadence + (p.fractionalCadence ?? 0)) * (isCycling ? 1 : 2) : null,
-			};
-		});
+	return filtered.map((p) => {
+		const distMiles = ((p.distance ?? 0) - baseDistance) / METERS_PER_MILE;
+		const elapsedMin = (p.elapsedTime - baseTime) / 60;
+		const paceMinPerMile =
+			p.enhancedSpeed && p.enhancedSpeed > 0 ? (1 / p.enhancedSpeed) * (METERS_PER_MILE / 60) : null;
+		const speedMph = p.enhancedSpeed ? p.enhancedSpeed * 2.23694 : null;
+		return {
+			x: xMode === "distance" ? distMiles : elapsedMin,
+			distMiles,
+			elapsedMin,
+			pointIndex: idx++,
+			pace: paceMinPerMile,
+			speed: speedMph,
+			hr: p.heartRate,
+			altitude: p.correctedAltitude ?? (p.altitude ? p.altitude * 3.28084 : null),
+			cadence: p.cadence ? (p.cadence + (p.fractionalCadence ?? 0)) * (isCycling ? 1 : 2) : null,
+		};
+	});
 }
 
 function getXTicks(data: ChartPoint[], xMode: XMode): number[] {
