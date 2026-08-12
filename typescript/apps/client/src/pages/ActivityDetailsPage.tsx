@@ -8,6 +8,7 @@ import { useActivity, useLaps, useRecords, useSessions } from "../api/queries.js
 import { PerformanceCharts } from "../components/charts/PerformanceCharts.js";
 import { ActivityStatsGrid } from "../components/details/ActivityStatsGrid.js";
 import { FeelEffortRow } from "../components/details/FeelEffortRow.js";
+import { SessionSummaryCards } from "../components/details/SessionSummaryCards.js";
 import { SimilarActivities } from "../components/details/SimilarActivities.js";
 import { AutoLapTable } from "../components/laps/AutoLapTable.js";
 import { type LapEdit, LapTable } from "../components/laps/LapTable.js";
@@ -331,9 +332,19 @@ export function ActivityDetailsPage() {
 				</div>
 			)}
 
+			{/* 5b. Per-leg summary metrics for multisport */}
+			{isMultisport && activeSession && <SessionSummaryCards session={activeSession} />}
+
 			{/* 6. Performance Charts (inline, not in tab) */}
 			{sessionPoints.length > 0 && (
-				<PerformanceCharts points={sessionPoints} sport={sessionSport} category={category} onHover={setHoveredIndex} onRangeSelect={setSelectedRange} laps={sessionLaps} />
+				<PerformanceCharts
+					points={sessionPoints}
+					sport={sessionSport}
+					category={category}
+					onHover={setHoveredIndex}
+					onRangeSelect={setSelectedRange}
+					laps={sessionLaps}
+				/>
 			)}
 
 			{/* 7. Three tabs: Laps / Activity Details / Auto Laps */}
@@ -373,24 +384,24 @@ export function ActivityDetailsPage() {
 							avgPower={activity.avgPower}
 						/>
 						{/* Show elapsed time from session data (TODO #11) */}
-						{sessions && sessions.length > 0 && (() => {
-							const session = activeSession ?? sessions[0];
-							const elapsed = session?.totalElapsedTime;
-							if (elapsed == null || elapsed <= 0) return null;
-							return (
-								<div className="mt-4 rounded-xl bg-gray-900 border border-gray-800 p-4 inline-block">
-									<p className="text-xs font-medium uppercase tracking-wide text-gray-500">Elapsed Time</p>
-									<p className="mt-1 text-lg font-semibold text-gray-100 tabular-nums">
-										{convertSecondsToHms(Math.round(elapsed))}
-									</p>
-								</div>
-							);
-						})()}
+						{sessions &&
+							sessions.length > 0 &&
+							(() => {
+								const session = activeSession ?? sessions[0];
+								const elapsed = session?.totalElapsedTime;
+								if (elapsed == null || elapsed <= 0) return null;
+								return (
+									<div className="mt-4 rounded-xl bg-gray-900 border border-gray-800 p-4 inline-block">
+										<p className="text-xs font-medium uppercase tracking-wide text-gray-500">Elapsed Time</p>
+										<p className="mt-1 text-lg font-semibold text-gray-100 tabular-nums">
+											{convertSecondsToHms(Math.round(elapsed))}
+										</p>
+									</div>
+								);
+							})()}
 					</>
 				)}
-				{tab === "auto-laps" && (
-					<AutoLapTable activityId={id} sport={sessionSport} onDistanceChange={setAutoLapDist} />
-				)}
+				{tab === "auto-laps" && <AutoLapTable activityId={id} sport={sessionSport} onDistanceChange={setAutoLapDist} />}
 			</div>
 
 			{/* 8. Feel + Effort row */}

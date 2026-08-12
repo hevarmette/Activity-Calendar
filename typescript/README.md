@@ -11,7 +11,7 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 
 ### Activity Details Page
 - Full-screen interactive Leaflet map with lap markers, auto mile markers, start/end icons, speed-colored route overlay, and fullscreen mode
-- Multisport activities render per-session tabs with scoped maps, charts, and laps
+- Multisport activities render per-session tabs with scoped maps, charts, laps, and per-leg summary cards (distance, duration, pace/speed/power)
 - Performance charts (Recharts) plotted against distance: pace, heart rate, altitude, cadence, power
 - Synchronized chart range selection that filters the map view
 - Editable lap table with inline editing for distance, time, and intensity
@@ -103,9 +103,22 @@ bun run dev          # Starts client (port 5173) and server (port 3000)
 
 ## Docker
 
+Build and run the application as a single container:
+
 ```bash
-docker compose up    # Starts PostgreSQL for local development
+docker compose build            # Build the image
+docker compose up -d            # Start in background
+docker compose logs -f server   # Watch logs
+docker compose down             # Stop
 ```
+
+The app reads database credentials from `apps/server/.env`. After code changes, rebuild and restart:
+
+```bash
+docker compose up -d --build
+```
+
+The application is accessible at `http://<your-ip>:3000` from any machine on your network.
 
 ## Testing
 

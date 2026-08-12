@@ -15,7 +15,11 @@ import { autoLapsRoutes } from "./routes/auto-laps.js";
 
 const app = new Hono();
 
-app.use("*", cors({ origin: process.env.CLIENT_ORIGIN || "http://localhost:5173" }));
+app.use("*", cors({
+	origin: process.env.NODE_ENV === "production"
+		? "*"
+		: (process.env.CLIENT_ORIGIN || "http://localhost:5173"),
+}));
 
 app.route("/api/calendar", calendarRoutes);
 app.route("/api/activities", activitiesRoutes);

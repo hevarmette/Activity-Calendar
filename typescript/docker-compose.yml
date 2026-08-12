@@ -14,15 +14,9 @@ services:
     build: .
     ports:
       - "3000:3000"
-    depends_on:
-      - postgres
+    env_file:
+      - apps/server/.env
     environment:
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: activity_calendar
-      DB_USER: activity_user
-      DB_PASSWORD: activity_pass
-      PORT: "3000"
       NODE_ENV: production
 
 volumes:

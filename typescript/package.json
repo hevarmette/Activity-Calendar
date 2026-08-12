@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "concurrently \"bun run --filter=@activity-calendar/server dev\" \"bun run --filter=@activity-calendar/client dev\"",
     "build": "bun run --filter=* build",
+    "start": "bun run build && bun run --filter=@activity-calendar/server start",
     "check": "biome check .",
     "format": "biome format --write .",
     "test:e2e": "playwright test"
