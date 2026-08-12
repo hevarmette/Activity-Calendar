@@ -1,7 +1,7 @@
-import { useMemo } from "react";
-import { useSearchParams, Link } from "react-router";
-import { METERS_PER_MILE, Sport, convertSecondsToHms, formatPaceSpeed, SPORT_COLORS } from "@activity-calendar/shared";
+import { METERS_PER_MILE, SPORT_COLORS, Sport, convertSecondsToHms, formatPaceSpeed } from "@activity-calendar/shared";
 import type { SearchRow } from "@activity-calendar/shared";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router";
 import { useSearch } from "../api/queries.js";
 import { MetricCard } from "../components/ui/MetricCard.js";
 
@@ -53,7 +53,32 @@ function canonicalSport(sport: string, numSessions: number): string {
 
 export function ActivitySearchPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
-	const { data, isLoading } = useSearch();
+
+	const qParam = searchParams.get("q") ?? "";
+	const [searchText, setSearchText] = useState(qParam);
+	const [debouncedQ, setDebouncedQ] = useState(qParam);
+
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			setDebouncedQ(searchText);
+		}, 300);
+		return () => clearTimeout(timer);
+	}, [searchText]);
+
+	useEffect(() => {
+		setSearchParams((prev) => {
+			const next = new URLSearchParams(prev);
+			if (debouncedQ) next.set("q", debouncedQ);
+			else next.delete("q");
+			if (next.get("q") !== prev.get("q")) {
+				next.set("page", "1");
+				return next;
+			}
+			return prev;
+		});
+	}, [debouncedQ, setSearchParams]);
+
+	const { data, isLoading } = useSearch(debouncedQ || undefined);
 
 	const sports = searchParams.get("sports")?.split(",").filter(Boolean) ?? [];
 	const categories = searchParams.get("categories")?.split(",").filter(Boolean) ?? [];
@@ -66,7 +91,16 @@ export function ActivitySearchPage() {
 	const page = Number(searchParams.get("page")) || 1;
 	const sortField = searchParams.get("sort") || "date";
 	const sortDir = searchParams.get("dir") || "desc";
-	const hasFilters = sports.length > 0 || categories.length > 0 || dateFrom || dateTo || minDist || maxDist || minDur || maxDur;
+	const hasFilters =
+		!!debouncedQ ||
+		sports.length > 0 ||
+		categories.length > 0 ||
+		dateFrom ||
+		dateTo ||
+		minDist ||
+		maxDist ||
+		minDur ||
+		maxDur;
 
 	const availableSports = useMemo(() => {
 		if (!data) return [];
@@ -101,14 +135,17 @@ export function ActivitySearchPage() {
 		const dir = sortDir === "asc" ? 1 : -1;
 		result.sort((a, b) => {
 			switch (sortField) {
-				case "distance": return dir * (a.totalDistance - b.totalDistance);
-				case "duration": return dir * (a.totalTimerTime - b.totalTimerTime);
+				case "distance":
+					return dir * (a.totalDistance - b.totalDistance);
+				case "duration":
+					return dir * (a.totalTimerTime - b.totalTimerTime);
 				case "pace": {
-					const pA = a.totalDistance > 0 ? a.totalTimerTime / a.totalDistance : Infinity;
-					const pB = b.totalDistance > 0 ? b.totalTimerTime / b.totalDistance : Infinity;
+					const pA = a.totalDistance > 0 ? a.totalTimerTime / a.totalDistance : Number.POSITIVE_INFINITY;
+					const pB = b.totalDistance > 0 ? b.totalTimerTime / b.totalDistance : Number.POSITIVE_INFINITY;
 					return dir * (pA - pB);
 				}
-				default: return dir * (a.localTimestamp ?? "").localeCompare(b.localTimestamp ?? "");
+				default:
+					return dir * (a.localTimestamp ?? "").localeCompare(b.localTimestamp ?? "");
 			}
 		});
 
@@ -138,6 +175,16 @@ export function ActivitySearchPage() {
 	const filterPanel = (
 		<div className="space-y-4">
 			<div>
+				<input
+					type="text"
+					value={searchText}
+					onChange={(e) => setSearchText(e.target.value)}
+					placeholder="Search by title or description..."
+					aria-label="Search activities by title or description"
+					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
+				/>
+			</div>
+			<div>
 				<label className="text-xs font-medium text-gray-400 block mb-2">Sport</label>
 				<div className="flex flex-wrap gap-1.5">
 					{availableSports.map((s) => {
@@ -148,9 +195,7 @@ export function ActivitySearchPage() {
 								key={s}
 								type="button"
 								onClick={() => {
-									const next = isSelected
-										? sports.filter((sp) => sp !== s)
-										: [...sports, s];
+									const next = isSelected ? sports.filter((sp) => sp !== s) : [...sports, s];
 									updateParam("sports", next.join(","));
 								}}
 								className={`capitalize px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
@@ -158,7 +203,15 @@ export function ActivitySearchPage() {
 										? "text-white shadow-sm"
 										: "bg-gray-800 text-gray-400 border border-gray-700 hover:text-gray-200 hover:border-gray-600"
 								}`}
-								style={isSelected ? { backgroundColor: `${sportColor ?? "#f97316"}cc`, borderColor: sportColor ?? "#f97316", border: `1px solid ${sportColor ?? "#f97316"}80` } : undefined}
+								style={
+									isSelected
+										? {
+												backgroundColor: `${sportColor ?? "#f97316"}cc`,
+												borderColor: sportColor ?? "#f97316",
+												border: `1px solid ${sportColor ?? "#f97316"}80`,
+											}
+										: undefined
+								}
 							>
 								{s}
 							</button>
@@ -176,9 +229,7 @@ export function ActivitySearchPage() {
 								key={c}
 								type="button"
 								onClick={() => {
-									const next = isSelected
-										? categories.filter((cat) => cat !== c)
-										: [...categories, c];
+									const next = isSelected ? categories.filter((cat) => cat !== c) : [...categories, c];
 									updateParam("categories", next.join(","));
 								}}
 								className={`capitalize px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap border ${
@@ -196,31 +247,65 @@ export function ActivitySearchPage() {
 			<div className="grid grid-cols-2 gap-2">
 				<div>
 					<label className="text-xs font-medium text-gray-400 block mb-2">From</label>
-					<input type="date" value={dateFrom} onChange={(e) => updateParam("from", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors" />
+					<input
+						type="date"
+						value={dateFrom}
+						onChange={(e) => updateParam("from", e.target.value)}
+						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
+					/>
 				</div>
 				<div>
 					<label className="text-xs font-medium text-gray-400 block mb-2">To</label>
-					<input type="date" value={dateTo} onChange={(e) => updateParam("to", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors" />
+					<input
+						type="date"
+						value={dateTo}
+						onChange={(e) => updateParam("to", e.target.value)}
+						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
+					/>
 				</div>
 			</div>
 			<div className="grid grid-cols-2 gap-2">
 				<div>
 					<label className="text-xs font-medium text-gray-400 block mb-2">Min Dist (mi)</label>
-					<input type="number" step="0.5" value={minDist || ""} onChange={(e) => updateParam("minDist", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors" />
+					<input
+						type="number"
+						step="0.5"
+						value={minDist || ""}
+						onChange={(e) => updateParam("minDist", e.target.value)}
+						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
+					/>
 				</div>
 				<div>
 					<label className="text-xs font-medium text-gray-400 block mb-2">Max Dist (mi)</label>
-					<input type="number" step="0.5" value={maxDist || ""} onChange={(e) => updateParam("maxDist", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors" />
+					<input
+						type="number"
+						step="0.5"
+						value={maxDist || ""}
+						onChange={(e) => updateParam("maxDist", e.target.value)}
+						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
+					/>
 				</div>
 			</div>
 			<div className="grid grid-cols-2 gap-2">
 				<div>
 					<label className="text-xs font-medium text-gray-400 block mb-2">Min Dur (min)</label>
-					<input type="number" step="5" value={minDur || ""} onChange={(e) => updateParam("minDur", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors" />
+					<input
+						type="number"
+						step="5"
+						value={minDur || ""}
+						onChange={(e) => updateParam("minDur", e.target.value)}
+						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
+					/>
 				</div>
 				<div>
 					<label className="text-xs font-medium text-gray-400 block mb-2">Max Dur (min)</label>
-					<input type="number" step="5" value={maxDur || ""} onChange={(e) => updateParam("maxDur", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors" />
+					<input
+						type="number"
+						step="5"
+						value={maxDur || ""}
+						onChange={(e) => updateParam("maxDur", e.target.value)}
+						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
+					/>
 				</div>
 			</div>
 		</div>
@@ -239,13 +324,21 @@ export function ActivitySearchPage() {
 					<div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
 						{filterPanel}
 						<div className="flex gap-2 mt-4">
-							<select value={sortField} onChange={(e) => updateParam("sort", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors">
+							<select
+								value={sortField}
+								onChange={(e) => updateParam("sort", e.target.value)}
+								className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
+							>
 								<option value="date">Sort: Date</option>
 								<option value="distance">Sort: Distance</option>
 								<option value="duration">Sort: Duration</option>
 								<option value="pace">Sort: Pace/Speed</option>
 							</select>
-							<select value={sortDir} onChange={(e) => updateParam("dir", e.target.value)} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors">
+							<select
+								value={sortDir}
+								onChange={(e) => updateParam("dir", e.target.value)}
+								className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
+							>
 								<option value="desc">Descending</option>
 								<option value="asc">Ascending</option>
 							</select>
@@ -257,7 +350,10 @@ export function ActivitySearchPage() {
 				<div className="space-y-3">
 					{hasFilters ? (
 						<>
-							<p className="text-sm text-gray-500">{activities.length} activities found — showing {((currentPage - 1) * RESULTS_PER_PAGE) + 1}–{Math.min(currentPage * RESULTS_PER_PAGE, activities.length)}</p>
+							<p className="text-sm text-gray-500">
+								{activities.length} activities found — showing {(currentPage - 1) * RESULTS_PER_PAGE + 1}–
+								{Math.min(currentPage * RESULTS_PER_PAGE, activities.length)}
+							</p>
 
 							{pageActivities.map((a) => {
 								const sport = canonicalSport(a.sport, a.numSessions);
@@ -266,10 +362,18 @@ export function ActivitySearchPage() {
 								const date = new Date(a.localTimestamp).toLocaleDateString();
 								const sportColor = SPORT_COLORS[sport] ?? "#6b7280";
 								return (
-									<div key={a.activityId} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center gap-4 hover:border-gray-700 transition-colors">
+									<div
+										key={a.activityId}
+										className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center gap-4 hover:border-gray-700 transition-colors"
+									>
 										<div className="w-1 h-12 rounded-full" style={{ backgroundColor: sportColor }} />
 										<div className="flex-1 min-w-0">
-											<p className="font-medium text-gray-200 truncate">{a.activityName} <span className="text-xs text-gray-500 capitalize">· {sport} · {date}</span></p>
+											<p className="font-medium text-gray-200 truncate">
+												{a.activityName}{" "}
+												<span className="text-xs text-gray-500 capitalize">
+													· {sport} · {date}
+												</span>
+											</p>
 											<div className="flex gap-4 mt-1 text-sm text-gray-400">
 												<span>{miles.toFixed(2)} mi</span>
 												<span>{convertSecondsToHms(a.totalTimerTime) ?? "—"}</span>
@@ -289,11 +393,21 @@ export function ActivitySearchPage() {
 							{/* Pagination */}
 							{totalPages > 1 && (
 								<div className="flex items-center justify-center gap-4 pt-4">
-									<button onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+									<button
+										onClick={() => setPage(currentPage - 1)}
+										disabled={currentPage <= 1}
+										className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+									>
 										← Prev
 									</button>
-									<span className="text-sm text-gray-500">Page {currentPage} of {totalPages}</span>
-									<button onClick={() => setPage(currentPage + 1)} disabled={currentPage >= totalPages} className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+									<span className="text-sm text-gray-500">
+										Page {currentPage} of {totalPages}
+									</span>
+									<button
+										onClick={() => setPage(currentPage + 1)}
+										disabled={currentPage >= totalPages}
+										className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+									>
 										Next →
 									</button>
 								</div>

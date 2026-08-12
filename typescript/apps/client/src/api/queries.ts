@@ -1,4 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
 import type {
 	ActivityDetails,
 	CalendarEvent,
@@ -11,6 +10,7 @@ import type {
 	SwimLength,
 	TimerEvent,
 } from "@activity-calendar/shared";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "./client.js";
 
 export const queryKeys = {
@@ -100,10 +100,10 @@ export function useReport() {
 	});
 }
 
-export function useSearch() {
+export function useSearch(q?: string) {
 	return useQuery({
-		queryKey: queryKeys.search,
-		queryFn: () => api<SearchRow[]>("/api/search"),
+		queryKey: [...queryKeys.search, q ?? ""] as const,
+		queryFn: () => api<SearchRow[]>(q ? `/api/search?q=${encodeURIComponent(q)}` : "/api/search"),
 	});
 }
 

@@ -30,6 +30,7 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 - Tabular breakdown with pace/speed appropriate to sport (pace/mi for running, mph for cycling, pace/100m for swimming)
 
 ### Activity Search Page
+- Text search by title/description with fuzzy matching (handles variations like 5x600m vs 5 x 600m)
 - Filter by sport, sub-sport, category, date range, distance range, and duration range
 - Sort controls (distance, duration, ascending/descending)
 - Click through to Activity Details for any result

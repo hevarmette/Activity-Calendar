@@ -117,6 +117,8 @@ export interface SearchRow {
 	activityId: number;
 	localTimestamp: string;
 	activityName: string | null;
+	/** User-editable activity description, used for text search. */
+	description: string | null;
 	category: string | null;
 	numSessions: number;
 	sport: string;
