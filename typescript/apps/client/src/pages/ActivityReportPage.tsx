@@ -160,8 +160,8 @@ export function ActivityReportPage() {
 	const filteredData = useMemo(() => {
 		if (!data) return [];
 		let result = data;
-		if (dateFrom) result = result.filter((r) => r.localTimestamp >= dateFrom);
-		if (dateTo) result = result.filter((r) => r.localTimestamp.slice(0, 10) <= dateTo);
+		if (dateFrom) result = result.filter((r) => r.localTimestamp != null && r.localTimestamp >= dateFrom);
+		if (dateTo) result = result.filter((r) => r.localTimestamp != null && r.localTimestamp.slice(0, 10) <= dateTo);
 		return result;
 	}, [data, dateFrom, dateTo]);
 

@@ -117,8 +117,8 @@ export function ActivitySearchPage() {
 		let filtered = data;
 		if (sports.length > 0) filtered = filtered.filter((r) => sports.includes(r.sport));
 		if (categories.length > 0) filtered = filtered.filter((r) => categories.includes(r.category?.trim() ?? ""));
-		if (dateFrom) filtered = filtered.filter((r) => r.localTimestamp >= dateFrom);
-		if (dateTo) filtered = filtered.filter((r) => r.localTimestamp.slice(0, 10) <= dateTo);
+		if (dateFrom) filtered = filtered.filter((r) => r.localTimestamp != null && r.localTimestamp >= dateFrom);
+		if (dateTo) filtered = filtered.filter((r) => r.localTimestamp != null && r.localTimestamp.slice(0, 10) <= dateTo);
 
 		const agg = aggregateActivities(filtered);
 
