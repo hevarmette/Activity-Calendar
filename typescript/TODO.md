@@ -104,3 +104,4 @@
   - [x] cumulative dist and time on the lap tab
   - [x] show pace to two decimal places in the lap tables and auto lap table on details page
   - [x] Changes to the time in any column except intensity does not persist in the lap table
+  - [ ] activity report is not summing manual activities made in garmin connect
