@@ -15,6 +15,7 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 - Performance charts (Recharts) plotted against distance: pace, heart rate, altitude, cadence, power
 - Synchronized chart range selection that filters the map view
 - Editable lap table with inline editing for distance, time, and intensity
+- Lap selection with copy-paste intensity patterns (Ctrl+C/V) supporting cyclic repeat for bulk editing
 - Auto laps computed from GPS data at configurable intervals with interpolated splits, elevation, HR, and cadence
 - Activity stats grid with running dynamics (vertical oscillation, ground contact time, stride length, vertical ratio) and best lap
 - Interval summary with clustering algorithm that auto-detects distance or time grouping, shows deviation trends

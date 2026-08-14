@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
 	METERS_PER_MILE,
 	Intensity,
@@ -216,6 +216,15 @@ function detectDefaultGroup(laps: Lap[]): "distance" | "time" {
 	return cv(times) < cv(dists) ? "time" : "distance";
 }
 
+/**
+ * LapTable component with inline editing, intensity copy-paste, and interval summary.
+ *
+ * Copy-paste intensity feature:
+ * - Select laps via checkboxes (supports Shift+Click for range selection)
+ * - Copy intensity pattern from selected laps (Ctrl+C / ⌘C or button)
+ * - Paste pattern onto other selected laps (Ctrl+V / ⌘V or button), cycling if shorter
+ * - Visual feedback: orange highlight for selected rows, blue outline for copied source
+ */
 export function LapTable({ laps, sport, category, onEdits }: Props) {
 	const [filters, setFilters] = useState<Set<string>>(new Set());
 	const [edits, setEdits] = useState<Map<string, LapEdit>>(new Map());
@@ -223,12 +232,102 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 	const [groupBy, setGroupBy] = useState<"distance" | "time">(defaultGroup);
 	const [focusedCell, setFocusedCell] = useState<string | null>(null);
 
+	// --- Copy-paste intensity state ---
+	const [selectedLaps, setSelectedLaps] = useState<Set<number>>(new Set());
+	const [copiedPattern, setCopiedPattern] = useState<string[]>([]);
+	const [lastCopiedFrom, setLastCopiedFrom] = useState<Set<number>>(new Set());
+	const [lastClickedIdx, setLastClickedIdx] = useState<number | null>(null);
+
 	const filtered = filters.size > 0 ? laps.filter((l) => l.intensity != null && filters.has(l.intensity)) : laps;
 	const isCycling = sport === Sport.Cycling;
 
 	const activeLaps = laps.filter((l) => l.intensity === Intensity.Active);
 	const showIntervalSummary = category === "training" && activeLaps.length >= 2;
 	const intervalSets = useMemo(() => showIntervalSummary ? computeIntervalSummary(laps, sport, groupBy) : [], [laps, sport, groupBy, showIntervalSummary]);
+
+	// Reset selection and clipboard when laps change (e.g., navigating to different activity)
+	useEffect(() => {
+		setSelectedLaps(new Set());
+		setCopiedPattern([]);
+		setLastCopiedFrom(new Set());
+		setLastClickedIdx(null);
+		setEdits(new Map());
+	}, [laps]);
+
+	/** Copy intensity values from selected laps in display order. */
+	const handleCopy = useCallback(() => {
+		if (selectedLaps.size === 0) return;
+		const selectedInOrder = filtered
+			.filter((l) => selectedLaps.has(l.lapId))
+			.sort((a, b) => a.number - b.number);
+		const pattern = selectedInOrder.map((l) => {
+			const edit = edits.get(`${l.lapId}-intensity`);
+			return edit != null ? (edit.value as string) : (l.intensity ?? "");
+		});
+		setCopiedPattern(pattern);
+		setLastCopiedFrom(new Set(selectedLaps));
+	}, [selectedLaps, filtered, edits]);
+
+	/** Paste copied intensity pattern onto selected laps, cycling if pattern is shorter. */
+	const handlePaste = useCallback(() => {
+		if (copiedPattern.length === 0 || selectedLaps.size === 0) return;
+		const selectedInOrder = filtered
+			.filter((l) => selectedLaps.has(l.lapId))
+			.sort((a, b) => a.number - b.number);
+
+		const newEdits = new Map(edits);
+		for (let i = 0; i < selectedInOrder.length; i++) {
+			const lap = selectedInOrder[i]!;
+			const intensity = copiedPattern[i % copiedPattern.length]!;
+			const key = `${lap.lapId}-intensity`;
+			newEdits.set(key, { lapId: lap.lapId, field: "intensity", value: intensity });
+		}
+		setEdits(newEdits);
+		onEdits(Array.from(newEdits.values()));
+		// Clear selection after paste (natural spreadsheet behavior)
+		setSelectedLaps(new Set());
+	}, [copiedPattern, selectedLaps, filtered, edits, onEdits]);
+
+	// Keyboard shortcuts for copy/paste intensity
+	useEffect(() => {
+		function onKeyDown(e: KeyboardEvent) {
+			const tag = (e.target as HTMLElement)?.tagName;
+			if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+			if ((e.ctrlKey || e.metaKey) && e.key === "c") {
+				if (selectedLaps.size === 0) return;
+				if (window.getSelection()?.toString()) return;
+				e.preventDefault();
+				handleCopy();
+			}
+			if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+				if (selectedLaps.size === 0 || copiedPattern.length === 0) return;
+				e.preventDefault();
+				handlePaste();
+			}
+		}
+		document.addEventListener("keydown", onKeyDown);
+		return () => document.removeEventListener("keydown", onKeyDown);
+	}, [selectedLaps, copiedPattern, handleCopy, handlePaste]);
+
+	/** Toggle or range-select laps via checkbox. Supports Shift+Click for range selection. */
+	function handleRowSelect(lapId: number, idx: number, shiftKey: boolean) {
+		setSelectedLaps((prev) => {
+			const next = new Set(prev);
+			if (shiftKey && lastClickedIdx !== null) {
+				const start = Math.min(lastClickedIdx, idx);
+				const end = Math.max(lastClickedIdx, idx);
+				for (let i = start; i <= end; i++) {
+					next.add(filtered[i]!.lapId);
+				}
+			} else {
+				if (next.has(lapId)) next.delete(lapId);
+				else next.add(lapId);
+			}
+			return next;
+		});
+		setLastClickedIdx(idx);
+	}
 
 	function toggleFilter(intensity: string) {
 		setFilters((prev) => {
@@ -245,6 +344,12 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 		updated.set(key, { lapId, field, value });
 		setEdits(updated);
 		onEdits(Array.from(updated.values()));
+	}
+
+	/** Get the effective intensity value for a lap, considering pending edits. */
+	function getEffectiveIntensity(lap: Lap): string {
+		const edit = edits.get(`${lap.lapId}-intensity`);
+		return edit != null ? (edit.value as string) : (lap.intensity ?? "");
 	}
 
 	return (
@@ -267,10 +372,57 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 				))}
 			</div>
 
+			{/* Selection toolbar — shown when laps are selected */}
+			{selectedLaps.size > 0 && (
+				<div className="flex items-center gap-3 mb-2 px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-xs text-gray-300">
+					<span className="font-medium">
+						{selectedLaps.size} lap{selectedLaps.size > 1 ? "s" : ""} selected
+					</span>
+					<button
+						type="button"
+						onClick={handleCopy}
+						className="px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
+						aria-label="Copy intensity pattern from selected laps"
+					>
+						Copy Intensity <kbd className="ml-1 text-[10px] text-gray-500">⌘C</kbd>
+					</button>
+					{copiedPattern.length > 0 && (
+						<button
+							type="button"
+							onClick={handlePaste}
+							className="px-2 py-1 rounded bg-orange-600 hover:bg-orange-500 text-white transition-colors"
+							aria-label="Paste intensity pattern onto selected laps"
+						>
+							Paste ({copiedPattern.length} pattern) <kbd className="ml-1 text-[10px] text-gray-300">⌘V</kbd>
+						</button>
+					)}
+					<button
+						type="button"
+						onClick={() => { setSelectedLaps(new Set()); setLastCopiedFrom(new Set()); }}
+						className="ml-auto px-2 py-1 rounded text-gray-500 hover:text-gray-300 transition-colors"
+						aria-label="Clear lap selection"
+					>
+						Clear
+					</button>
+				</div>
+			)}
+
 			<div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
 				<table className="w-full text-sm text-left">
 					<thead className="bg-gray-800/50 text-xs font-medium text-gray-400 uppercase tracking-wide">
 						<tr>
+							<th className="px-2 py-3 w-8">
+								<input
+									type="checkbox"
+									checked={filtered.length > 0 && filtered.every((l) => selectedLaps.has(l.lapId))}
+									onChange={() => {
+										if (filtered.every((l) => selectedLaps.has(l.lapId))) setSelectedLaps(new Set());
+										else setSelectedLaps(new Set(filtered.map((l) => l.lapId)));
+									}}
+									className="rounded border-gray-600 text-orange-500 focus:ring-orange-500/50"
+									aria-label="Select all laps"
+								/>
+							</th>
 							<th className="px-4 py-3">Lap</th>
 							<th className="px-4 py-3">Distance (mi)</th>
 							<th className="px-4 py-3">Time</th>
@@ -287,7 +439,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 						{(() => {
 							let cumDist = 0;
 							let cumTime = 0;
-							return filtered.map((lap) => {
+							return filtered.map((lap, idx) => {
 								const distEdit = edits.get(`${lap.lapId}-totalDistance`);
 								const timeEdit = edits.get(`${lap.lapId}-totalTimerTime`);
 								const miles = distEdit != null ? (distEdit.value as number) / METERS_PER_MILE : (lap.totalDistance ?? 0) / METERS_PER_MILE;
@@ -297,8 +449,32 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 								const paceVal = miles > 0 ? time / 60 / miles : null;
 								const speedMph = time > 0 ? miles / (time / 3600) : null;
 
+								const isSelected = selectedLaps.has(lap.lapId);
+								const isCopiedSource = lastCopiedFrom.has(lap.lapId);
+
 								return (
-									<tr key={lap.lapId} className="border-t border-gray-800 hover:bg-gray-800/30 transition-colors">
+									<tr
+										key={lap.lapId}
+										className={`border-t border-gray-800 transition-colors ${
+											isSelected
+												? "bg-orange-500/10 border-l-2 border-l-orange-500"
+												: isCopiedSource
+													? "bg-blue-500/5 ring-1 ring-inset ring-blue-400/30"
+													: "hover:bg-gray-800/30"
+										}`}
+									>
+										<td className="px-2 py-3">
+											<input
+												type="checkbox"
+												checked={isSelected}
+												onChange={(e) => {
+													const event = e.nativeEvent as MouseEvent;
+													handleRowSelect(lap.lapId, idx, event.shiftKey);
+												}}
+												className="rounded border-gray-600 text-orange-500 focus:ring-orange-500/50"
+												aria-label={`Select lap ${lap.number}`}
+											/>
+										</td>
 										<td className="px-4 py-3 text-gray-300">{lap.number}</td>
 										<td className="px-4 py-3 text-gray-300">
 											<input
@@ -340,7 +516,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 										<td className="px-4 py-3 text-gray-300">{lap.avgRunningCadence != null ? Math.round(lap.avgRunningCadence * (isCycling ? 1 : 2)) : "—"}</td>
 										<td className="px-4 py-3 text-gray-300">
 											<select
-												defaultValue={lap.intensity ?? ""}
+												value={getEffectiveIntensity(lap)}
 												onChange={(e) => handleEdit(lap.lapId, "intensity", e.target.value)}
 												className="rounded-lg bg-gray-800 border border-gray-700 text-xs px-2 py-1 text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500"
 											>
