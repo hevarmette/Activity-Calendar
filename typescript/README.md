@@ -32,6 +32,7 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 
 ### Activity Search Page
 - Text search by title/description with fuzzy matching (handles variations like 5x600m vs 5 x 600m)
+- Separate title and description search with exact case-insensitive substring matching
 - Filter by sport, sub-sport, category, date range, distance range, and duration range
 - Sort controls (distance, duration, ascending/descending)
 - Click through to Activity Details for any result

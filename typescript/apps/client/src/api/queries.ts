@@ -100,10 +100,29 @@ export function useReport() {
 	});
 }
 
-export function useSearch(q?: string) {
+/** Parameters for the activity search API. All fields are optional. */
+export interface SearchParams {
+	/** Fuzzy text search across title and description. */
+	q?: string;
+	/** Exact case-insensitive substring match on activity title. */
+	titleSearch?: string;
+	/** Exact case-insensitive substring match on activity description. */
+	descriptionSearch?: string;
+}
+
+export function useSearch(params?: SearchParams) {
+	const cacheKey = params ? `${params.q ?? ""}|${params.titleSearch ?? ""}|${params.descriptionSearch ?? ""}` : "";
+
 	return useQuery({
-		queryKey: [...queryKeys.search, q ?? ""] as const,
-		queryFn: () => api<SearchRow[]>(q ? `/api/search?q=${encodeURIComponent(q)}` : "/api/search"),
+		queryKey: [...queryKeys.search, cacheKey] as const,
+		queryFn: () => {
+			const searchParams = new URLSearchParams();
+			if (params?.q) searchParams.set("q", params.q);
+			if (params?.titleSearch) searchParams.set("titleSearch", params.titleSearch);
+			if (params?.descriptionSearch) searchParams.set("descriptionSearch", params.descriptionSearch);
+			const qs = searchParams.toString();
+			return api<SearchRow[]>(qs ? `/api/search?${qs}` : "/api/search");
+		},
 	});
 }
 

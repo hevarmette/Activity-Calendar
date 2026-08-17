@@ -132,12 +132,12 @@ export function ActivityReportPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const { data, isLoading } = useReport();
 
-	const grouping = (searchParams.get("group") as Grouping) || "Monthly";
+	const grouping = (searchParams.get("group") as Grouping) || "Weekly";
 	const metric = (searchParams.get("metric") as ChartMetric) || "Distance (mi)";
 	const sportsParam = searchParams.get("sports");
 	const groupBySport = searchParams.get("groupBySport") !== "true";
 	const dateFrom = searchParams.get("from") ?? "";
-	const dateTo = searchParams.get("to") ?? "";
+	const dateTo = searchParams.get("to") ?? new Date().toISOString().slice(0, 10);
 
 	const availableSports = useMemo(() => {
 		if (!data) return [];

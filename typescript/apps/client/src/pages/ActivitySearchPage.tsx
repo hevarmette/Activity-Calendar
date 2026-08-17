@@ -51,34 +51,75 @@ function canonicalSport(sport: string, numSessions: number): string {
 	return sports[0] ?? "other";
 }
 
+/**
+ * Custom hook for debouncing a text value. Returns the debounced value after the
+ * specified delay (default 300ms). Used by the search inputs to avoid firing API
+ * requests on every keystroke.
+ */
+function useDebouncedValue(value: string, delay = 300): string {
+	const [debounced, setDebounced] = useState(value);
+	useEffect(() => {
+		const timer = setTimeout(() => setDebounced(value), delay);
+		return () => clearTimeout(timer);
+	}, [value, delay]);
+	return debounced;
+}
+
 export function ActivitySearchPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
 
+	// --- Text search state (fuzzy, title, description) ---
 	const qParam = searchParams.get("q") ?? "";
+	const titleParam = searchParams.get("titleSearch") ?? "";
+	const descParam = searchParams.get("descriptionSearch") ?? "";
+
 	const [searchText, setSearchText] = useState(qParam);
-	const [debouncedQ, setDebouncedQ] = useState(qParam);
+	const [titleText, setTitleText] = useState(titleParam);
+	const [descText, setDescText] = useState(descParam);
 
-	useEffect(() => {
-		const timer = setTimeout(() => {
-			setDebouncedQ(searchText);
-		}, 300);
-		return () => clearTimeout(timer);
-	}, [searchText]);
+	const debouncedQ = useDebouncedValue(searchText);
+	const debouncedTitle = useDebouncedValue(titleText);
+	const debouncedDesc = useDebouncedValue(descText);
 
+	// Sync debounced text values back to URL search params
 	useEffect(() => {
 		setSearchParams((prev) => {
 			const next = new URLSearchParams(prev);
-			if (debouncedQ) next.set("q", debouncedQ);
-			else next.delete("q");
-			if (next.get("q") !== prev.get("q")) {
+			let changed = false;
+
+			for (const [key, val] of [
+				["q", debouncedQ],
+				["titleSearch", debouncedTitle],
+				["descriptionSearch", debouncedDesc],
+			] as const) {
+				const current = prev.get(key) ?? "";
+				if (val !== current) {
+					if (val) next.set(key, val);
+					else next.delete(key);
+					changed = true;
+				}
+			}
+
+			if (changed) {
 				next.set("page", "1");
 				return next;
 			}
 			return prev;
 		});
-	}, [debouncedQ, setSearchParams]);
+	}, [debouncedQ, debouncedTitle, debouncedDesc, setSearchParams]);
 
-	const { data, isLoading } = useSearch(debouncedQ || undefined);
+	// Build search params object for the API hook
+	const searchApiParams = useMemo(() => {
+		const hasAny = debouncedQ || debouncedTitle || debouncedDesc;
+		if (!hasAny) return undefined;
+		return {
+			q: debouncedQ || undefined,
+			titleSearch: debouncedTitle || undefined,
+			descriptionSearch: debouncedDesc || undefined,
+		};
+	}, [debouncedQ, debouncedTitle, debouncedDesc]);
+
+	const { data, isLoading } = useSearch(searchApiParams);
 
 	const sports = searchParams.get("sports")?.split(",").filter(Boolean) ?? [];
 	const categories = searchParams.get("categories")?.split(",").filter(Boolean) ?? [];
@@ -93,6 +134,8 @@ export function ActivitySearchPage() {
 	const sortDir = searchParams.get("dir") || "desc";
 	const hasFilters =
 		!!debouncedQ ||
+		!!debouncedTitle ||
+		!!debouncedDesc ||
 		sports.length > 0 ||
 		categories.length > 0 ||
 		dateFrom ||
@@ -174,18 +217,53 @@ export function ActivitySearchPage() {
 
 	const filterPanel = (
 		<div className="space-y-4">
+			{/* Fuzzy search — matches variations like "5x600m" vs "5 x 600m" */}
 			<div>
+				<label htmlFor="search-fuzzy" className="text-xs font-medium text-gray-400 block mb-2">
+					Fuzzy Search
+				</label>
 				<input
+					id="search-fuzzy"
 					type="text"
 					value={searchText}
 					onChange={(e) => setSearchText(e.target.value)}
-					placeholder="Search by title or description..."
-					aria-label="Search activities by title or description"
+					placeholder="Fuzzy match (e.g. 5x600m)..."
+					aria-label="Fuzzy search activities by title or description"
+					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
+				/>
+			</div>
+			{/* Exact title search — case-insensitive substring match on activity name */}
+			<div>
+				<label htmlFor="search-title" className="text-xs font-medium text-gray-400 block mb-2">
+					Title
+				</label>
+				<input
+					id="search-title"
+					type="text"
+					value={titleText}
+					onChange={(e) => setTitleText(e.target.value)}
+					placeholder="Exact title match..."
+					aria-label="Search activities by exact title"
+					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
+				/>
+			</div>
+			{/* Exact description search — case-insensitive substring match on description */}
+			<div>
+				<label htmlFor="search-description" className="text-xs font-medium text-gray-400 block mb-2">
+					Description
+				</label>
+				<input
+					id="search-description"
+					type="text"
+					value={descText}
+					onChange={(e) => setDescText(e.target.value)}
+					placeholder="Exact description match..."
+					aria-label="Search activities by exact description"
 					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 				/>
 			</div>
 			<div>
-				<label className="text-xs font-medium text-gray-400 block mb-2">Sport</label>
+				<span className="text-xs font-medium text-gray-400 block mb-2">Sport</span>
 				<div className="flex flex-wrap gap-1.5">
 					{availableSports.map((s) => {
 						const isSelected = sports.includes(s);
@@ -220,7 +298,7 @@ export function ActivitySearchPage() {
 				</div>
 			</div>
 			<div>
-				<label className="text-xs font-medium text-gray-400 block mb-2">Category</label>
+				<span className="text-xs font-medium text-gray-400 block mb-2">Category</span>
 				<div className="flex flex-wrap gap-1.5">
 					{availableCategories.map((c) => {
 						const isSelected = categories.includes(c);
@@ -246,8 +324,11 @@ export function ActivitySearchPage() {
 			</div>
 			<div className="grid grid-cols-2 gap-2">
 				<div>
-					<label className="text-xs font-medium text-gray-400 block mb-2">From</label>
+					<label htmlFor="filter-from" className="text-xs font-medium text-gray-400 block mb-2">
+						From
+					</label>
 					<input
+						id="filter-from"
 						type="date"
 						value={dateFrom}
 						onChange={(e) => updateParam("from", e.target.value)}
@@ -255,8 +336,11 @@ export function ActivitySearchPage() {
 					/>
 				</div>
 				<div>
-					<label className="text-xs font-medium text-gray-400 block mb-2">To</label>
+					<label htmlFor="filter-to" className="text-xs font-medium text-gray-400 block mb-2">
+						To
+					</label>
 					<input
+						id="filter-to"
 						type="date"
 						value={dateTo}
 						onChange={(e) => updateParam("to", e.target.value)}
@@ -266,8 +350,11 @@ export function ActivitySearchPage() {
 			</div>
 			<div className="grid grid-cols-2 gap-2">
 				<div>
-					<label className="text-xs font-medium text-gray-400 block mb-2">Min Dist (mi)</label>
+					<label htmlFor="filter-min-dist" className="text-xs font-medium text-gray-400 block mb-2">
+						Min Dist (mi)
+					</label>
 					<input
+						id="filter-min-dist"
 						type="number"
 						step="0.5"
 						value={minDist || ""}
@@ -276,8 +363,11 @@ export function ActivitySearchPage() {
 					/>
 				</div>
 				<div>
-					<label className="text-xs font-medium text-gray-400 block mb-2">Max Dist (mi)</label>
+					<label htmlFor="filter-max-dist" className="text-xs font-medium text-gray-400 block mb-2">
+						Max Dist (mi)
+					</label>
 					<input
+						id="filter-max-dist"
 						type="number"
 						step="0.5"
 						value={maxDist || ""}
@@ -288,8 +378,11 @@ export function ActivitySearchPage() {
 			</div>
 			<div className="grid grid-cols-2 gap-2">
 				<div>
-					<label className="text-xs font-medium text-gray-400 block mb-2">Min Dur (min)</label>
+					<label htmlFor="filter-min-dur" className="text-xs font-medium text-gray-400 block mb-2">
+						Min Dur (min)
+					</label>
 					<input
+						id="filter-min-dur"
 						type="number"
 						step="5"
 						value={minDur || ""}
@@ -298,8 +391,11 @@ export function ActivitySearchPage() {
 					/>
 				</div>
 				<div>
-					<label className="text-xs font-medium text-gray-400 block mb-2">Max Dur (min)</label>
+					<label htmlFor="filter-max-dur" className="text-xs font-medium text-gray-400 block mb-2">
+						Max Dur (min)
+					</label>
 					<input
+						id="filter-max-dur"
 						type="number"
 						step="5"
 						value={maxDur || ""}
@@ -394,6 +490,7 @@ export function ActivitySearchPage() {
 							{totalPages > 1 && (
 								<div className="flex items-center justify-center gap-4 pt-4">
 									<button
+										type="button"
 										onClick={() => setPage(currentPage - 1)}
 										disabled={currentPage <= 1}
 										className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
@@ -404,6 +501,7 @@ export function ActivitySearchPage() {
 										Page {currentPage} of {totalPages}
 									</span>
 									<button
+										type="button"
 										onClick={() => setPage(currentPage + 1)}
 										disabled={currentPage >= totalPages}
 										className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"

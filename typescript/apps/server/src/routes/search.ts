@@ -11,7 +11,14 @@
  *     Input is normalized (lowercased, trimmed, whitespace collapsed) before comparison.
  *     This handles variations like "5x600m" vs "5 x 600m".
  *
- *   When q is empty or missing, all activities are returned ordered by local_timestamp DESC.
+ *   - titleSearch (optional): Exact case-insensitive substring match against activity_name.
+ *     Uses ILIKE for matching. No fuzzy/trigram logic applied.
+ *
+ *   - descriptionSearch (optional): Exact case-insensitive substring match against description.
+ *     Uses ILIKE for matching. No fuzzy/trigram logic applied.
+ *
+ *   When multiple search params are provided, they are combined with AND logic.
+ *   When none are provided, all activities are returned ordered by local_timestamp DESC.
  *
  * Requires the pg_trgm extension to be enabled in the database.
  */
@@ -23,9 +30,44 @@ export const searchRoutes = new Hono();
 
 searchRoutes.get("/", async (c) => {
 	const q = c.req.query("q")?.trim() || "";
+	const titleSearch = c.req.query("titleSearch")?.trim() || "";
+	const descriptionSearch = c.req.query("descriptionSearch")?.trim() || "";
 
-	if (q) {
-		const normalized = q.toLowerCase().replace(/\s+/g, " ").trim();
+	const hasSearch = q || titleSearch || descriptionSearch;
+
+	if (hasSearch) {
+		const normalized = q ? q.toLowerCase().replace(/\s+/g, " ").trim() : "";
+
+		// When only q is provided (no titleSearch/descriptionSearch), preserve original fuzzy behavior
+		if (q && !titleSearch && !descriptionSearch) {
+			const rows = await sql`
+				SELECT
+					a.activity_id,
+					COALESCE(a.local_timestamp, a.timestamp AT TIME ZONE ${TIMEZONE}) AS local_timestamp,
+					a.activity_name, a.description, a.category, a.num_sessions,
+					s.sport, s.sub_sport, s.total_distance, s.total_timer_time,
+					s.total_calories, s.total_ascent, s.total_descent,
+					s.avg_heart_rate, s.max_heart_rate, s.enhanced_avg_speed,
+					GREATEST(
+						word_similarity(${normalized}, LOWER(TRIM(regexp_replace(COALESCE(a.activity_name, ''), '\s+', ' ', 'g')))),
+						word_similarity(${normalized}, LOWER(TRIM(regexp_replace(COALESCE(a.description, ''), '\s+', ' ', 'g'))))
+					) AS relevance
+				FROM ${sql(SCHEMA)}.activity a
+				JOIN ${sql(SCHEMA)}.session s ON a.activity_id = s.activity_id
+				WHERE
+					a.activity_name ILIKE ${`%${normalized}%`}
+					OR a.description ILIKE ${`%${normalized}%`}
+					OR word_similarity(${normalized}, LOWER(TRIM(regexp_replace(COALESCE(a.activity_name, ''), '\s+', ' ', 'g')))) > 0.3
+					OR word_similarity(${normalized}, LOWER(TRIM(regexp_replace(COALESCE(a.description, ''), '\s+', ' ', 'g')))) > 0.3
+				ORDER BY relevance DESC, local_timestamp DESC
+			`;
+			return c.json(rows);
+		}
+
+		// Targeted search with titleSearch and/or descriptionSearch (exact ILIKE, AND logic)
+		// Also supports combining with q for additional fuzzy filtering
+		const titlePattern = titleSearch ? `%${titleSearch.toLowerCase().replace(/\s+/g, " ").trim()}%` : null;
+		const descPattern = descriptionSearch ? `%${descriptionSearch.toLowerCase().replace(/\s+/g, " ").trim()}%` : null;
 
 		const rows = await sql`
 			SELECT
@@ -34,19 +76,23 @@ searchRoutes.get("/", async (c) => {
 				a.activity_name, a.description, a.category, a.num_sessions,
 				s.sport, s.sub_sport, s.total_distance, s.total_timer_time,
 				s.total_calories, s.total_ascent, s.total_descent,
-				s.avg_heart_rate, s.max_heart_rate, s.enhanced_avg_speed,
-				GREATEST(
-					word_similarity(${normalized}, LOWER(TRIM(regexp_replace(COALESCE(a.activity_name, ''), '\s+', ' ', 'g')))),
-					word_similarity(${normalized}, LOWER(TRIM(regexp_replace(COALESCE(a.description, ''), '\s+', ' ', 'g'))))
-				) AS relevance
+				s.avg_heart_rate, s.max_heart_rate, s.enhanced_avg_speed
 			FROM ${sql(SCHEMA)}.activity a
 			JOIN ${sql(SCHEMA)}.session s ON a.activity_id = s.activity_id
 			WHERE
-				a.activity_name ILIKE ${`%${normalized}%`}
-				OR a.description ILIKE ${`%${normalized}%`}
-				OR word_similarity(${normalized}, LOWER(TRIM(regexp_replace(COALESCE(a.activity_name, ''), '\s+', ' ', 'g')))) > 0.3
-				OR word_similarity(${normalized}, LOWER(TRIM(regexp_replace(COALESCE(a.description, ''), '\s+', ' ', 'g')))) > 0.3
-			ORDER BY relevance DESC, local_timestamp DESC
+				(${titlePattern}::text IS NULL OR a.activity_name ILIKE ${titlePattern ?? ""})
+				AND (${descPattern}::text IS NULL OR a.description ILIKE ${descPattern ?? ""})
+				${
+					q
+						? sql`AND (
+					a.activity_name ILIKE ${`%${normalized}%`}
+					OR a.description ILIKE ${`%${normalized}%`}
+					OR word_similarity(${normalized}, LOWER(TRIM(regexp_replace(COALESCE(a.activity_name, ''), '\s+', ' ', 'g')))) > 0.3
+					OR word_similarity(${normalized}, LOWER(TRIM(regexp_replace(COALESCE(a.description, ''), '\s+', ' ', 'g')))) > 0.3
+				)`
+						: sql``
+				}
+			ORDER BY local_timestamp DESC
 		`;
 		return c.json(rows);
 	}
