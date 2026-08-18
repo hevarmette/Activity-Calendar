@@ -1,9 +1,18 @@
-interface Props { label: string; value: string; }
-export function MetricCard({ label, value }: Props) {
-  return (
-    <div style={{ flex: 1, padding: "16px" }}>
-      <p style={{ fontSize: "0.75rem", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", color: "#6b7280" }}>{label}</p>
-      <p style={{ marginTop: "4px", fontSize: "1.5rem", fontWeight: 700, color: "#f9fafb", fontVariantNumeric: "tabular-nums" }}>{value}</p>
-    </div>
-  );
+/**
+ * Bare label + value metric display. No card wrapper, no borders, no padding.
+ * Parent controls layout (flex, grid, spacing). Pass `className` for positioning tweaks.
+ */
+interface Props {
+	label: string;
+	value: string;
+	className?: string;
+}
+
+export function MetricCard({ label, value, className }: Props) {
+	return (
+		<div className={className}>
+			<p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
+			<p className="mt-1 text-2xl font-bold text-gray-50 tabular-nums">{value}</p>
+		</div>
+	);
 }

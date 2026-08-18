@@ -44,7 +44,7 @@ interface IntervalSet {
 const INTENSITIES = Object.values(Intensity);
 
 function scalingTolerance(distMi: number): number {
-	return Math.max(0.02, 0.10 * (0.0621 / distMi));
+	return Math.max(0.02, 0.1 * (0.0621 / distMi));
 }
 
 function distanceLabel(meanDistMi: number): string {
@@ -100,7 +100,9 @@ function formatDevTrend(value: number, mode: "time" | "dist"): string {
  *   consistent (lower CV) becomes the grouping axis.
  */
 function computeIntervalSummary(laps: Lap[], sport: string, groupBy: "distance" | "time"): IntervalSet[] {
-	const active = laps.filter((l) => l.intensity === Intensity.Active && (l.totalDistance ?? 0) > 0 && (l.totalTimerTime ?? 0) > 0);
+	const active = laps.filter(
+		(l) => l.intensity === Intensity.Active && (l.totalDistance ?? 0) > 0 && (l.totalTimerTime ?? 0) > 0,
+	);
 	if (active.length < 2) return [];
 
 	const withMetrics = active.map((l) => ({
@@ -109,7 +111,7 @@ function computeIntervalSummary(laps: Lap[], sport: string, groupBy: "distance" 
 		secs: l.totalTimerTime ?? 0,
 	}));
 
-	const sorted = [...withMetrics].sort((a, b) => groupBy === "time" ? a.secs - b.secs : a.dist - b.dist);
+	const sorted = [...withMetrics].sort((a, b) => (groupBy === "time" ? a.secs - b.secs : a.dist - b.dist));
 
 	// Cluster
 	const groups: (typeof sorted)[] = [];
@@ -208,11 +210,17 @@ function computeIntervalSummary(laps: Lap[], sport: string, groupBy: "distance" 
 
 /** Detect whether to default to "time" or "distance" grouping based on coefficient of variation. */
 function detectDefaultGroup(laps: Lap[]): "distance" | "time" {
-	const active = laps.filter((l) => l.intensity === Intensity.Active && (l.totalDistance ?? 0) > 0 && (l.totalTimerTime ?? 0) > 0);
+	const active = laps.filter(
+		(l) => l.intensity === Intensity.Active && (l.totalDistance ?? 0) > 0 && (l.totalTimerTime ?? 0) > 0,
+	);
 	if (active.length < 2) return "distance";
 	const dists = active.map((l) => (l.totalDistance ?? 0) / METERS_PER_MILE);
 	const times = active.map((l) => l.totalTimerTime ?? 0);
-	const cv = (arr: number[]) => { const m = arr.reduce((a, b) => a + b, 0) / arr.length; const std = Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / arr.length); return m > 0 ? std / m : 1; };
+	const cv = (arr: number[]) => {
+		const m = arr.reduce((a, b) => a + b, 0) / arr.length;
+		const std = Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / arr.length);
+		return m > 0 ? std / m : 1;
+	};
 	return cv(times) < cv(dists) ? "time" : "distance";
 }
 
@@ -243,7 +251,10 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 
 	const activeLaps = laps.filter((l) => l.intensity === Intensity.Active);
 	const showIntervalSummary = category === "training" && activeLaps.length >= 2;
-	const intervalSets = useMemo(() => showIntervalSummary ? computeIntervalSummary(laps, sport, groupBy) : [], [laps, sport, groupBy, showIntervalSummary]);
+	const intervalSets = useMemo(
+		() => (showIntervalSummary ? computeIntervalSummary(laps, sport, groupBy) : []),
+		[laps, sport, groupBy, showIntervalSummary],
+	);
 
 	// Reset selection and clipboard when laps change (e.g., navigating to different activity)
 	useEffect(() => {
@@ -257,9 +268,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 	/** Copy intensity values from selected laps in display order. */
 	const handleCopy = useCallback(() => {
 		if (selectedLaps.size === 0) return;
-		const selectedInOrder = filtered
-			.filter((l) => selectedLaps.has(l.lapId))
-			.sort((a, b) => a.number - b.number);
+		const selectedInOrder = filtered.filter((l) => selectedLaps.has(l.lapId)).sort((a, b) => a.number - b.number);
 		const pattern = selectedInOrder.map((l) => {
 			const edit = edits.get(`${l.lapId}-intensity`);
 			return edit != null ? (edit.value as string) : (l.intensity ?? "");
@@ -271,9 +280,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 	/** Paste copied intensity pattern onto selected laps, cycling if pattern is shorter. */
 	const handlePaste = useCallback(() => {
 		if (copiedPattern.length === 0 || selectedLaps.size === 0) return;
-		const selectedInOrder = filtered
-			.filter((l) => selectedLaps.has(l.lapId))
-			.sort((a, b) => a.number - b.number);
+		const selectedInOrder = filtered.filter((l) => selectedLaps.has(l.lapId)).sort((a, b) => a.number - b.number);
 
 		const newEdits = new Map(edits);
 		for (let i = 0; i < selectedInOrder.length; i++) {
@@ -357,7 +364,11 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 			<div className="inline-flex rounded-lg bg-gray-800 border border-gray-700 p-0.5 mb-4">
 				<button
 					onClick={() => setFilters(new Set())}
-					className={filters.size === 0 ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-red-600" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}
+					className={
+						filters.size === 0
+							? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-red-600"
+							: "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"
+					}
 				>
 					All
 				</button>
@@ -398,7 +409,10 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 					)}
 					<button
 						type="button"
-						onClick={() => { setSelectedLaps(new Set()); setLastCopiedFrom(new Set()); }}
+						onClick={() => {
+							setSelectedLaps(new Set());
+							setLastCopiedFrom(new Set());
+						}}
 						className="ml-auto px-2 py-1 rounded text-gray-500 hover:text-gray-300 transition-colors"
 						aria-label="Clear lap selection"
 					>
@@ -442,7 +456,10 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 							return filtered.map((lap, idx) => {
 								const distEdit = edits.get(`${lap.lapId}-totalDistance`);
 								const timeEdit = edits.get(`${lap.lapId}-totalTimerTime`);
-								const miles = distEdit != null ? (distEdit.value as number) / METERS_PER_MILE : (lap.totalDistance ?? 0) / METERS_PER_MILE;
+								const miles =
+									distEdit != null
+										? (distEdit.value as number) / METERS_PER_MILE
+										: (lap.totalDistance ?? 0) / METERS_PER_MILE;
 								const time = timeEdit != null ? (timeEdit.value as number) : (lap.totalTimerTime ?? 0);
 								cumDist += miles;
 								cumTime += time;
@@ -493,27 +510,39 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 										<td className="px-4 py-3 text-gray-300">
 											<input
 												type="text"
-												defaultValue={focusedCell === `${lap.lapId}-time` ? convertSecondsToHms(time) ?? "" : (convertSecondsToHms(Math.round(time * 100) / 100) ?? "")}
+												defaultValue={
+													focusedCell === `${lap.lapId}-time`
+														? (convertSecondsToHms(time) ?? "")
+														: (convertSecondsToHms(Math.round(time * 100) / 100) ?? "")
+												}
 												key={`${lap.lapId}-time-${focusedCell === `${lap.lapId}-time` ? "full" : "rounded"}-${timeEdit ? time : ""}`}
 												onFocus={() => setFocusedCell(`${lap.lapId}-time`)}
 												onBlur={(e) => {
 													setFocusedCell(null);
 													const parts = e.target.value.split(":").map(Number);
-													const secs = parts.length === 3 ? parts[0]! * 3600 + parts[1]! * 60 + parts[2]! :
-														parts.length === 2 ? parts[0]! * 60 + parts[1]! : parts[0] ?? 0;
+													const secs =
+														parts.length === 3
+															? parts[0]! * 3600 + parts[1]! * 60 + parts[2]!
+															: parts.length === 2
+																? parts[0]! * 60 + parts[1]!
+																: (parts[0] ?? 0);
 													handleEdit(lap.lapId, "totalTimerTime", secs);
 												}}
 												className="w-24 bg-transparent border-b border-dashed border-gray-700 focus:border-red-500 outline-none text-gray-200 tabular-nums"
 											/>
 										</td>
 										<td className="px-4 py-3 text-gray-400 tabular-nums">{cumDist.toFixed(2)}</td>
-										<td className="px-4 py-3 text-gray-400 tabular-nums">{convertSecondsToHms(Math.round(cumTime * 100) / 100)}</td>
+										<td className="px-4 py-3 text-gray-400 tabular-nums">
+											{convertSecondsToHms(Math.round(cumTime * 100) / 100)}
+										</td>
 										<td className="px-4 py-3 text-gray-300">
 											{isCycling ? (speedMph?.toFixed(1) ?? "—") : (formatPacePrecise(paceVal) ?? "—")}
 										</td>
 										<td className="px-4 py-3 text-gray-300">{lap.totalAscent ?? "—"}</td>
 										<td className="px-4 py-3 text-gray-300">{lap.totalDescent ?? "—"}</td>
-										<td className="px-4 py-3 text-gray-300">{lap.avgRunningCadence != null ? Math.round(lap.avgRunningCadence * (isCycling ? 1 : 2)) : "—"}</td>
+										<td className="px-4 py-3 text-gray-300">
+											{lap.avgRunningCadence != null ? Math.round(lap.avgRunningCadence * (isCycling ? 1 : 2)) : "—"}
+										</td>
 										<td className="px-4 py-3 text-gray-300">
 											<select
 												value={getEffectiveIntensity(lap)}
@@ -522,7 +551,9 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 											>
 												<option value="">—</option>
 												{INTENSITIES.map((i) => (
-													<option key={i} value={i}>{i}</option>
+													<option key={i} value={i}>
+														{i}
+													</option>
 												))}
 											</select>
 										</td>
@@ -539,21 +570,31 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 					<div className="inline-flex rounded-lg bg-gray-800 border border-gray-700 p-0.5 mb-4">
 						<button
 							onClick={() => setGroupBy("distance")}
-							className={groupBy === "distance" ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-red-600" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}
+							className={
+								groupBy === "distance"
+									? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-red-600"
+									: "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"
+							}
 						>
 							Distance
 						</button>
 						<button
 							onClick={() => setGroupBy("time")}
-							className={groupBy === "time" ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-red-600" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}
+							className={
+								groupBy === "time"
+									? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-red-600"
+									: "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"
+							}
 						>
 							Time
 						</button>
 					</div>
 
 					{intervalSets.map((set, idx) => (
-						<div key={idx} className="mb-4 bg-gray-900 border border-gray-800 rounded-xl p-5">
-							<p className="text-lg font-bold text-gray-50 mb-2">{set.count}×{set.label}</p>
+						<div key={idx} className="mb-4 bg-gray-900 border border-gray-800 rounded-xl p-4">
+							<p className="text-lg font-bold text-gray-50 mb-2">
+								{set.count}×{set.label}
+							</p>
 							<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
 								{groupBy === "distance" ? (
 									<>
@@ -562,14 +603,18 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 											<p className="text-gray-200 font-medium tabular-nums">
 												{set.avgDuration ?? "—"}
 												{set.timeDevTrend != null && set.timeDevTrendValue != null && (
-													<span className={`ml-1.5 text-xs ${set.timeDevTrendValue < 0 ? "text-green-400" : set.timeDevTrendValue > 0 ? "text-red-400" : "text-gray-500"}`}>
+													<span
+														className={`ml-1.5 text-xs ${set.timeDevTrendValue < 0 ? "text-green-400" : set.timeDevTrendValue > 0 ? "text-red-400" : "text-gray-500"}`}
+													>
 														{set.timeDevTrend}
 													</span>
 												)}
 											</p>
 										</div>
 										<div>
-											<p className="text-xs text-gray-500 uppercase tracking-wide">Fastest Split (Lap {set.fastestLap})</p>
+											<p className="text-xs text-gray-500 uppercase tracking-wide">
+												Fastest Split (Lap {set.fastestLap})
+											</p>
 											<p className="text-gray-200 font-medium tabular-nums">{set.fastestSplit ?? "—"}</p>
 										</div>
 									</>
@@ -580,7 +625,9 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 											<p className="text-gray-200 font-medium tabular-nums">
 												{set.avgDistLabel} mi
 												{set.distDevTrend != null && set.distDevTrendValue != null && (
-													<span className={`ml-1.5 text-xs ${set.distDevTrendValue > 0 ? "text-green-400" : set.distDevTrendValue < 0 ? "text-red-400" : "text-gray-500"}`}>
+													<span
+														className={`ml-1.5 text-xs ${set.distDevTrendValue > 0 ? "text-green-400" : set.distDevTrendValue < 0 ? "text-red-400" : "text-gray-500"}`}
+													>
 														{set.distDevTrend}
 													</span>
 												)}
@@ -593,7 +640,9 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 									</>
 								)}
 								<div>
-									<p className="text-xs text-gray-500 uppercase tracking-wide">{isCycling ? "Avg Speed" : "Avg Pace"}</p>
+									<p className="text-xs text-gray-500 uppercase tracking-wide">
+										{isCycling ? "Avg Speed" : "Avg Pace"}
+									</p>
 									<p className="text-gray-200 font-medium tabular-nums">{set.avgPaceLabel}</p>
 								</div>
 								{set.avgHr != null && (

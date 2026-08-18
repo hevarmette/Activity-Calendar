@@ -182,7 +182,7 @@ function Chart({
 	const displayAvg = selectionRange ? avg(displayData, dataKey as keyof ChartPoint) : avgValue;
 
 	return (
-		<div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+		<div className="border-b border-gray-800 pb-4 last:border-b-0 last:pb-0">
 			<p className="text-sm text-gray-400 mb-2">{yLabel}</p>
 			<ResponsiveContainer width="100%" height={200}>
 				<LineChart
@@ -224,7 +224,7 @@ function Chart({
 					/>
 					<Tooltip
 						content={<ChartTooltip metric={metric} isCycling={isCycling} />}
-						cursor={{ stroke: "#f97316", strokeWidth: 1 }}
+						cursor={{ stroke: "#dc2626", strokeWidth: 1 }}
 					/>
 					<Line type="monotone" dataKey={dataKey} stroke={color} dot={false} strokeWidth={1.5} />
 					{displayAvg != null && (
@@ -370,7 +370,7 @@ export function PerformanceCharts({ points, sport, category, onHover, onRangeSel
 				<>
 					{/* Power chart on top for cycling if lap power data is available */}
 					{powerData && (
-						<div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+						<div className="border-b border-gray-800 pb-4">
 							<p className="text-sm text-gray-400 mb-2">Power (W)</p>
 							<ResponsiveContainer width="100%" height={200}>
 								<LineChart data={powerData}>
@@ -395,12 +395,12 @@ export function PerformanceCharts({ points, sport, category, onHover, onRangeSel
 												</div>
 											);
 										}}
-										cursor={{ stroke: "#f97316", strokeWidth: 1 }}
+										cursor={{ stroke: "#dc2626", strokeWidth: 1 }}
 									/>
-									<Line type="stepAfter" dataKey="power" stroke="#FF8C00" dot={false} strokeWidth={2} />
+									<Line type="stepAfter" dataKey="power" stroke="#f59e0b" dot={false} strokeWidth={2} />
 									<ReferenceLine
 										y={Math.round(powerData.reduce((s, p) => s + p.power, 0) / powerData.length)}
-										stroke="#FF8C00"
+										stroke="#f59e0b"
 										strokeDasharray="5 5"
 										label={{ value: `Avg: ${Math.round(powerData.reduce((s, p) => s + p.power, 0) / powerData.length)} W`, fill: "#6b7280", fontSize: 11, position: "insideBottomRight" }}
 									/>

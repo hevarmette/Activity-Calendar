@@ -187,7 +187,7 @@ export function DetailMap({ points, sport, sessions, hoveredIndex, autoLapDist: 
 			{highlightCoords && (
 				<Polyline
 					positions={highlightCoords}
-					pathOptions={{ color: "#f97316", weight: 6, opacity: 0.9 }}
+					pathOptions={{ color: "#dc2626", weight: 6, opacity: 0.9 }}
 				/>
 			)}
 
@@ -196,7 +196,7 @@ export function DetailMap({ points, sport, sessions, hoveredIndex, autoLapDist: 
 				<CircleMarker
 					center={[points[hoveredIndex]!.latitude!, points[hoveredIndex]!.longitude!]}
 					radius={6}
-					pathOptions={{ color: "#f97316", fillColor: "#f97316", fillOpacity: 1, weight: 2 }}
+					pathOptions={{ color: "#dc2626", fillColor: "#dc2626", fillOpacity: 1, weight: 2 }}
 				/>
 			)}
 		</MapContainer>

@@ -3,7 +3,6 @@ import type { SearchRow } from "@activity-calendar/shared";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useSearch } from "../api/queries.js";
-import { MetricCard } from "../components/ui/MetricCard.js";
 
 const RESULTS_PER_PAGE = 20;
 
@@ -284,9 +283,9 @@ export function ActivitySearchPage() {
 								style={
 									isSelected
 										? {
-												backgroundColor: `${sportColor ?? "#f97316"}cc`,
-												borderColor: sportColor ?? "#f97316",
-												border: `1px solid ${sportColor ?? "#f97316"}80`,
+												backgroundColor: `${sportColor ?? "#6b7280"}cc`,
+												borderColor: sportColor ?? "#6b7280",
+												border: `1px solid ${sportColor ?? "#6b7280"}80`,
 											}
 										: undefined
 								}
@@ -414,10 +413,10 @@ export function ActivitySearchPage() {
 				<p className="text-sm text-gray-500 mt-1">Find and filter activities across your history</p>
 			</div>
 
-			<div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,auto)_1fr] gap-6">
+			<div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,auto)_1fr] gap-5">
 				{/* Filters */}
-				<div className="min-w-0">
-					<div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+				<div className="min-w-0 lg:border-r lg:border-gray-800 lg:pr-6">
+					<div>
 						{filterPanel}
 						<div className="flex gap-2 mt-4">
 							<select
@@ -443,7 +442,7 @@ export function ActivitySearchPage() {
 				</div>
 
 				{/* Results */}
-				<div className="space-y-3">
+				<div className="space-y-0">
 					{hasFilters ? (
 						<>
 							<p className="text-sm text-gray-500">
@@ -458,31 +457,26 @@ export function ActivitySearchPage() {
 								const date = new Date(a.localTimestamp).toLocaleDateString();
 								const sportColor = SPORT_COLORS[sport] ?? "#6b7280";
 								return (
-									<div
+									<Link
 										key={a.activityId}
-										className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center gap-4 hover:border-gray-700 transition-colors"
+										to={`/activity/${a.activityId}?sport=${sport}`}
+										className="border-b border-gray-800 py-3 flex items-center gap-3 hover:bg-gray-900/50 transition-colors"
 									>
-										<div className="w-1 h-12 rounded-full" style={{ backgroundColor: sportColor }} />
+										<div className="w-0.5 h-8 rounded-full shrink-0" style={{ backgroundColor: sportColor }} />
 										<div className="flex-1 min-w-0">
-											<p className="font-medium text-gray-200 truncate">
+											<p className="text-sm font-medium text-gray-200 truncate">
 												{a.activityName}{" "}
 												<span className="text-xs text-gray-500 capitalize">
 													· {sport} · {date}
 												</span>
 											</p>
-											<div className="flex gap-4 mt-1 text-sm text-gray-400">
+											<div className="flex gap-3 mt-0.5 text-xs text-gray-400">
 												<span>{miles.toFixed(2)} mi</span>
 												<span>{convertSecondsToHms(a.totalTimerTime) ?? "—"}</span>
 												<span>{paceSpeed}</span>
 											</div>
 										</div>
-										<Link
-											to={`/activity/${a.activityId}?sport=${sport}`}
-											className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-										>
-											View
-										</Link>
-									</div>
+									</Link>
 								);
 							})}
 

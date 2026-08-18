@@ -1,15 +1,6 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import {
-	BarChart,
-	Bar,
-	XAxis,
-	YAxis,
-	CartesianGrid,
-	Tooltip,
-	ResponsiveContainer,
-	Legend,
-} from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import {
 	METERS_PER_MILE,
 	METERS_TO_FEET,
@@ -119,9 +110,15 @@ function buildChartData(agg: AggRow[], metric: ChartMetric) {
 		for (const sport of sports) {
 			const item = agg.find((r) => r.period === period && r.sport === sport);
 			switch (metric) {
-				case "Distance (mi)": row[sport] = item?.distanceMi ?? 0; break;
-				case "Time (hours)": row[sport] = item?.timeHours ?? 0; break;
-				case "Activities": row[sport] = item?.activities ?? 0; break;
+				case "Distance (mi)":
+					row[sport] = item?.distanceMi ?? 0;
+					break;
+				case "Time (hours)":
+					row[sport] = item?.timeHours ?? 0;
+					break;
+				case "Activities":
+					row[sport] = item?.activities ?? 0;
+					break;
 			}
 		}
 		return row;
@@ -187,14 +184,14 @@ export function ActivityReportPage() {
 	if (isLoading) return <div className="text-center py-10 text-gray-400">Loading report…</div>;
 
 	return (
-		<div className="space-y-6">
+		<div className="space-y-5">
 			<div>
 				<h1 className="text-2xl font-bold text-gray-100">Activity Report</h1>
 				<p className="text-sm text-gray-500 mt-1">Analyze your training volume and trends over time</p>
 			</div>
 
 			{/* Controls */}
-			<div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
+			<div className="border-b border-gray-800 pb-4 mb-4 space-y-4">
 				<div className="flex flex-wrap gap-x-6 gap-y-4 items-end">
 					<div>
 						<label className="text-xs font-medium text-gray-400 block mb-1.5">Sports</label>
@@ -207,9 +204,7 @@ export function ActivityReportPage() {
 										key={s}
 										type="button"
 										onClick={() => {
-											const next = isSelected
-												? selectedSports.filter((sp) => sp !== s)
-												: [...selectedSports, s];
+											const next = isSelected ? selectedSports.filter((sp) => sp !== s) : [...selectedSports, s];
 											updateParam("sports", next.join(","));
 										}}
 										className={`capitalize px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
@@ -217,7 +212,14 @@ export function ActivityReportPage() {
 												? "text-white shadow-sm"
 												: "bg-gray-800 text-gray-400 border border-gray-700 hover:text-gray-200 hover:border-gray-600"
 										}`}
-										style={isSelected ? { backgroundColor: `${sportColor ?? "#f97316"}cc`, border: `1px solid ${sportColor ?? "#f97316"}80` } : undefined}
+										style={
+											isSelected
+												? {
+														backgroundColor: `${sportColor ?? "#6b7280"}cc`,
+														border: `1px solid ${sportColor ?? "#6b7280"}80`,
+													}
+												: undefined
+										}
 									>
 										{s}
 									</button>
@@ -234,9 +236,7 @@ export function ActivityReportPage() {
 									type="button"
 									onClick={() => updateParam("group", g)}
 									className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-										grouping === g
-											? "text-white bg-red-600 shadow-sm"
-											: "text-gray-400 hover:text-gray-200"
+										grouping === g ? "text-white bg-red-600 shadow-sm" : "text-gray-400 hover:text-gray-200"
 									}`}
 								>
 									{g}
@@ -253,9 +253,7 @@ export function ActivityReportPage() {
 									type="button"
 									onClick={() => updateParam("metric", m)}
 									className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
-										metric === m
-											? "text-white bg-red-600 shadow-sm"
-											: "text-gray-400 hover:text-gray-200"
+										metric === m ? "text-white bg-red-600 shadow-sm" : "text-gray-400 hover:text-gray-200"
 									}`}
 								>
 									{m.replace(" (mi)", "").replace(" (hours)", "")}
@@ -305,7 +303,7 @@ export function ActivityReportPage() {
 			</div>
 
 			{/* Chart */}
-			<div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+			<div>
 				<ResponsiveContainer width="100%" height={300}>
 					<BarChart data={chartData}>
 						<CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
@@ -321,7 +319,7 @@ export function ActivityReportPage() {
 			</div>
 
 			{/* Table */}
-			<div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+			<div className="overflow-hidden rounded-lg">
 				<table className="w-full text-sm text-left">
 					<thead className="bg-gray-800/50 text-xs font-medium text-gray-400 uppercase tracking-wide">
 						<tr>
@@ -330,7 +328,15 @@ export function ActivityReportPage() {
 							<th className="px-4 py-3">Activities</th>
 							<th className="px-4 py-3">Distance (mi)</th>
 							<th className="px-4 py-3">Time</th>
-							<th className="px-4 py-3">{isRunningOnly ? "Avg Pace" : isSwimmingOnly ? "Avg Pace" : isCyclingOnly ? "Avg Power/Speed" : "Avg Pace/Speed"}</th>
+							<th className="px-4 py-3">
+								{isRunningOnly
+									? "Avg Pace"
+									: isSwimmingOnly
+										? "Avg Pace"
+										: isCyclingOnly
+											? "Avg Power/Speed"
+											: "Avg Pace/Speed"}
+							</th>
 							<th className="px-4 py-3">Elev Gain (ft)</th>
 							<th className="px-4 py-3">Avg HR</th>
 						</tr>

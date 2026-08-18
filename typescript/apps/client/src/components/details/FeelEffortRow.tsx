@@ -34,7 +34,7 @@ export function FeelEffortRow({ feel, effort, onChange }: FeelEffortProps) {
 	}
 
 	return (
-		<div className="grid grid-cols-[3fr_7fr] gap-8 items-start">
+		<div className="grid grid-cols-[3fr_7fr] gap-6 items-start">
 			{/* Feel */}
 			<div>
 				<div className="text-xs font-medium uppercase tracking-wide text-gray-500 block mb-2">How did you feel?</div>

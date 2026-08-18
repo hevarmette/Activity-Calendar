@@ -47,7 +47,7 @@ export function SessionSummaryCards({ session }: Props) {
 	const distanceDisplay = sport === Sport.Swimming ? `${Math.round(distance)} m` : `${miles.toFixed(2)} mi`;
 
 	return (
-		<div className="grid grid-cols-3 gap-4 mb-6">
+		<div className="grid grid-cols-3 gap-4 mb-4">
 			<LegMetric label="Distance" value={distanceDisplay} />
 			<LegMetric label="Duration" value={convertSecondsToHms(Math.round(duration)) ?? "—"} />
 			<LegMetric label={thirdLabel} value={thirdValue} />

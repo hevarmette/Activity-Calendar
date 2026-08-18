@@ -46,13 +46,13 @@ export function AutoLapTable({ activityId, sport, onDistanceChange }: Props) {
 					value={inputValue}
 					onChange={(e) => setInputValue(Number(e.target.value))}
 					aria-label="Lap distance"
-					className="w-20 rounded bg-gray-700 border border-gray-600 px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+					className="w-20 rounded bg-gray-800 border border-gray-700 px-2 py-1 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500"
 				/>
 				<div className="flex rounded overflow-hidden text-xs" role="group" aria-label="Distance unit">
 					<button
 						type="button"
 						onClick={() => setUnit("mi")}
-						className={`px-2 py-1 ${unit === "mi" ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}
+						className={`px-2 py-1 ${unit === "mi" ? "bg-red-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}
 						aria-pressed={unit === "mi"}
 					>
 						mi
@@ -60,7 +60,7 @@ export function AutoLapTable({ activityId, sport, onDistanceChange }: Props) {
 					<button
 						type="button"
 						onClick={() => setUnit("m")}
-						className={`px-2 py-1 ${unit === "m" ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}
+						className={`px-2 py-1 ${unit === "m" ? "bg-red-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}
 						aria-pressed={unit === "m"}
 					>
 						m

@@ -168,7 +168,7 @@ export function ActivityDetailsPage() {
 		activityEdits.description !== undefined ? (activityEdits.description ?? "") : (activity.description ?? "");
 
 	return (
-		<div key={id} className="w-full space-y-8">
+		<div key={id} className="w-full space-y-5">
 			{/* 1. Title row: title left, category + nav right */}
 			<div className="flex items-center justify-between gap-6">
 				<div className="flex items-baseline gap-2 flex-1 min-w-0">

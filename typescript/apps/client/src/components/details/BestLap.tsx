@@ -12,8 +12,8 @@ export function BestLap({ laps, sport }: Props) {
 
 	const isCycling = sport === Sport.Cycling;
 	const best = isCycling
-		? valid.reduce((a, b) => ((a.totalDistance! / a.totalTimerTime!) > (b.totalDistance! / b.totalTimerTime!) ? a : b))
-		: valid.reduce((a, b) => ((a.totalTimerTime! / a.totalDistance!) < (b.totalTimerTime! / b.totalDistance!) ? a : b));
+		? valid.reduce((a, b) => (a.totalDistance! / a.totalTimerTime! > b.totalDistance! / b.totalTimerTime! ? a : b))
+		: valid.reduce((a, b) => (a.totalTimerTime! / a.totalDistance! < b.totalTimerTime! / b.totalDistance! ? a : b));
 
 	const miles = (best.totalDistance ?? 0) / METERS_PER_MILE;
 	const time = best.totalTimerTime ?? 0;
@@ -21,10 +21,11 @@ export function BestLap({ laps, sport }: Props) {
 	const speed = time > 0 ? miles / (time / 3600) : null;
 
 	return (
-		<div className="rounded-lg bg-green-900/30 border border-green-700 p-3">
-			<p className="text-xs text-green-400 uppercase font-medium mb-1">Best Lap</p>
-			<p className="text-sm text-gray-300">
-				Lap {best.number} — {miles.toFixed(2)} mi — {convertSecondsToHms(time)} — {isCycling ? `${speed?.toFixed(1)} mph` : `${formatPace(pace)} /mi`}
+		<div>
+			<p className="text-xs font-medium uppercase tracking-wide text-gray-500">Best Lap</p>
+			<p className="mt-1 text-lg font-bold text-green-400 tabular-nums">
+				Lap {best.number} — {miles.toFixed(2)} mi — {convertSecondsToHms(time)} —{" "}
+				{isCycling ? `${speed?.toFixed(1)} mph` : `${formatPace(pace)} /mi`}
 			</p>
 		</div>
 	);

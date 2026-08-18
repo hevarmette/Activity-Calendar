@@ -11,11 +11,15 @@ interface Props {
 }
 
 function weightedAvg(laps: Lap[], getter: (l: Lap) => number | null): number | null {
-	let sum = 0, weight = 0;
+	let sum = 0,
+		weight = 0;
 	for (const l of laps) {
 		const v = getter(l);
 		const t = l.totalTimerTime ?? 0;
-		if (v != null && t > 0) { sum += v * t; weight += t; }
+		if (v != null && t > 0) {
+			sum += v * t;
+			weight += t;
+		}
 	}
 	return weight > 0 ? sum / weight : null;
 }
@@ -41,7 +45,8 @@ export function ActivityStatsGrid({ distance, duration, sport, points, laps, avg
 	let totalAscent: number | null = null;
 	let totalDescent: number | null = null;
 	if (altValues.length > 1) {
-		let asc = 0, desc = 0;
+		let asc = 0,
+			desc = 0;
 		for (let i = 1; i < altValues.length; i++) {
 			const diff = altValues[i]! - altValues[i - 1]!;
 			if (diff > ELEV_THRESHOLD_FT) asc += diff;
@@ -59,8 +64,12 @@ export function ActivityStatsGrid({ distance, duration, sport, points, laps, avg
 	let bestLapLabel: string | null = null;
 	if (validLaps.length) {
 		const best = isCycling
-			? validLaps.reduce((a, b) => ((a.totalDistance ?? 0) / (a.totalTimerTime ?? 1)) > ((b.totalDistance ?? 0) / (b.totalTimerTime ?? 1)) ? a : b)
-			: validLaps.reduce((a, b) => ((a.totalTimerTime ?? 0) / (a.totalDistance ?? 1)) < ((b.totalTimerTime ?? 0) / (b.totalDistance ?? 1)) ? a : b);
+			? validLaps.reduce((a, b) =>
+					(a.totalDistance ?? 0) / (a.totalTimerTime ?? 1) > (b.totalDistance ?? 0) / (b.totalTimerTime ?? 1) ? a : b,
+				)
+			: validLaps.reduce((a, b) =>
+					(a.totalTimerTime ?? 0) / (a.totalDistance ?? 1) < (b.totalTimerTime ?? 0) / (b.totalDistance ?? 1) ? a : b,
+				);
 		const bestMiles = (best.totalDistance ?? 0) / METERS_PER_MILE;
 		const bestTime = best.totalTimerTime ?? 0;
 		if (isCycling) {
@@ -74,7 +83,7 @@ export function ActivityStatsGrid({ distance, duration, sport, points, laps, avg
 
 	// Cadence from points
 	const cadenceValues = points
-		.map((p) => p.cadence != null ? (p.cadence + (p.fractionalCadence ?? 0)) * (isCycling ? 1 : 2) : null)
+		.map((p) => (p.cadence != null ? (p.cadence + (p.fractionalCadence ?? 0)) * (isCycling ? 1 : 2) : null))
 		.filter((v): v is number => v != null);
 	const avgCadence = cadenceValues.length > 0 ? cadenceValues.reduce((a, b) => a + b, 0) / cadenceValues.length : null;
 	const maxCadence = cadenceValues.length > 0 ? Math.max(...cadenceValues) : null;
@@ -85,7 +94,7 @@ export function ActivityStatsGrid({ distance, duration, sport, points, laps, avg
 	const vr = weightedAvg(laps, (l) => l.avgVerticalRatio);
 
 	return (
-		<div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+		<div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
 			{/* Column 1: Distance + Pace/Speed */}
 			<div className="space-y-4">
 				<Stat label="Distance" value={`${miles.toFixed(2)} mi`} />
@@ -98,9 +107,7 @@ export function ActivityStatsGrid({ distance, duration, sport, points, laps, avg
 
 			{/* Column 2: HR + Duration */}
 			<div className="space-y-4">
-				{avgHr != null && (
-					<Stat label="Heart Rate" value={`${avgHr.toFixed(0)} avg / ${maxHr} max bpm`} />
-				)}
+				{avgHr != null && <Stat label="Heart Rate" value={`${avgHr.toFixed(0)} avg / ${maxHr} max bpm`} />}
 				<Stat label="Duration" value={convertSecondsToHms(duration) ?? "—"} />
 			</div>
 
@@ -109,9 +116,7 @@ export function ActivityStatsGrid({ distance, duration, sport, points, laps, avg
 				{totalAscent != null && (
 					<Stat label="Elevation" value={`↑${totalAscent.toFixed(0)} ft  ↓${totalDescent!.toFixed(0)} ft`} />
 				)}
-				{bestLapLabel && (
-					<Stat label={isCycling ? "Best Speed" : "Best Pace"} value={bestLapLabel} />
-				)}
+				{bestLapLabel && <Stat label={isCycling ? "Best Speed" : "Best Pace"} value={bestLapLabel} />}
 			</div>
 
 			{/* Column 4: Cadence + Dynamics */}
