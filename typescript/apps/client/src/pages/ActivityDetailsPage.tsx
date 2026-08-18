@@ -185,7 +185,7 @@ export function ActivityDetailsPage() {
 					<select
 						value={category}
 						onChange={(e) => handleChange({ category: e.target.value || null })}
-						className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-orange-500"
+						className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-red-500"
 					>
 						{CATEGORIES.map((c) => (
 							<option key={c} value={c}>
@@ -226,7 +226,7 @@ export function ActivityDetailsPage() {
 			{/* 3. Summary metrics — horizontal cards */}
 			<div className="grid grid-cols-3 gap-4">
 				<MetricBlock label="Distance">
-					<div className="mt-1 flex items-baseline gap-2">
+					<div className="mt-1 flex items-baseline">
 						<input
 							type="number"
 							min={0}
@@ -247,10 +247,11 @@ export function ActivityDetailsPage() {
 									!Number.isNaN(nextMiles) && nextMiles >= 0 ? nextMiles.toFixed(2) : editedMiles.toFixed(2),
 								);
 							}}
-							className="w-full min-w-0 bg-transparent border-none p-0 text-2xl font-bold text-gray-50 tabular-nums focus:outline-none focus:text-orange-200"
+							style={{ width: `${(distanceInput.length || 1) + 1}ch` }}
+							className="min-w-0 bg-transparent border-none p-0 text-2xl font-bold text-gray-50 tabular-nums focus:outline-none focus:text-red-200"
 							aria-label="Distance in miles"
 						/>
-						<span className="text-2xl font-bold text-gray-50">mi</span>
+						<span className="text-2xl font-bold text-gray-500 ml-1">mi</span>
 					</div>
 				</MetricBlock>
 				<MetricBlock label="Duration">
@@ -267,7 +268,7 @@ export function ActivityDetailsPage() {
 							const seconds = parseHmsToSeconds(e.target.value);
 							setDurationInput(convertSecondsToHms(seconds ?? editedDuration) ?? "");
 						}}
-						className="mt-1 w-full bg-transparent border-none p-0 text-2xl font-bold text-gray-50 tabular-nums focus:outline-none focus:text-orange-200"
+						className="mt-1 w-full bg-transparent border-none p-0 text-2xl font-bold text-gray-50 tabular-nums focus:outline-none focus:text-red-200"
 						aria-label="Duration"
 					/>
 				</MetricBlock>
@@ -308,7 +309,7 @@ export function ActivityDetailsPage() {
 						onChange={(e) => handleChange({ description: e.target.value || null })}
 						placeholder="Description"
 						rows={8}
-						className="w-full h-full min-h-[500px] rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:border-orange-500"
+						className="w-full h-full min-h-[500px] rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:border-red-500"
 					/>
 				</div>
 			</div>
@@ -324,7 +325,7 @@ export function ActivityDetailsPage() {
 							aria-selected={sessionIdx === i}
 							aria-label={`${s.sport} session ${i + 1}`}
 							onClick={() => setSessionIdx(i)}
-							className={`capitalize px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${sessionIdx === i ? "text-orange-400 border-orange-400" : "text-gray-500 hover:text-gray-300 border-transparent"}`}
+							className={`capitalize px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${sessionIdx === i ? "text-red-400 border-red-400" : "text-gray-500 hover:text-gray-300 border-transparent"}`}
 						>
 							{s.sport} ({i + 1})
 						</button>
@@ -357,7 +358,7 @@ export function ActivityDetailsPage() {
 						aria-selected={tab === t}
 						aria-label={t === "laps" ? "Laps" : t === "details" ? "Activity Details" : "Auto Laps"}
 						onClick={() => setTab(t)}
-						className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t ? "text-orange-400 border-orange-400" : "text-gray-500 hover:text-gray-300 border-transparent"}`}
+						className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t ? "text-red-400 border-red-400" : "text-gray-500 hover:text-gray-300 border-transparent"}`}
 					>
 						{t === "laps" ? "Laps" : t === "details" ? "Activity Details" : "Auto Laps"}
 					</button>
@@ -391,7 +392,7 @@ export function ActivityDetailsPage() {
 								const elapsed = session?.totalElapsedTime;
 								if (elapsed == null || elapsed <= 0) return null;
 								return (
-									<div className="mt-4 rounded-xl bg-gray-900 border border-gray-800 p-4 inline-block">
+									<div className="mt-4 inline-block">
 										<p className="text-xs font-medium uppercase tracking-wide text-gray-500">Elapsed Time</p>
 										<p className="mt-1 text-lg font-semibold text-gray-100 tabular-nums">
 											{convertSecondsToHms(Math.round(elapsed))}
@@ -454,7 +455,7 @@ export function ActivityDetailsPage() {
 
 function MetricBlock({ label, value, children }: { label: string; value?: string; children?: ReactNode }) {
 	return (
-		<div className="rounded-xl bg-gray-900 border border-gray-800 p-4">
+		<div>
 			<p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
 			{children ?? <p className="mt-1 text-2xl font-bold text-gray-50 tabular-nums">{value}</p>}
 		</div>

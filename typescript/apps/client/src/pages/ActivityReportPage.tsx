@@ -235,7 +235,7 @@ export function ActivityReportPage() {
 									onClick={() => updateParam("group", g)}
 									className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
 										grouping === g
-											? "text-white bg-orange-500 shadow-sm"
+											? "text-white bg-red-600 shadow-sm"
 											: "text-gray-400 hover:text-gray-200"
 									}`}
 								>
@@ -254,7 +254,7 @@ export function ActivityReportPage() {
 									onClick={() => updateParam("metric", m)}
 									className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
 										metric === m
-											? "text-white bg-orange-500 shadow-sm"
+											? "text-white bg-red-600 shadow-sm"
 											: "text-gray-400 hover:text-gray-200"
 									}`}
 								>
@@ -268,7 +268,7 @@ export function ActivityReportPage() {
 						onClick={() => updateParam("groupBySport", groupBySport ? "true" : "false")}
 						className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap border ${
 							groupBySport
-								? "bg-orange-500/20 text-orange-300 border-orange-500/50"
+								? "bg-red-600/20 text-red-300 border-red-500/50"
 								: "bg-gray-800 text-gray-400 border-gray-700 hover:text-gray-200 hover:border-gray-600"
 						}`}
 					>
@@ -280,7 +280,7 @@ export function ActivityReportPage() {
 							type="date"
 							value={dateFrom}
 							onChange={(e) => updateParam("from", e.target.value)}
-							className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
+							className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-colors"
 							aria-label="Filter from date"
 						/>
 					</div>
@@ -290,7 +290,7 @@ export function ActivityReportPage() {
 							type="date"
 							value={dateTo}
 							onChange={(e) => updateParam("to", e.target.value)}
-							className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
+							className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-colors"
 							aria-label="Filter to date"
 						/>
 					</div>

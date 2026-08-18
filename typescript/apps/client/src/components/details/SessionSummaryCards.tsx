@@ -58,7 +58,7 @@ export function SessionSummaryCards({ session }: Props) {
 /** Read-only metric card for a multisport session leg. */
 function LegMetric({ label, value }: { label: string; value: string }) {
 	return (
-		<div className="rounded-xl bg-gray-900 border border-gray-800 p-4">
+		<div>
 			<p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
 			<p className="mt-1 text-2xl font-bold text-gray-50 tabular-nums">{value}</p>
 		</div>

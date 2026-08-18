@@ -44,7 +44,7 @@ export function FeelEffortRow({ feel, effort, onChange }: FeelEffortProps) {
 							type="button"
 							key={value}
 							onClick={() => handleFeel(value)}
-							className={`rounded-lg px-3 py-2 text-xs capitalize flex flex-col items-center gap-1 transition-colors ${localFeel === value ? "bg-orange-500/20 border border-orange-500 ring-1 ring-orange-500/50" : "bg-gray-800 border border-gray-700 hover:border-gray-600"}`}
+							className={`rounded-lg px-3 py-2 text-xs capitalize flex flex-col items-center gap-1 transition-colors ${localFeel === value ? "bg-red-600/20 border border-red-600 ring-1 ring-red-500/50" : "bg-gray-800 border border-gray-700 hover:border-gray-600"}`}
 							title={label}
 							aria-label={`Feel: ${label}`}
 							aria-pressed={localFeel === value}
@@ -71,7 +71,7 @@ export function FeelEffortRow({ feel, effort, onChange }: FeelEffortProps) {
 					max={10}
 					value={effortIndex ?? 1}
 					onChange={(e) => handleEffort(Number(e.target.value))}
-					className={`effort-slider w-full accent-orange-500 ${hasEffort ? "" : "effort-slider-unset"}`}
+					className={`effort-slider w-full accent-red-600 ${hasEffort ? "" : "effort-slider-unset"}`}
 				/>
 				<div className="flex justify-between text-[10px] text-gray-600 mt-1">
 					{Array.from({ length: 10 }, (_, i) => i + 1).map((value) => (

@@ -9,7 +9,7 @@
 	--fc-page-bg-color: transparent;
 	--fc-neutral-bg-color: var(--color-gray-900);
 	--fc-list-event-hover-bg-color: var(--color-gray-800);
-	--fc-today-bg-color: oklch(0.7 0.15 45 / 0.05);
+	--fc-today-bg-color: oklch(0.6 0.2 25 / 0.06);
 }
 
 .fc .fc-daygrid-day-number {
@@ -43,8 +43,8 @@
 }
 
 .fc .fc-button-active {
-	background: var(--color-orange-500) !important;
-	border-color: var(--color-orange-500) !important;
+	background: var(--color-red-600) !important;
+	border-color: var(--color-red-600) !important;
 	color: white !important;
 }
 

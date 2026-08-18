@@ -68,13 +68,13 @@ export function PageLayout() {
 						onChange={handleYearChange}
 						onBlur={handleYearBlur}
 						onKeyDown={handleYearKeyDown}
-						className="w-20 rounded-lg bg-gray-800 border border-gray-700 px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+						className="w-20 rounded-lg bg-gray-800 border border-gray-700 px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50"
 						aria-label="Year"
 					/>
 					<select
 						value={month}
 						onChange={handleMonthChange}
-						className="rounded-lg bg-gray-800 border border-gray-700 px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+						className="rounded-lg bg-gray-800 border border-gray-700 px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50"
 						aria-label="Month"
 					>
 						{Array.from({ length: 12 }, (_, i) => (
@@ -98,7 +98,7 @@ export function PageLayout() {
 							style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "6px" }}
 							className={({ isActive }) =>
 								isActive
-									? "px-3 py-1.5 rounded-lg text-sm font-medium text-gray-50 bg-orange-500/10"
+									? "px-3 py-1.5 rounded-lg text-sm font-medium text-gray-50 bg-red-600/10"
 									: "px-3 py-1.5 rounded-lg text-sm font-medium text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-colors"
 							}
 						>

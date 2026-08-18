@@ -340,7 +340,7 @@ export function PerformanceCharts({ points, sport, category, onHover, onRangeSel
 					onClick={() => setXMode("distance")}
 					aria-pressed={xMode === "distance"}
 					aria-label="Plot by distance"
-					className={xMode === "distance" ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-orange-500" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}
+					className={xMode === "distance" ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-red-600" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}
 				>
 					Distance
 				</button>
@@ -349,7 +349,7 @@ export function PerformanceCharts({ points, sport, category, onHover, onRangeSel
 					onClick={() => setXMode("time")}
 					aria-pressed={xMode === "time"}
 					aria-label="Plot by time"
-					className={xMode === "time" ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-orange-500" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}
+					className={xMode === "time" ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-red-600" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}
 				>
 					Time
 				</button>
@@ -359,7 +359,7 @@ export function PerformanceCharts({ points, sport, category, onHover, onRangeSel
 				<button
 					type="button"
 					onClick={clearSelection}
-					className="text-xs text-orange-400 hover:text-orange-300 underline"
+					className="text-xs text-red-400 hover:text-red-300 underline"
 					aria-label="Clear chart range selection"
 				>
 					Clear selection
