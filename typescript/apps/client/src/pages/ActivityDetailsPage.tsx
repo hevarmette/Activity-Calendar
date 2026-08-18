@@ -171,7 +171,7 @@ export function ActivityDetailsPage() {
 		<div key={id} className="w-full space-y-5">
 			{/* 1. Title row: title left, category + nav right */}
 			<div className="flex items-center justify-between gap-6">
-				<div className="flex items-baseline gap-2 flex-1 min-w-0">
+				<div className="flex items-center gap-2 flex-1 min-w-0">
 					<input
 						type="text"
 						value={title}
@@ -181,11 +181,12 @@ export function ActivityDetailsPage() {
 					/>
 					<span className="text-lg text-gray-500 shrink-0">- {id}</span>
 				</div>
+				{/* Category + navigation: unified control group, secondary to title */}
 				<div className="flex items-center gap-3 shrink-0">
 					<select
 						value={category}
 						onChange={(e) => handleChange({ category: e.target.value || null })}
-						className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-red-500"
+						className="bg-transparent border-none text-sm text-gray-400 hover:text-gray-200 focus:outline-none cursor-pointer transition-colors"
 					>
 						{CATEGORIES.map((c) => (
 							<option key={c} value={c}>
@@ -193,24 +194,27 @@ export function ActivityDetailsPage() {
 							</option>
 						))}
 					</select>
-					<button
-						type="button"
-						onClick={goPrev}
-						disabled={!prev}
-						aria-label="Previous activity"
-						className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-					>
-						&lt;
-					</button>
-					<button
-						type="button"
-						onClick={goNext}
-						disabled={!next}
-						aria-label="Next activity"
-						className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-					>
-						&gt;
-					</button>
+					<span className="w-px h-5 bg-gray-700" />
+					<div className="flex items-center">
+						<button
+							type="button"
+							onClick={goPrev}
+							disabled={!prev}
+							aria-label="Previous activity"
+							className="p-1 text-lg text-gray-500 hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+						>
+							‹
+						</button>
+						<button
+							type="button"
+							onClick={goNext}
+							disabled={!next}
+							aria-label="Next activity"
+							className="p-1 text-lg text-gray-500 hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+						>
+							›
+						</button>
+					</div>
 				</div>
 			</div>
 
