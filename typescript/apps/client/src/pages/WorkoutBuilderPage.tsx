@@ -389,7 +389,7 @@ export function WorkoutBuilderPage() {
 								onClick={handleAddRepeat}
 								className="px-2.5 py-1.5 rounded text-xs font-medium bg-gray-700/50 text-gray-300 border border-gray-600 hover:bg-gray-700 transition-colors"
 							>
-								+ Repeat Group
+								+ Repeats
 							</button>
 						</div>
 					</div>
