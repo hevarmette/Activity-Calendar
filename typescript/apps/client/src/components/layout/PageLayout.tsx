@@ -70,6 +70,34 @@ const links = [
 			</svg>
 		),
 	},
+	{
+		to: "/workouts/builder",
+		label: "Workout",
+		icon: (
+			<svg
+				aria-hidden="true"
+				width="20"
+				height="20"
+				className="w-5 h-5 shrink-0"
+				fill="none"
+				stroke="currentColor"
+				viewBox="0 0 24 24"
+			>
+				<path
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					strokeWidth="1.5"
+					d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12"
+				/>
+				<path
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					strokeWidth="1.5"
+					d="M14.25 17.25l2.25-2.25 2.25 2.25M16.5 15v6"
+				/>
+			</svg>
+		),
+	},
 ] as const;
 
 /**

@@ -37,6 +37,22 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 - Sort controls (distance, duration, ascending/descending)
 - Click through to Activity Details for any result
 
+### Workout Builder
+- Create structured workouts with warmup, interval, rest, recovery, cooldown, and other step types
+- Repeat groups to define interval sets (e.g., 4×1mi with 2min recovery)
+- Drag-and-drop step reordering with grip handle
+- Per-step distance unit selector (mi, km, m) — each step independently chooses its display unit
+- Sport-specific step labels: "Run" for running, "Bike" for cycling, "Swim" for swimming
+- Sport-specific target units: pace (min/mi) for running, mph for cycling, pace (min/100m) for swimming
+- Target types: speed, heart rate, power, cadence, or open
+- Duration types: time (minutes), distance (mi/km/m), or lap button (manual press)
+- Warmup and cooldown default to lap button press
+- Smart step insertion: new steps insert before the cooldown
+- Visual preview bar showing workout structure color-coded by intensity
+- Estimated total time and distance calculation
+- Export as Garmin .fit file for direct upload to a watch (tested with Forerunner 570)
+- Move, duplicate, and remove steps with always-visible action buttons
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -49,6 +65,7 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 | Charts | [Recharts](https://recharts.org/) |
 | Calendar | [FullCalendar](https://fullcalendar.io/) |
 | State | [TanStack Query](https://tanstack.com/query) |
+| Workout Encoding | [@garmin/fitsdk](https://github.com/garmin/fit-javascript-sdk) |
 | Testing | [Playwright](https://playwright.dev/) |
 | Linting | [Biome](https://biomejs.dev/) |
 
@@ -59,17 +76,17 @@ typescript/
 ├── apps/
 │   ├── client/             # React SPA (Vite)
 │   │   ├── src/
-│   │   │   ├── pages/     # CalendarPage, ActivityDetailsPage, ActivityReportPage, ActivitySearchPage
-│   │   │   ├── components/ # UI components (maps, charts, laps, details, calendar, layout)
+│   │   │   ├── pages/     # CalendarPage, ActivityDetailsPage, ActivityReportPage, ActivitySearchPage, WorkoutBuilderPage
+│   │   │   ├── components/ # UI components (maps, charts, laps, details, calendar, layout, workouts)
 │   │   │   ├── api/       # TanStack Query hooks and API client
 │   │   │   └── hooks/     # Custom hooks (activity navigation)
 │   │   └── public/assets/ # SVG icons for workout feel
 │   └── server/             # Hono REST API
 │       └── src/
-│           ├── routes/    # API routes (activities, laps, records, calendar, search, report, etc.)
+│           ├── routes/    # API routes (activities, laps, records, calendar, search, report, workouts, etc.)
 │           └── lib/       # Auto-laps computation
 ├── packages/
-│   └── shared/             # Shared types, constants, enums, formatting utilities
+│   └── shared/             # Shared types, constants, enums, formatting utilities, workout types
 ├── tests/
 │   └── e2e/               # Playwright end-to-end tests
 ├── docker-compose.yml      # PostgreSQL + full stack

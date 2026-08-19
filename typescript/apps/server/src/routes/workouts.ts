@@ -86,40 +86,42 @@ const TARGET_TYPE_MAP: Record<string, string> = {
 
 /**
  * Encode duration value for the FIT file.
- * - time: the SDK applies scale 1000, so pass seconds (SDK will write ms)
- * - distance: the SDK applies scale 100, so pass meters (SDK will write centimeters)
- * - open: 0
+ *
+ * The SDK writes `durationValue` as a raw uint32 — it does NOT auto-apply
+ * the subField scale factors. We must pre-scale ourselves:
+ *   - time: seconds × 1000 → milliseconds
+ *   - distance: meters × 100 → centimeters
+ *   - open: 0
  */
 function encodeDurationValue(durationType: string, value?: number): number {
 	if (durationType === "open" || value === undefined) return 0;
-	// The SDK handles scaling via the profile field definitions (subFields).
-	// For "time" durationType (value 0), the subField "durationTime" has scale=1000,
-	// meaning the SDK divides by scale when reading and multiplies when writing.
-	// We pass the value in the user-facing unit (seconds / meters) and the SDK
-	// applies the scale factor during encoding.
-	return value;
+	if (durationType === "time") return Math.round(value * 1000); // seconds → ms
+	if (durationType === "distance") return Math.round(value * 100); // meters → cm
+	return Math.round(value);
 }
 
 /**
  * Encode custom target low/high values for the FIT file.
- * - speed: the SDK's customTargetSpeedLow subField has scale=1000, units=m/s
- *   so we pass m/s and the SDK writes it as mm/s internally.
- * - heartRate: bpm, offset 100 per FIT spec (100 + bpm means custom absolute bpm)
- * - power: watts, offset 1000 per FIT spec (1000 + watts means custom absolute watts)
- * - cadence: rpm/spm, no offset
- * - open: 0
+ *
+ * The SDK writes `customTargetValueLow/High` as raw uint32 without applying
+ * subField scales. We must pre-scale:
+ *   - speed: m/s × 1000 → mm/s
+ *   - heartRate: 100 + bpm (FIT convention for custom absolute HR)
+ *   - power: 1000 + watts (FIT convention for custom absolute power)
+ *   - cadence: rpm/spm as-is
+ *   - open: 0
  */
 function encodeCustomTargetLow(targetType: string, value?: number): number {
 	if (value === undefined) return 0;
 	switch (targetType) {
 		case "speed":
-			return value; // m/s — SDK applies scale 1000
+			return Math.round(value * 1000); // m/s → mm/s
 		case "heartRate":
-			return 100 + value; // FIT convention: 100 + bpm for absolute
+			return 100 + Math.round(value); // FIT convention: 100 + bpm for absolute
 		case "power":
-			return 1000 + value; // FIT convention: 1000 + watts for absolute
+			return 1000 + Math.round(value); // FIT convention: 1000 + watts for absolute
 		case "cadence":
-			return value;
+			return Math.round(value);
 		default:
 			return 0;
 	}
@@ -129,13 +131,13 @@ function encodeCustomTargetHigh(targetType: string, value?: number): number {
 	if (value === undefined) return 0;
 	switch (targetType) {
 		case "speed":
-			return value;
+			return Math.round(value * 1000); // m/s → mm/s
 		case "heartRate":
-			return 100 + value;
+			return 100 + Math.round(value); // FIT convention: 100 + bpm for absolute
 		case "power":
-			return 1000 + value;
+			return 1000 + Math.round(value); // FIT convention: 1000 + watts for absolute
 		case "cadence":
-			return value;
+			return Math.round(value);
 		default:
 			return 0;
 	}

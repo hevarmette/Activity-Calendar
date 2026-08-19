@@ -29,7 +29,7 @@ export type StepDurationType = "time" | "distance" | "open";
 export type StepTargetType = "speed" | "heartRate" | "power" | "cadence" | "open";
 
 /** Step intensity category (maps to FIT intensity enum). */
-export type StepIntensity = "active" | "rest" | "warmup" | "cooldown" | "recovery" | "interval";
+export type StepIntensity = "active" | "rest" | "warmup" | "cooldown" | "recovery" | "interval" | "other";
 
 /**
  * A single workout step (warmup, interval, rest, cooldown).
