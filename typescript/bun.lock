@@ -46,6 +46,7 @@
       "version": "0.0.1",
       "dependencies": {
         "@activity-calendar/shared": "workspace:*",
+        "@garmin/fitsdk": "^21.213.0",
         "hono": "4.7.4",
         "postgres": "3.4.5",
         "zod": "3.24.4",
@@ -185,6 +186,8 @@
     "@fullcalendar/interaction": ["@fullcalendar/interaction@6.1.17", "", { "peerDependencies": { "@fullcalendar/core": "~6.1.17" } }, "sha512-AudvQvgmJP2FU89wpSulUUjeWv24SuyCx8FzH2WIPVaYg+vDGGYarI7K6PcM3TH7B/CyaBjm5Rqw9lXgnwt5YA=="],
 
     "@fullcalendar/react": ["@fullcalendar/react@6.1.17", "", { "peerDependencies": { "@fullcalendar/core": "~6.1.17", "react": "^16.7.0 || ^17 || ^18 || ^19", "react-dom": "^16.7.0 || ^17 || ^18 || ^19" } }, "sha512-AA8soHhlfRH5dUeqHnfAtzDiXa2vrgWocJSK/F5qzw/pOxc9MqpuoS/nQBROWtHHg6yQUg3DoGqOOhi7dmylXQ=="],
+
+    "@garmin/fitsdk": ["@garmin/fitsdk@21.213.0", "", {}, "sha512-MrJEm7naMxs+VTkWI0+HMC6K1xJtr8Lb2X8CQdUo0GEFhM9hQNfGyaTShdFphqP2pH/u8/fqw0w9JpjZDNE6Mw=="],
 
     "@isaacs/fs-minipass": ["@isaacs/fs-minipass@4.0.1", "", { "dependencies": { "minipass": "^7.0.4" } }, "sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w=="],
 

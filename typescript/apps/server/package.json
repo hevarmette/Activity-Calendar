@@ -10,6 +10,7 @@
 	},
 	"dependencies": {
 		"@activity-calendar/shared": "workspace:*",
+		"@garmin/fitsdk": "^21.213.0",
 		"hono": "4.7.4",
 		"postgres": "3.4.5",
 		"zod": "3.24.4"
