@@ -17,11 +17,16 @@
  * - Drag-and-drop step reordering
  * - Visual workout preview with estimated time/distance
  * - FIT file download
+ * - Save/Update to server with URL persistence (?id=N)
+ * - Keyboard shortcut: S to save (matches activity details pattern)
+ * - Load saved workouts from URL search params on mount
  */
 import type { RepeatStep, WorkoutSport, WorkoutStep, WorkoutStepOrRepeat } from "@activity-calendar/shared";
 import { isRepeatStep } from "@activity-calendar/shared";
-import { useCallback, useReducer, useState } from "react";
+import { useCallback, useEffect, useReducer, useState } from "react";
+import { useSearchParams } from "react-router";
 import { downloadWorkoutFit } from "../api/client.js";
+import { useSaveWorkout, useUpdateWorkout, useWorkout } from "../api/workout-queries.js";
 import { StepList } from "../components/workouts/StepList.js";
 import { WorkoutPreview } from "../components/workouts/WorkoutPreview.js";
 import { type DistanceUnit, getSportVerb } from "../components/workouts/constants.js";
@@ -45,6 +50,7 @@ type Action =
 	| { type: "REMOVE_STEP"; index: number }
 	| { type: "MOVE_STEP"; from: number; to: number }
 	| { type: "DUPLICATE_STEP"; index: number }
+	| { type: "LOAD"; state: WorkoutBuilderState }
 	| { type: "RESET" };
 
 const INITIAL_STATE: WorkoutBuilderState = {
@@ -119,6 +125,8 @@ function reducer(state: WorkoutBuilderState, action: Action): WorkoutBuilderStat
 			steps.splice(action.index + 1, 0, copy);
 			return { ...state, steps };
 		}
+		case "LOAD":
+			return action.state;
 		case "RESET":
 			return INITIAL_STATE;
 		default:
@@ -164,12 +172,57 @@ const SPORT_OPTIONS: { value: WorkoutSport; label: string }[] = [
 ];
 
 export function WorkoutBuilderPage() {
+	const [searchParams, setSearchParams] = useSearchParams();
 	const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
 	const [generating, setGenerating] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [success, setSuccess] = useState(false);
+	const [saving, setSaving] = useState(false);
 	/** Per-step distance unit. Keys are "idx" for top-level steps and "idx-innerIdx" for repeat group inner steps. */
 	const [distanceUnits, setDistanceUnits] = useState<Record<string, DistanceUnit>>({ "1": "mi" });
+
+	// ─── Persistence state ────────────────────────────────────────────────────
+
+	/** Current workout ID — null for new, number for editing an existing saved workout. */
+	const [workoutId, setWorkoutId] = useState<number | null>(() => {
+		const idParam = searchParams.get("id");
+		return idParam ? Number(idParam) : null;
+	});
+
+	// Load saved workout from server when ?id=N is in URL
+	const { data: savedWorkout } = useWorkout(workoutId ?? 0);
+	const [loaded, setLoaded] = useState(false);
+
+	useEffect(() => {
+		if (savedWorkout && !loaded) {
+			dispatch({
+				type: "LOAD",
+				state: {
+					name: savedWorkout.name,
+					sport: savedWorkout.sport,
+					description: savedWorkout.description ?? "",
+					steps: savedWorkout.definition,
+				},
+			});
+			setLoaded(true);
+		}
+	}, [savedWorkout, loaded]);
+
+	// Reset loaded flag if ID changes
+	useEffect(() => {
+		const idParam = searchParams.get("id");
+		const newId = idParam ? Number(idParam) : null;
+		if (newId !== workoutId) {
+			setWorkoutId(newId);
+			setLoaded(false);
+			if (!newId) {
+				dispatch({ type: "RESET" });
+			}
+		}
+	}, [searchParams, workoutId]);
+
+	const saveWorkoutMutation = useSaveWorkout();
+	const updateWorkoutMutation = useUpdateWorkout(workoutId ?? 0);
 
 	const errors = validate(state);
 	const hasErrors = Object.keys(errors).length > 0;
@@ -215,6 +268,57 @@ export function WorkoutBuilderPage() {
 		setDistanceUnits((prev) => ({ ...prev, [key]: unit }));
 	}, []);
 
+	// ─── Save / Update ────────────────────────────────────────────────────────
+
+	const buildDefinition = useCallback(() => {
+		return {
+			name: state.name.trim(),
+			sport: state.sport,
+			description: state.description || undefined,
+			steps: state.steps,
+		};
+	}, [state]);
+
+	const handleSave = useCallback(async () => {
+		if (hasErrors) return;
+		setError(null);
+		setSaving(true);
+		try {
+			if (workoutId) {
+				await updateWorkoutMutation.mutateAsync(buildDefinition());
+			} else {
+				const result = await saveWorkoutMutation.mutateAsync(buildDefinition());
+				setWorkoutId(result.workoutId);
+				setSearchParams((prev) => {
+					const next = new URLSearchParams(prev);
+					next.set("id", String(result.workoutId));
+					return next;
+				});
+			}
+			setSuccess(true);
+			setTimeout(() => setSuccess(false), 2000);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Failed to save workout");
+		} finally {
+			setSaving(false);
+		}
+	}, [hasErrors, workoutId, buildDefinition, saveWorkoutMutation, updateWorkoutMutation, setSearchParams]);
+
+	// ─── Keyboard shortcut: S to save ─────────────────────────────────────────
+
+	useEffect(() => {
+		function handleKeyDown(e: KeyboardEvent) {
+			if (e.key === "s" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+				const tag = (e.target as HTMLElement)?.tagName;
+				if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+				e.preventDefault();
+				handleSave();
+			}
+		}
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [handleSave]);
+
 	// ─── Generate / Download ──────────────────────────────────────────────────
 
 	const handleGenerate = useCallback(async () => {
@@ -222,12 +326,7 @@ export function WorkoutBuilderPage() {
 		setError(null);
 		setGenerating(true);
 		try {
-			await downloadWorkoutFit({
-				name: state.name.trim(),
-				sport: state.sport,
-				description: state.description || undefined,
-				steps: state.steps,
-			});
+			await downloadWorkoutFit(buildDefinition());
 			setSuccess(true);
 			setTimeout(() => setSuccess(false), 2000);
 		} catch (err) {
@@ -235,7 +334,7 @@ export function WorkoutBuilderPage() {
 		} finally {
 			setGenerating(false);
 		}
-	}, [state, hasErrors]);
+	}, [buildDefinition, hasErrors]);
 
 	// ─── Render ───────────────────────────────────────────────────────────────
 
@@ -244,7 +343,10 @@ export function WorkoutBuilderPage() {
 			{/* Header */}
 			<div>
 				<h1 className="text-2xl font-bold text-gray-100">Workout Builder</h1>
-				<p className="text-sm text-gray-500 mt-1">Create structured workouts for your Garmin device</p>
+				<p className="text-sm text-gray-500 mt-1">
+					{workoutId ? `Editing saved workout #${workoutId}` : "Create structured workouts for your Garmin device"}
+					<span className="ml-2 text-gray-600">Press S to save</span>
+				</p>
 			</div>
 
 			<div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
@@ -395,14 +497,51 @@ export function WorkoutBuilderPage() {
 					</div>
 				</div>
 
-				{/* Right column: Preview + Generate */}
+				{/* Right column: Preview + Save + Generate */}
 				<div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
 					<div>
 						<span className="text-xs font-medium text-gray-400 block mb-2">Preview</span>
 						<WorkoutPreview steps={state.steps} sport={state.sport} />
 					</div>
 
-					{/* Generate button */}
+					{/* Save / Update button */}
+					<button
+						type="button"
+						onClick={handleSave}
+						disabled={hasErrors || saving}
+						className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all bg-gray-800 border border-gray-700 text-gray-200 hover:bg-gray-700 hover:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+					>
+						{saving ? (
+							<>
+								<svg aria-hidden="true" className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+									<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+									<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+								</svg>
+								Saving…
+							</>
+						) : (
+							<>
+								<svg
+									aria-hidden="true"
+									width="16"
+									height="16"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="2"
+									strokeLinecap="round"
+									strokeLinejoin="round"
+								>
+									<path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
+									<polyline points="17 21 17 13 7 13 7 21" />
+									<polyline points="7 3 7 8 15 8" />
+								</svg>
+								{workoutId ? "Update Workout" : "Save Workout"}
+							</>
+						)}
+					</button>
+
+					{/* Generate / Download button */}
 					<button
 						type="button"
 						onClick={handleGenerate}
@@ -457,7 +596,7 @@ export function WorkoutBuilderPage() {
 									<polyline points="7 10 12 15 17 10" />
 									<line x1="12" y1="15" x2="12" y2="3" />
 								</svg>
-								Download {state.name.trim().slice(0, 20)}.fit
+								Download .fit
 							</>
 						)}
 					</button>

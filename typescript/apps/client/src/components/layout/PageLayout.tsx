@@ -71,8 +71,8 @@ const links = [
 		),
 	},
 	{
-		to: "/workouts/builder",
-		label: "Workout",
+		to: "/workouts",
+		label: "Workouts",
 		icon: (
 			<svg
 				aria-hidden="true"

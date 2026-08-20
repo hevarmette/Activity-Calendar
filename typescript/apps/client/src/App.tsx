@@ -8,6 +8,7 @@ const ActivityDetailsPage = lazy(() => import("./pages/ActivityDetailsPage.js"))
 const ActivityReportPage = lazy(() => import("./pages/ActivityReportPage.js"));
 const ActivitySearchPage = lazy(() => import("./pages/ActivitySearchPage.js"));
 const WorkoutBuilderPage = lazy(() => import("./pages/WorkoutBuilderPage.js"));
+const WorkoutsListPage = lazy(() => import("./pages/WorkoutsListPage.js"));
 
 function Loading() {
 	return <div className="flex items-center justify-center py-20 text-gray-400">Loading…</div>;
@@ -55,6 +56,14 @@ export function App() {
 						element={
 							<Suspense fallback={<Loading />}>
 								<WorkoutBuilderPage />
+							</Suspense>
+						}
+					/>
+					<Route
+						path="/workouts"
+						element={
+							<Suspense fallback={<Loading />}>
+								<WorkoutsListPage />
 							</Suspense>
 						}
 					/>

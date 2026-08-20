@@ -119,3 +119,18 @@ export interface WorkoutDefinition {
 	 */
 	steps: WorkoutStepOrRepeat[];
 }
+
+/** A saved workout as returned by GET /api/workouts (list view, no steps). */
+export interface WorkoutListItem {
+	workoutId: number;
+	name: string;
+	sport: WorkoutSport;
+	description: string | null;
+	createdAt: string;
+	updatedAt: string;
+}
+
+/** A saved workout with full step definition (GET /api/workouts/:id). */
+export interface SavedWorkout extends WorkoutListItem {
+	definition: WorkoutStepOrRepeat[];
+}

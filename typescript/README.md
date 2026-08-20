@@ -52,6 +52,18 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 - Estimated total time and distance calculation
 - Export as Garmin .fit file for direct upload to a watch (tested with Forerunner 570)
 - Move, duplicate, and remove steps with always-visible action buttons
+- Save/update workouts to the database with persistent URL (?id=N)
+- Keyboard shortcut: S to save (matches activity details pattern)
+- Load saved workouts from URL for editing
+
+### Workout Library
+- Browse all saved workouts in a compact list view
+- Filter by sport (Running, Cycling, Swimming)
+- Each row shows name, sport badge, created date, and description
+- Edit saved workouts (navigates to builder with ?id=N)
+- Download .fit files directly from the list
+- Delete workouts with confirmation dialog
+- "+ New Workout" button to create from scratch
 
 ## Tech Stack
 
@@ -76,7 +88,7 @@ typescript/
 ├── apps/
 │   ├── client/             # React SPA (Vite)
 │   │   ├── src/
-│   │   │   ├── pages/     # CalendarPage, ActivityDetailsPage, ActivityReportPage, ActivitySearchPage, WorkoutBuilderPage
+│   │   │   ├── pages/     # CalendarPage, ActivityDetailsPage, ActivityReportPage, ActivitySearchPage, WorkoutBuilderPage, WorkoutsListPage
 │   │   │   ├── components/ # UI components (maps, charts, laps, details, calendar, layout, workouts)
 │   │   │   ├── api/       # TanStack Query hooks and API client
 │   │   │   └── hooks/     # Custom hooks (activity navigation)

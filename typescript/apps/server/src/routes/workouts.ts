@@ -1,25 +1,42 @@
 /**
- * Workout FIT file generation route.
+ * Workout routes — FIT file generation and CRUD for saved workouts.
  *
  * POST /api/workouts/generate
  *   Body: WorkoutDefinition JSON
  *   Response: Binary .fit file (application/octet-stream)
+ *   Encodes an ad-hoc workout definition into a Garmin-compatible FIT file.
  *
- * Encodes a structured workout definition into a Garmin-compatible FIT
- * workout file using the official @garmin/fitsdk Encoder. The resulting
- * file can be placed in Garmin/Workout/ on a device or synced via
- * Garmin Connect.
+ * GET /api/workouts
+ *   Query: ?sport=running (optional filter)
+ *   Response: WorkoutListItem[] ordered by updated_at DESC
+ *
+ * POST /api/workouts
+ *   Body: WorkoutDefinition JSON
+ *   Response: { workoutId: number } with status 201
+ *   Saves a new workout to the database.
+ *
+ * GET /api/workouts/:id
+ *   Response: SavedWorkout (includes full step definition)
+ *   Returns 404 if not found.
+ *
+ * PUT /api/workouts/:id
+ *   Body: WorkoutDefinition JSON
+ *   Response: { success: true }
+ *   Updates all fields + updated_at. Returns 404 if not found.
+ *
+ * DELETE /api/workouts/:id
+ *   Response: { success: true }
+ *
+ * POST /api/workouts/:id/generate
+ *   Response: Binary .fit file (application/octet-stream)
+ *   Generates a FIT file from a saved workout. Uses workout_id as serialNumber.
  */
 
-import {
-	type WorkoutDefinition,
-	type WorkoutStep,
-	type WorkoutStepOrRepeat,
-	isRepeatStep,
-} from "@activity-calendar/shared";
+import { type WorkoutDefinition, type WorkoutStepOrRepeat, isRepeatStep } from "@activity-calendar/shared";
 import { Encoder, Profile } from "@garmin/fitsdk";
 import { Hono } from "hono";
 import { z } from "zod";
+import sql, { SCHEMA } from "../db.js";
 
 export const workoutsRoutes = new Hono();
 
@@ -219,8 +236,57 @@ function flattenSteps(steps: WorkoutStepOrRepeat[]): FlatStep[] {
 	return flat;
 }
 
-// --- Route handler ---
+/**
+ * Encode a WorkoutDefinition into a binary FIT Uint8Array.
+ *
+ * Shared by both ad-hoc POST /generate and POST /:id/generate routes.
+ */
+function encodeFitWorkout(workout: WorkoutDefinition, serialNumber: number): Uint8Array {
+	const flatSteps = flattenSteps(workout.steps);
+	const encoder = new Encoder();
 
+	// 1. File ID message (required first)
+	encoder.onMesg(Profile.MesgNum.FILE_ID, {
+		type: "workout",
+		manufacturer: "development",
+		product: 0,
+		timeCreated: new Date(),
+		serialNumber,
+	});
+
+	// 2. Workout message
+	encoder.onMesg(Profile.MesgNum.WORKOUT, {
+		wktName: workout.name,
+		sport: SPORT_MAP[workout.sport],
+		subSport: "generic",
+		numValidSteps: flatSteps.length,
+	});
+
+	// 3. Workout step messages
+	for (const step of flatSteps) {
+		const mesg: Record<string, unknown> = {
+			messageIndex: step.messageIndex,
+			durationType: step.durationType,
+			durationValue: step.durationValue,
+			targetType: step.targetType,
+			targetValue: step.targetValue,
+			customTargetValueLow: step.customTargetValueLow,
+			customTargetValueHigh: step.customTargetValueHigh,
+			intensity: step.intensity,
+		};
+		if (step.wktStepName) {
+			mesg.wktStepName = step.wktStepName;
+		}
+		encoder.onMesg(Profile.MesgNum.WORKOUT_STEP, mesg);
+	}
+
+	// Finalize encoding
+	return encoder.close();
+}
+
+// --- Route handlers ---
+
+// 1. POST /generate — Ad-hoc FIT generation from JSON body
 workoutsRoutes.post("/generate", async (c) => {
 	const body = await c.req.json();
 
@@ -231,50 +297,163 @@ workoutsRoutes.post("/generate", async (c) => {
 	}
 
 	const workout = result.data as WorkoutDefinition;
-	const flatSteps = flattenSteps(workout.steps);
 
 	try {
-		const encoder = new Encoder();
-
-		// 1. File ID message (required first)
-		encoder.onMesg(Profile.MesgNum.FILE_ID, {
-			type: "workout",
-			manufacturer: "development",
-			product: 0,
-			timeCreated: new Date(),
-			serialNumber: 12345,
-		});
-
-		// 2. Workout message
-		encoder.onMesg(Profile.MesgNum.WORKOUT, {
-			wktName: workout.name,
-			sport: SPORT_MAP[workout.sport],
-			subSport: "generic",
-			numValidSteps: flatSteps.length,
-		});
-
-		// 3. Workout step messages
-		for (const step of flatSteps) {
-			const mesg: Record<string, unknown> = {
-				messageIndex: step.messageIndex,
-				durationType: step.durationType,
-				durationValue: step.durationValue,
-				targetType: step.targetType,
-				targetValue: step.targetValue,
-				customTargetValueLow: step.customTargetValueLow,
-				customTargetValueHigh: step.customTargetValueHigh,
-				intensity: step.intensity,
-			};
-			if (step.wktStepName) {
-				mesg.wktStepName = step.wktStepName;
-			}
-			encoder.onMesg(Profile.MesgNum.WORKOUT_STEP, mesg);
-		}
-
-		// Finalize encoding
-		const uint8Array: Uint8Array = encoder.close();
+		const uint8Array = encodeFitWorkout(workout, Date.now() % 2147483647);
 
 		// Sanitize filename
+		const filename = `${workout.name.replace(/[^a-zA-Z0-9_-]/g, "_")}.fit`;
+
+		return new Response(uint8Array, {
+			headers: {
+				"Content-Type": "application/octet-stream",
+				"Content-Disposition": `attachment; filename="${filename}"`,
+				"Content-Length": String(uint8Array.byteLength),
+			},
+		});
+	} catch (err) {
+		const message = err instanceof Error ? err.message : "Unknown encoding error";
+		return c.json({ error: "FIT encoding failed", details: message }, 500);
+	}
+});
+
+// 2. GET / — List saved workouts
+workoutsRoutes.get("/", async (c) => {
+	const sport = c.req.query("sport");
+
+	const rows = sport
+		? await sql`
+			SELECT workout_id, name, sport, description, created_at, updated_at
+			FROM ${sql(SCHEMA)}.workout
+			WHERE sport = ${sport}
+			ORDER BY updated_at DESC
+		`
+		: await sql`
+			SELECT workout_id, name, sport, description, created_at, updated_at
+			FROM ${sql(SCHEMA)}.workout
+			ORDER BY updated_at DESC
+		`;
+
+	return c.json(rows);
+});
+
+// 3. POST / — Save a new workout
+workoutsRoutes.post("/", async (c) => {
+	const body = await c.req.json();
+
+	const result = workoutDefinitionSchema.safeParse(body);
+	if (!result.success) {
+		return c.json({ error: "Invalid workout definition", details: result.error.flatten() }, 400);
+	}
+
+	const workout = result.data;
+
+	const rows = await sql`
+		INSERT INTO ${sql(SCHEMA)}.workout (name, sport, description, definition)
+		VALUES (${workout.name}, ${workout.sport}, ${workout.description ?? null}, ${JSON.stringify(workout.steps)})
+		RETURNING workout_id
+	`;
+
+	return c.json({ workoutId: rows[0].workoutId }, 201);
+});
+
+// 4. GET /:id — Get a single workout with full definition
+workoutsRoutes.get("/:id", async (c) => {
+	const id = Number(c.req.param("id"));
+
+	const rows = await sql`
+		SELECT workout_id, name, sport, description, definition, created_at, updated_at
+		FROM ${sql(SCHEMA)}.workout
+		WHERE workout_id = ${id}
+		LIMIT 1
+	`;
+
+	if (rows.length === 0) {
+		return c.json({ error: "Not found" }, 404);
+	}
+
+	const row = rows[0];
+	return c.json({
+		workoutId: row.workoutId,
+		name: row.name,
+		sport: row.sport,
+		description: row.description,
+		createdAt: row.createdAt,
+		updatedAt: row.updatedAt,
+		definition: typeof row.definition === "string" ? JSON.parse(row.definition) : row.definition,
+	});
+});
+
+// 5. PUT /:id — Update a workout
+workoutsRoutes.put("/:id", async (c) => {
+	const id = Number(c.req.param("id"));
+	const body = await c.req.json();
+
+	const result = workoutDefinitionSchema.safeParse(body);
+	if (!result.success) {
+		return c.json({ error: "Invalid workout definition", details: result.error.flatten() }, 400);
+	}
+
+	const workout = result.data;
+
+	const rows = await sql`
+		UPDATE ${sql(SCHEMA)}.workout
+		SET name = ${workout.name},
+			sport = ${workout.sport},
+			description = ${workout.description ?? null},
+			definition = ${JSON.stringify(workout.steps)},
+			updated_at = NOW()
+		WHERE workout_id = ${id}
+		RETURNING workout_id
+	`;
+
+	if (rows.length === 0) {
+		return c.json({ error: "Not found" }, 404);
+	}
+
+	return c.json({ success: true });
+});
+
+// 6. DELETE /:id — Delete a workout
+workoutsRoutes.delete("/:id", async (c) => {
+	const id = Number(c.req.param("id"));
+
+	await sql`
+		DELETE FROM ${sql(SCHEMA)}.workout
+		WHERE workout_id = ${id}
+	`;
+
+	return c.json({ success: true });
+});
+
+// 7. POST /:id/generate — Generate FIT from a saved workout
+workoutsRoutes.post("/:id/generate", async (c) => {
+	const id = Number(c.req.param("id"));
+
+	const rows = await sql`
+		SELECT workout_id, name, sport, description, definition
+		FROM ${sql(SCHEMA)}.workout
+		WHERE workout_id = ${id}
+		LIMIT 1
+	`;
+
+	if (rows.length === 0) {
+		return c.json({ error: "Not found" }, 404);
+	}
+
+	const row = rows[0];
+	const steps: WorkoutStepOrRepeat[] = typeof row.definition === "string" ? JSON.parse(row.definition) : row.definition;
+
+	const workout: WorkoutDefinition = {
+		name: row.name,
+		sport: row.sport,
+		description: row.description,
+		steps,
+	};
+
+	try {
+		const uint8Array = encodeFitWorkout(workout, row.workoutId);
+
 		const filename = `${workout.name.replace(/[^a-zA-Z0-9_-]/g, "_")}.fit`;
 
 		return new Response(uint8Array, {
