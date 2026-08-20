@@ -1,19 +1,20 @@
 /**
  * WorkoutsListPage — Browse, manage, and download saved workouts.
  *
- * Compact list view with sport filter pills at the top. Each row shows the
- * workout name, sport badge, created date, and action buttons for editing,
- * downloading, and deleting. Follows the app's dark theme with red-600 accent.
+ * Compact list view with sport filter pills at the top. Each row is a clickable
+ * Link that navigates to the workout builder for editing. The row shows the
+ * workout name, sport badge, created date, and right-aligned action buttons
+ * (Download, Delete) that use preventDefault to avoid triggering navigation.
  *
  * Navigation:
- * - Edit → /workouts/builder?id=N
- * - Download → triggers .fit generation from saved workout
- * - Delete → confirmation dialog then mutation
+ * - Click row → /workouts/builder?id=N (edit the workout)
+ * - Download button → triggers .fit generation from saved workout
+ * - Delete button → confirmation dialog then mutation
  * - "+ New Workout" → /workouts/builder (no id)
  */
 import type { WorkoutSport } from "@activity-calendar/shared";
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 import { downloadSavedWorkoutFit } from "../api/client.js";
 import { useDeleteWorkout, useWorkouts } from "../api/workout-queries.js";
 
@@ -41,7 +42,6 @@ export function WorkoutsListPage() {
 	const [deletingId, setDeletingId] = useState<number | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
-	const navigate = useNavigate();
 	const { data: workouts, isLoading } = useWorkouts(sportFilter || undefined);
 	const deleteWorkoutMutation = useDeleteWorkout();
 
@@ -194,11 +194,13 @@ export function WorkoutsListPage() {
 			{!isLoading && workouts && sortedWorkouts.length > 0 && (
 				<div className="border border-gray-800 rounded-lg overflow-hidden">
 					{sortedWorkouts.map((w, idx) => (
-						<div
+						<Link
 							key={w.workoutId}
-							className={`flex items-center gap-3 px-4 py-3 hover:bg-gray-900/50 transition-colors ${
+							to={`/workouts/builder?id=${w.workoutId}`}
+							className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-800/60 transition-colors group ${
 								idx > 0 ? "border-t border-gray-800" : ""
 							}`}
+							aria-label={`Edit workout: ${w.name}`}
 						>
 							{/* Sport badge */}
 							<span
@@ -209,7 +211,9 @@ export function WorkoutsListPage() {
 
 							{/* Name + date */}
 							<div className="flex-1 min-w-0">
-								<p className="text-sm font-medium text-gray-200 truncate">{w.name}</p>
+								<p className="text-sm font-medium text-gray-200 truncate group-hover:text-white transition-colors">
+									{w.name}
+								</p>
 								<p className="text-xs text-gray-500">
 									{new Date(w.createdAt).toLocaleDateString(undefined, {
 										year: "numeric",
@@ -220,38 +224,24 @@ export function WorkoutsListPage() {
 								</p>
 							</div>
 
-							{/* Action buttons */}
-							<div className="flex items-center gap-1">
-								{/* Edit */}
-								<button
-									type="button"
-									onClick={() => navigate(`/workouts/builder?id=${w.workoutId}`)}
-									aria-label={`Edit ${w.name}`}
-									className="p-1.5 rounded text-gray-400 hover:text-gray-200 hover:bg-gray-800 transition-colors"
-								>
-									<svg
-										aria-hidden="true"
-										width="14"
-										height="14"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										strokeWidth="2"
-										strokeLinecap="round"
-										strokeLinejoin="round"
-									>
-										<path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-										<path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-									</svg>
-								</button>
-
+							{/* Action buttons — stopPropagation prevents navigation when clicking these */}
+							<div
+								className="flex items-center gap-1"
+								onClick={(e) => e.preventDefault()}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") e.stopPropagation();
+								}}
+							>
 								{/* Download */}
 								<button
 									type="button"
-									onClick={() => handleDownload(w.workoutId, w.name)}
+									onClick={(e) => {
+										e.preventDefault();
+										handleDownload(w.workoutId, w.name);
+									}}
 									disabled={downloadingId === w.workoutId}
 									aria-label={`Download ${w.name} as .fit`}
-									className="p-1.5 rounded text-gray-400 hover:text-gray-200 hover:bg-gray-800 transition-colors disabled:opacity-50"
+									className="p-1.5 rounded text-gray-400 hover:text-gray-200 hover:bg-gray-700 transition-colors disabled:opacity-50"
 								>
 									{downloadingId === w.workoutId ? (
 										<svg aria-hidden="true" className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
@@ -280,10 +270,13 @@ export function WorkoutsListPage() {
 								{/* Delete */}
 								<button
 									type="button"
-									onClick={() => handleDelete(w.workoutId, w.name)}
+									onClick={(e) => {
+										e.preventDefault();
+										handleDelete(w.workoutId, w.name);
+									}}
 									disabled={deletingId === w.workoutId}
 									aria-label={`Delete ${w.name}`}
-									className="p-1.5 rounded text-gray-400 hover:text-red-400 hover:bg-gray-800 transition-colors disabled:opacity-50"
+									className="p-1.5 rounded text-gray-400 hover:text-red-400 hover:bg-gray-700 transition-colors disabled:opacity-50"
 								>
 									{deletingId === w.workoutId ? (
 										<svg aria-hidden="true" className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
@@ -308,7 +301,7 @@ export function WorkoutsListPage() {
 									)}
 								</button>
 							</div>
-						</div>
+						</Link>
 					))}
 				</div>
 			)}
