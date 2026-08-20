@@ -12,10 +12,13 @@
  * - "+ New Workout" → /workouts/builder (no id)
  */
 import type { WorkoutSport } from "@activity-calendar/shared";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { downloadSavedWorkoutFit } from "../api/client.js";
 import { useDeleteWorkout, useWorkouts } from "../api/workout-queries.js";
+
+/** Available sort options for the workout list. */
+type SortOption = "newest" | "oldest" | "name-asc" | "name-desc" | "sport";
 
 /** Sport badge color mapping consistent with the builder. */
 const SPORT_BADGE_STYLES: Record<WorkoutSport, string> = {
@@ -33,6 +36,7 @@ const SPORT_OPTIONS: { value: WorkoutSport | ""; label: string }[] = [
 
 export function WorkoutsListPage() {
 	const [sportFilter, setSportFilter] = useState<string>("");
+	const [sortBy, setSortBy] = useState<SortOption>("newest");
 	const [downloadingId, setDownloadingId] = useState<number | null>(null);
 	const [deletingId, setDeletingId] = useState<number | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -40,6 +44,30 @@ export function WorkoutsListPage() {
 	const navigate = useNavigate();
 	const { data: workouts, isLoading } = useWorkouts(sportFilter || undefined);
 	const deleteWorkoutMutation = useDeleteWorkout();
+
+	/** Workouts sorted by the selected criteria. Sorting is applied after the sport filter. */
+	const sortedWorkouts = useMemo(() => {
+		if (!workouts) return [];
+		const sorted = [...workouts];
+		switch (sortBy) {
+			case "newest":
+				sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+				break;
+			case "oldest":
+				sorted.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+				break;
+			case "name-asc":
+				sorted.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+				break;
+			case "name-desc":
+				sorted.sort((a, b) => b.name.localeCompare(a.name, undefined, { sensitivity: "base" }));
+				break;
+			case "sport":
+				sorted.sort((a, b) => a.sport.localeCompare(b.sport));
+				break;
+		}
+		return sorted;
+	}, [workouts, sortBy]);
 
 	/** Download .fit file for a saved workout. */
 	async function handleDownload(workoutId: number, name: string) {
@@ -98,23 +126,37 @@ export function WorkoutsListPage() {
 				</Link>
 			</div>
 
-			{/* Sport filter pills */}
-			<div className="flex gap-1.5">
-				{SPORT_OPTIONS.map(({ value, label }) => (
-					<button
-						key={value}
-						type="button"
-						onClick={() => setSportFilter(value)}
-						aria-pressed={sportFilter === value}
-						className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-							sportFilter === value
-								? "bg-red-600 text-white"
-								: "bg-gray-800 text-gray-400 border border-gray-700 hover:text-gray-200 hover:border-gray-600"
-						}`}
-					>
-						{label}
-					</button>
-				))}
+			{/* Sport filter pills and sort control */}
+			<div className="flex items-center justify-between gap-4">
+				<div className="flex gap-1.5">
+					{SPORT_OPTIONS.map(({ value, label }) => (
+						<button
+							key={value}
+							type="button"
+							onClick={() => setSportFilter(value)}
+							aria-pressed={sportFilter === value}
+							className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+								sportFilter === value
+									? "bg-red-600 text-white"
+									: "bg-gray-800 text-gray-400 border border-gray-700 hover:text-gray-200 hover:border-gray-600"
+							}`}
+						>
+							{label}
+						</button>
+					))}
+				</div>
+				<select
+					value={sortBy}
+					onChange={(e) => setSortBy(e.target.value as SortOption)}
+					aria-label="Sort workouts"
+					className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-colors"
+				>
+					<option value="newest">Newest first</option>
+					<option value="oldest">Oldest first</option>
+					<option value="name-asc">Name A–Z</option>
+					<option value="name-desc">Name Z–A</option>
+					<option value="sport">Sport</option>
+				</select>
 			</div>
 
 			{/* Error banner */}
@@ -149,9 +191,9 @@ export function WorkoutsListPage() {
 				</div>
 			)}
 
-			{!isLoading && workouts && workouts.length > 0 && (
+			{!isLoading && workouts && sortedWorkouts.length > 0 && (
 				<div className="border border-gray-800 rounded-lg overflow-hidden">
-					{workouts.map((w, idx) => (
+					{sortedWorkouts.map((w, idx) => (
 						<div
 							key={w.workoutId}
 							className={`flex items-center gap-3 px-4 py-3 hover:bg-gray-900/50 transition-colors ${

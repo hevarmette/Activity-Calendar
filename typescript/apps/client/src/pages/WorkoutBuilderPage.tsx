@@ -24,7 +24,7 @@
 import type { RepeatStep, WorkoutSport, WorkoutStep, WorkoutStepOrRepeat } from "@activity-calendar/shared";
 import { isRepeatStep } from "@activity-calendar/shared";
 import { useCallback, useEffect, useReducer, useState } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { downloadWorkoutFit } from "../api/client.js";
 import { useSaveWorkout, useUpdateWorkout, useWorkout } from "../api/workout-queries.js";
 import { StepList } from "../components/workouts/StepList.js";
