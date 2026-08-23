@@ -64,9 +64,7 @@ export async function downloadSavedWorkoutFit(
     throw new Error(err.error ?? `API error: ${res.status}`);
   }
   const disposition = res.headers.get("Content-Disposition");
-  // TODO: Saved scheduled workouts as date of schedule.fit. See typescript/workouts/connect/schedule/
-  const filename =
-    disposition?.match(/filename="(.+)"/)?.[1] ?? `${name}_workout.fit`;
+  const filename = disposition?.match(/filename="(.+)"/)?.[1] ?? `${name}.fit`;
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
