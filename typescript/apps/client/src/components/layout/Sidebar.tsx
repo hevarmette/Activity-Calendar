@@ -14,7 +14,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 			)}
 			<aside className={`fixed inset-y-0 left-0 z-50 w-60 bg-gray-900 border-r border-gray-800 flex flex-col transition-transform duration-200 ease-out lg:static lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}>
 				<div className="flex items-center gap-3 px-5 py-5 border-b border-gray-800">
-					<div className="w-8 h-8 rounded-lg bg-red-600 flex items-center justify-center text-white text-sm font-bold">AC</div>
+					<div className="w-8 h-8 rounded-lg bg-orange-600 flex items-center justify-center text-white text-sm font-bold">AC</div>
 					<span className="text-base font-bold text-gray-50">Activity Cal</span>
 				</div>
 				<nav className="flex-1 px-3 py-4 space-y-1">
@@ -25,7 +25,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 							onClick={onClose}
 							className={({ isActive }) =>
 								isActive
-									? "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-50 bg-red-600/10"
+									? "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-50 bg-orange-600/10"
 									: "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-colors"
 							}
 						>

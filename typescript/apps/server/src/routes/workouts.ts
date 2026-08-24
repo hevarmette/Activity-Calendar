@@ -302,7 +302,7 @@ workoutsRoutes.post("/generate", async (c) => {
 		const uint8Array = encodeFitWorkout(workout, Date.now() % 2147483647);
 
 		// Sanitize filename
-		const filename = `${workout.name.replace(/[^a-zA-Z0-9_-]/g, "_")}.fit`;
+		const filename = `${workout.name.replace(/[^a-zA-Z0-9_-]/g, "_")}_workout.fit`;
 
 		return new Response(uint8Array, {
 			headers: {
@@ -454,7 +454,7 @@ workoutsRoutes.post("/:id/generate", async (c) => {
 	try {
 		const uint8Array = encodeFitWorkout(workout, row.workoutId);
 
-		const filename = `${workout.name.replace(/[^a-zA-Z0-9_-]/g, "_")}.fit`;
+		const filename = `${workout.name.replace(/[^a-zA-Z0-9_-]/g, "_")}_workout.fit`;
 
 		return new Response(uint8Array, {
 			headers: {

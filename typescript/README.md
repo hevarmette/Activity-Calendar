@@ -7,6 +7,8 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 ### Calendar View
 - Interactive monthly calendar displaying all activities, color-coded by sport
 - Click any event to open a summary dialog with distance, duration, pace/speed, and an embedded GPS map with start/end markers and lap markers
+- Click any empty date cell to create a manual activity (no GPS data) with that date pre-filled
+- Manual activity creation dialog with title, sport, sub-sport, category, duration, lap splits (distance + time + intensity per lap), workout feel, and perceived effort
 - Year/month navigation
 
 ### Activity Details Page

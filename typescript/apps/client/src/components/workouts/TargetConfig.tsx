@@ -163,7 +163,7 @@ export function TargetConfig({ targetType, low, high, sport, onChange }: TargetC
 				value={targetType}
 				onChange={handleTypeChange}
 				aria-label="Target type"
-				className="w-24 rounded bg-gray-800 border border-gray-700 px-1.5 py-1 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50"
+				className="w-24 rounded bg-gray-800 border border-gray-700 px-1.5 py-1 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
 			>
 				{availableTargets.map((t) => (
 					<option key={t} value={t}>
@@ -180,7 +180,7 @@ export function TargetConfig({ targetType, low, high, sport, onChange }: TargetC
 						onChange={(e) => handleLowChange(e.target.value)}
 						placeholder={isPace ? "M:SS" : "Low"}
 						aria-label={isPace ? "Slow pace" : "Target low value"}
-						className="w-16 rounded bg-gray-800 border border-gray-700 px-1.5 py-1 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50"
+						className="w-16 rounded bg-gray-800 border border-gray-700 px-1.5 py-1 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
 						{...(isPace ? { pattern: "\\d{1,2}:\\d{2}" } : { step: "1", min: "0" })}
 					/>
 					<span className="text-gray-600 text-xs">–</span>
@@ -190,7 +190,7 @@ export function TargetConfig({ targetType, low, high, sport, onChange }: TargetC
 						onChange={(e) => handleHighChange(e.target.value)}
 						placeholder={isPace ? "M:SS" : "High"}
 						aria-label={isPace ? "Fast pace" : "Target high value"}
-						className="w-16 rounded bg-gray-800 border border-gray-700 px-1.5 py-1 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50"
+						className="w-16 rounded bg-gray-800 border border-gray-700 px-1.5 py-1 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
 						{...(isPace ? { pattern: "\\d{1,2}:\\d{2}" } : { step: "1", min: "0" })}
 					/>
 					<span className="text-xs text-gray-500">{unit}</span>

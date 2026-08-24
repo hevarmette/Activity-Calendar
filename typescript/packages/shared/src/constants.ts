@@ -62,3 +62,14 @@ export const TRACK_DISTANCES: [number, string][] = [
 	[0.4971, "800m"], [0.6214, "1000m"], [0.7456, "1200m"],
 	[1.0, "1 mi"], [1.2427, "2000m"], [1.8641, "3000m"],
 ];
+
+/**
+ * Valid sub-sport options per sport for manual activity creation.
+ * Used by the CreateActivityDialog to populate the sub-sport select
+ * and by the server for validation.
+ */
+export const SUB_SPORT_OPTIONS: Record<string, string[]> = {
+	[Sport.Running]: ["generic", "trail", "treadmill", "track"],
+	[Sport.Cycling]: ["generic", "indoor_cycling", "mountain", "road"],
+	[Sport.Swimming]: ["lap_swimming", "open_water"],
+};

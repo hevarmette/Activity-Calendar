@@ -106,7 +106,7 @@ export function WorkoutsListPage() {
 				</div>
 				<Link
 					to="/workouts/builder"
-					className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-700 text-white transition-colors"
+					className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-orange-600 hover:bg-orange-700 text-white transition-colors"
 				>
 					<svg
 						aria-hidden="true"
@@ -137,7 +137,7 @@ export function WorkoutsListPage() {
 							aria-pressed={sportFilter === value}
 							className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
 								sportFilter === value
-									? "bg-red-600 text-white"
+									? "bg-orange-600 text-white"
 									: "bg-gray-800 text-gray-400 border border-gray-700 hover:text-gray-200 hover:border-gray-600"
 							}`}
 						>
@@ -149,7 +149,7 @@ export function WorkoutsListPage() {
 					value={sortBy}
 					onChange={(e) => setSortBy(e.target.value as SortOption)}
 					aria-label="Sort workouts"
-					className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-colors"
+					className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 				>
 					<option value="newest">Newest first</option>
 					<option value="oldest">Oldest first</option>
@@ -185,7 +185,7 @@ export function WorkoutsListPage() {
 						<path d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
 					</svg>
 					<p className="text-sm">No saved workouts yet</p>
-					<Link to="/workouts/builder" className="mt-3 text-sm text-red-400 hover:text-red-300 transition-colors">
+					<Link to="/workouts/builder" className="mt-3 text-sm text-orange-400 hover:text-orange-300 transition-colors">
 						Create your first workout →
 					</Link>
 				</div>

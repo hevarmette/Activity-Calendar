@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 import { useCalendar } from "../api/queries.js";
 import { ActivityCalendar, type CalendarActivity } from "../components/calendar/ActivityCalendar.js";
 import { ActivityDialog } from "../components/calendar/ActivityDialog.js";
+import { CreateActivityDialog } from "../components/calendar/CreateActivityDialog.js";
 
 export function CalendarPage() {
 	const [searchParams] = useSearchParams();
@@ -13,6 +14,7 @@ export function CalendarPage() {
 
 	const { data, isLoading } = useCalendar();
 	const [selected, setSelected] = useState<CalendarActivity | null>(null);
+	const [createDate, setCreateDate] = useState<string | null>(null);
 
 	if (isLoading) return <div className="text-center py-10 text-gray-400">Loading calendar…</div>;
 
@@ -22,6 +24,7 @@ export function CalendarPage() {
 				events={data ?? []}
 				initialDate={initialDate}
 				onEventClick={setSelected}
+				onDateClick={(dateStr) => setCreateDate(dateStr)}
 			/>
 
 			{selected && (
@@ -33,6 +36,10 @@ export function CalendarPage() {
 					open={true}
 					onClose={() => setSelected(null)}
 				/>
+			)}
+
+			{createDate != null && (
+				<CreateActivityDialog open={true} onClose={() => setCreateDate(null)} initialDate={createDate} />
 			)}
 		</div>
 	);

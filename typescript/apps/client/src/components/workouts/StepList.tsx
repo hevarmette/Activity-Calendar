@@ -175,7 +175,7 @@ function RepeatGroupEditor({
 
 	return (
 		<div
-			className={`border-l-2 border-dashed border-gray-700 ml-4 pl-3 py-1 ${isDragOver ? "bg-gray-800/70 border-t border-t-red-500/50" : ""}`}
+			className={`border-l-2 border-dashed border-gray-700 ml-4 pl-3 py-1 ${isDragOver ? "bg-gray-800/70 border-t border-t-orange-500/50" : ""}`}
 			draggable
 			onDragStart={onDragStart}
 			onDragOver={onDragOver}
@@ -218,7 +218,7 @@ function RepeatGroupEditor({
 					min="1"
 					max="99"
 					aria-label="Repeat count"
-					className="w-12 rounded bg-gray-800 border border-gray-700 px-1.5 py-1 text-xs text-gray-200 text-center focus:outline-none focus:ring-2 focus:ring-red-500/50"
+					className="w-12 rounded bg-gray-800 border border-gray-700 px-1.5 py-1 text-xs text-gray-200 text-center focus:outline-none focus:ring-2 focus:ring-orange-500/50"
 				/>
 				<button
 					type="button"

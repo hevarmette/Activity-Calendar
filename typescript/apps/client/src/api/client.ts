@@ -33,7 +33,7 @@ export async function downloadWorkoutFit(
   // Extract filename from Content-Disposition header or use fallback
   const disposition = res.headers.get("Content-Disposition");
   const filename =
-    disposition?.match(/filename="(.+)"/)?.[1] ?? `${workout.name}.fit`;
+    disposition?.match(/filename="(.+)"/)?.[1] ?? `${workout.name}_workout.fit`;
   // Trigger browser download via temporary anchor element
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
@@ -64,7 +64,7 @@ export async function downloadSavedWorkoutFit(
     throw new Error(err.error ?? `API error: ${res.status}`);
   }
   const disposition = res.headers.get("Content-Disposition");
-  const filename = disposition?.match(/filename="(.+)"/)?.[1] ?? `${name}.fit`;
+  const filename = disposition?.match(/filename="(.+)"/)?.[1] ?? `${name}_workout.fit`;
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

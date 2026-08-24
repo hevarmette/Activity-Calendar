@@ -228,7 +228,7 @@ export function ActivitySearchPage() {
 					onChange={(e) => setSearchText(e.target.value)}
 					placeholder="Fuzzy match (e.g. 5x600m)..."
 					aria-label="Fuzzy search activities by title or description"
-					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-colors"
+					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 				/>
 			</div>
 			{/* Exact title search — case-insensitive substring match on activity name */}
@@ -243,7 +243,7 @@ export function ActivitySearchPage() {
 					onChange={(e) => setTitleText(e.target.value)}
 					placeholder="Exact title match..."
 					aria-label="Search activities by exact title"
-					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-colors"
+					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 				/>
 			</div>
 			{/* Exact description search — case-insensitive substring match on description */}
@@ -258,7 +258,7 @@ export function ActivitySearchPage() {
 					onChange={(e) => setDescText(e.target.value)}
 					placeholder="Exact description match..."
 					aria-label="Search activities by exact description"
-					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-colors"
+					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 				/>
 			</div>
 			<div>
@@ -311,7 +311,7 @@ export function ActivitySearchPage() {
 								}}
 								className={`capitalize px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap border ${
 									isSelected
-										? "bg-red-600/20 text-red-300 border-red-500/50"
+										? "bg-orange-600/20 text-orange-300 border-orange-500/50"
 										: "bg-gray-800 text-gray-400 border-gray-700 hover:text-gray-200 hover:border-gray-600"
 								}`}
 							>
@@ -331,7 +331,7 @@ export function ActivitySearchPage() {
 						type="date"
 						value={dateFrom}
 						onChange={(e) => updateParam("from", e.target.value)}
-						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-colors"
+						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 					/>
 				</div>
 				<div>
@@ -343,7 +343,7 @@ export function ActivitySearchPage() {
 						type="date"
 						value={dateTo}
 						onChange={(e) => updateParam("to", e.target.value)}
-						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-colors"
+						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 					/>
 				</div>
 			</div>
@@ -358,7 +358,7 @@ export function ActivitySearchPage() {
 						step="0.5"
 						value={minDist || ""}
 						onChange={(e) => updateParam("minDist", e.target.value)}
-						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-colors"
+						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 					/>
 				</div>
 				<div>
@@ -371,7 +371,7 @@ export function ActivitySearchPage() {
 						step="0.5"
 						value={maxDist || ""}
 						onChange={(e) => updateParam("maxDist", e.target.value)}
-						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-colors"
+						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 					/>
 				</div>
 			</div>
@@ -386,7 +386,7 @@ export function ActivitySearchPage() {
 						step="5"
 						value={minDur || ""}
 						onChange={(e) => updateParam("minDur", e.target.value)}
-						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-colors"
+						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 					/>
 				</div>
 				<div>
@@ -399,7 +399,7 @@ export function ActivitySearchPage() {
 						step="5"
 						value={maxDur || ""}
 						onChange={(e) => updateParam("maxDur", e.target.value)}
-						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-colors"
+						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 					/>
 				</div>
 			</div>
@@ -422,7 +422,7 @@ export function ActivitySearchPage() {
 							<select
 								value={sortField}
 								onChange={(e) => updateParam("sort", e.target.value)}
-								className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-colors"
+								className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 							>
 								<option value="date">Sort: Date</option>
 								<option value="distance">Sort: Distance</option>
@@ -432,7 +432,7 @@ export function ActivitySearchPage() {
 							<select
 								value={sortDir}
 								onChange={(e) => updateParam("dir", e.target.value)}
-								className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-colors"
+								className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 							>
 								<option value="desc">Descending</option>
 								<option value="asc">Ascending</option>

@@ -37,7 +37,7 @@ export function SwimLengthTable({ activityId, poolLengthM = 25 }: Props) {
 	return (
 		<div>
 			{selected.size >= 2 && (
-				<button onClick={handleCombine} disabled={combine.isPending} className="mb-2 rounded bg-red-600 px-3 py-1 text-sm text-white hover:bg-red-500 disabled:opacity-40">
+				<button onClick={handleCombine} disabled={combine.isPending} className="mb-2 rounded bg-orange-600 px-3 py-1 text-sm text-white hover:bg-orange-500 disabled:opacity-40">
 					Combine {selected.size} lengths
 				</button>
 			)}
@@ -71,10 +71,10 @@ export function SwimLengthTable({ activityId, poolLengthM = 25 }: Props) {
 									<td className="px-2 py-1">{dist}</td>
 									<td className="px-2 py-1">{convertSecondsToHms(time) ?? "—"}</td>
 									<td className="px-2 py-1">
-										<input type="number" defaultValue={l.totalStrokes ?? ""} className="w-14 bg-transparent border-b border-gray-600 focus:border-red-500 outline-none" />
+										<input type="number" defaultValue={l.totalStrokes ?? ""} className="w-14 bg-transparent border-b border-gray-600 focus:border-orange-500 outline-none" />
 									</td>
 									<td className="px-2 py-1">
-										<input type="text" defaultValue={l.swimStroke ?? ""} className="w-20 bg-transparent border-b border-gray-600 focus:border-red-500 outline-none" />
+										<input type="text" defaultValue={l.swimStroke ?? ""} className="w-20 bg-transparent border-b border-gray-600 focus:border-orange-500 outline-none" />
 									</td>
 									<td className="px-2 py-1">{pace100 != null ? `${Math.floor(pace100 / 60)}:${String(Math.round(pace100 % 60)).padStart(2, "0")}` : "—"}</td>
 									<td className="px-2 py-1">{swolf ?? "—"}</td>

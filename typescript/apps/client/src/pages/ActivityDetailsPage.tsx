@@ -252,7 +252,7 @@ export function ActivityDetailsPage() {
 								);
 							}}
 							style={{ width: `${(distanceInput.length || 1) + 1}ch` }}
-							className="min-w-0 bg-transparent border-none p-0 text-2xl font-bold text-gray-50 tabular-nums focus:outline-none focus:text-red-200"
+							className="min-w-0 bg-transparent border-none p-0 text-2xl font-bold text-gray-50 tabular-nums focus:outline-none focus:text-orange-200"
 							aria-label="Distance in miles"
 						/>
 						<span className="text-2xl font-bold text-gray-500 ml-1">mi</span>
@@ -272,7 +272,7 @@ export function ActivityDetailsPage() {
 							const seconds = parseHmsToSeconds(e.target.value);
 							setDurationInput(convertSecondsToHms(seconds ?? editedDuration) ?? "");
 						}}
-						className="mt-1 w-full bg-transparent border-none p-0 text-2xl font-bold text-gray-50 tabular-nums focus:outline-none focus:text-red-200"
+						className="mt-1 w-full bg-transparent border-none p-0 text-2xl font-bold text-gray-50 tabular-nums focus:outline-none focus:text-orange-200"
 						aria-label="Duration"
 					/>
 				</MetricBlock>
@@ -313,7 +313,7 @@ export function ActivityDetailsPage() {
 						onChange={(e) => handleChange({ description: e.target.value || null })}
 						placeholder="Description"
 						rows={8}
-						className="w-full h-full min-h-[500px] rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:border-red-500"
+						className="w-full h-full min-h-[500px] rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:border-orange-500"
 					/>
 				</div>
 			</div>
@@ -329,7 +329,7 @@ export function ActivityDetailsPage() {
 							aria-selected={sessionIdx === i}
 							aria-label={`${s.sport} session ${i + 1}`}
 							onClick={() => setSessionIdx(i)}
-							className={`capitalize px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${sessionIdx === i ? "text-red-400 border-red-400" : "text-gray-500 hover:text-gray-300 border-transparent"}`}
+							className={`capitalize px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${sessionIdx === i ? "text-orange-400 border-orange-400" : "text-gray-500 hover:text-gray-300 border-transparent"}`}
 						>
 							{s.sport} ({i + 1})
 						</button>
@@ -362,7 +362,7 @@ export function ActivityDetailsPage() {
 						aria-selected={tab === t}
 						aria-label={t === "laps" ? "Laps" : t === "details" ? "Activity Details" : "Auto Laps"}
 						onClick={() => setTab(t)}
-						className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t ? "text-red-400 border-red-400" : "text-gray-500 hover:text-gray-300 border-transparent"}`}
+						className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t ? "text-orange-400 border-orange-400" : "text-gray-500 hover:text-gray-300 border-transparent"}`}
 					>
 						{t === "laps" ? "Laps" : t === "details" ? "Activity Details" : "Auto Laps"}
 					</button>

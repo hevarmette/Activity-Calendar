@@ -164,3 +164,56 @@ export interface LengthUpdatePayload {
 	totalStrokes?: number;
 	swimStroke?: string;
 }
+
+// --- Manual Activity Creation ---
+
+/** A single lap entry for manual activity creation (POST /api/activities). */
+export interface CreateLapInput {
+	/** Distance in meters. */
+	distance: number;
+	/** Duration in seconds. */
+	time: number;
+	/** Lap intensity (e.g. "active", "warm up", "cooldown"). Defaults to "active". */
+	intensity?: string;
+}
+
+/**
+ * Payload for POST /api/activities — manual activity creation.
+ *
+ * Creates an activity, session, and lap rows in a single transaction.
+ * No GPS record data is generated for manual activities.
+ */
+export interface CreateActivityPayload {
+	/** Activity title/name (1–200 characters). */
+	title: string;
+	/** Optional description text. */
+	description?: string;
+	/** Sport type. Must be one of the supported sports. */
+	sport: "running" | "cycling" | "swimming";
+	/** Sub-sport (e.g. "generic", "trail", "open_water", "lap_swimming"). Defaults to "generic". */
+	subSport?: string;
+	/** Category label (e.g. "training", "race", "long run"). Max 15 characters. */
+	category?: string;
+	/** Local timestamp as ISO string without timezone (YYYY-MM-DDTHH:mm:ss). */
+	localTimestamp: string;
+	/** Total activity duration in seconds. */
+	duration: number;
+	/** Total activity distance in meters. If provided, used for adjusted_distance and session total_distance. */
+	distance?: number;
+	/** Workout feel: 0, 25, 50, 75, or 100 (maps to FEEL_MAP icons). */
+	workoutFeel?: number | null;
+	/** Perceived effort: 1–10 scale (maps to EFFORT_LABELS). */
+	effort?: number | null;
+	/** Lap splits. If empty, one lap matching activity distance/duration is auto-generated. */
+	laps: CreateLapInput[];
+	/** When true, the response includes the SQL statements executed. */
+	debugSql?: boolean;
+}
+
+/** Response from POST /api/activities — returns the created activity's ID. */
+export interface CreateActivityResponse {
+	/** The database-assigned activity ID for the newly created activity. */
+	activityId: number;
+	/** SQL statements executed (only present when debugSql was true in request). */
+	sql?: string[];
+}

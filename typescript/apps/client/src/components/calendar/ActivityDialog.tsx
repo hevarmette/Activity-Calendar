@@ -147,7 +147,7 @@ export function ActivityDialog({ activityId, title, sport, numSessions, open, on
 						</div>
 						<Link
 							to={`/activity/${activityId}?sport=${sport}`}
-							className="inline-block rounded-lg bg-red-600 hover:bg-red-500 px-5 py-2 text-sm font-medium text-white no-underline transition-colors"
+							className="inline-block rounded-lg bg-orange-600 hover:bg-orange-500 px-5 py-2 text-sm font-medium text-white no-underline transition-colors"
 							onClick={onClose}
 						>
 							View Details

@@ -366,7 +366,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 					onClick={() => setFilters(new Set())}
 					className={
 						filters.size === 0
-							? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-red-600"
+							? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-orange-600"
 							: "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"
 					}
 				>
@@ -376,7 +376,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 					<button
 						key={i}
 						onClick={() => toggleFilter(i)}
-						className={`capitalize ${filters.has(i) ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-red-600" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}`}
+						className={`capitalize ${filters.has(i) ? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-orange-600" : "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"}`}
 					>
 						{i}
 					</button>
@@ -401,7 +401,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 						<button
 							type="button"
 							onClick={handlePaste}
-							className="px-2 py-1 rounded bg-red-700 hover:bg-red-600 text-white transition-colors"
+							className="px-2 py-1 rounded bg-orange-700 hover:bg-orange-600 text-white transition-colors"
 							aria-label="Paste intensity pattern onto selected laps"
 						>
 							Paste ({copiedPattern.length} pattern) <kbd className="ml-1 text-[10px] text-gray-300">⌘V</kbd>
@@ -433,7 +433,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 										if (filtered.every((l) => selectedLaps.has(l.lapId))) setSelectedLaps(new Set());
 										else setSelectedLaps(new Set(filtered.map((l) => l.lapId)));
 									}}
-									className="rounded border-gray-600 text-red-600 focus:ring-red-500/50"
+									className="rounded border-gray-600 text-orange-600 focus:ring-orange-500/50"
 									aria-label="Select all laps"
 								/>
 							</th>
@@ -474,7 +474,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 										key={lap.lapId}
 										className={`border-t border-gray-800 transition-colors ${
 											isSelected
-												? "bg-red-600/10 border-l-2 border-l-red-600"
+												? "bg-orange-600/10 border-l-2 border-l-orange-600"
 												: isCopiedSource
 													? "bg-blue-500/5 ring-1 ring-inset ring-blue-400/30"
 													: "hover:bg-gray-800/30"
@@ -488,7 +488,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 													const event = e.nativeEvent as MouseEvent;
 													handleRowSelect(lap.lapId, idx, event.shiftKey);
 												}}
-												className="rounded border-gray-600 text-red-600 focus:ring-red-500/50"
+												className="rounded border-gray-600 text-orange-600 focus:ring-orange-500/50"
 												aria-label={`Select lap ${lap.number}`}
 											/>
 										</td>
@@ -504,7 +504,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 													setFocusedCell(null);
 													handleEdit(lap.lapId, "totalDistance", Number(e.target.value) * METERS_PER_MILE);
 												}}
-												className="w-20 bg-transparent border-b border-dashed border-gray-700 focus:border-red-500 outline-none text-gray-200 tabular-nums"
+												className="w-20 bg-transparent border-b border-dashed border-gray-700 focus:border-orange-500 outline-none text-gray-200 tabular-nums"
 											/>
 										</td>
 										<td className="px-4 py-3 text-gray-300">
@@ -528,7 +528,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 																: (parts[0] ?? 0);
 													handleEdit(lap.lapId, "totalTimerTime", secs);
 												}}
-												className="w-24 bg-transparent border-b border-dashed border-gray-700 focus:border-red-500 outline-none text-gray-200 tabular-nums"
+												className="w-24 bg-transparent border-b border-dashed border-gray-700 focus:border-orange-500 outline-none text-gray-200 tabular-nums"
 											/>
 										</td>
 										<td className="px-4 py-3 text-gray-400 tabular-nums">{cumDist.toFixed(2)}</td>
@@ -547,7 +547,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 											<select
 												value={getEffectiveIntensity(lap)}
 												onChange={(e) => handleEdit(lap.lapId, "intensity", e.target.value)}
-												className="rounded-lg bg-gray-800 border border-gray-700 text-xs px-2 py-1 text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500"
+												className="rounded-lg bg-gray-800 border border-gray-700 text-xs px-2 py-1 text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500"
 											>
 												<option value="">—</option>
 												{INTENSITIES.map((i) => (
@@ -572,7 +572,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 							onClick={() => setGroupBy("distance")}
 							className={
 								groupBy === "distance"
-									? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-red-600"
+									? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-orange-600"
 									: "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"
 							}
 						>
@@ -582,7 +582,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 							onClick={() => setGroupBy("time")}
 							className={
 								groupBy === "time"
-									? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-red-600"
+									? "px-3 py-1.5 rounded-md text-xs font-medium text-white bg-orange-600"
 									: "px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"
 							}
 						>

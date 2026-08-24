@@ -173,7 +173,7 @@ export function StepEditor({
 
 	return (
 		<div
-			className={`group flex items-center gap-2 py-2 pl-3 pr-2 border-l-3 ${borderClass} hover:bg-gray-900/50 transition-colors ${isDragOver ? "bg-gray-800/70 border-t border-t-red-500/50" : ""}`}
+			className={`group flex items-center gap-2 py-2 pl-3 pr-2 border-l-3 ${borderClass} hover:bg-gray-900/50 transition-colors ${isDragOver ? "bg-gray-800/70 border-t border-t-orange-500/50" : ""}`}
 			draggable
 			onDragStart={onDragStart}
 			onDragOver={onDragOver}
@@ -197,7 +197,7 @@ export function StepEditor({
 				value={step.intensity}
 				onChange={handleIntensityChange}
 				aria-label="Step intensity"
-				className="w-24 rounded bg-gray-800 border border-gray-700 px-1.5 py-1 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50"
+				className="w-24 rounded bg-gray-800 border border-gray-700 px-1.5 py-1 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
 			>
 				{INTENSITY_OPTIONS.map((i) => (
 					<option key={i} value={i}>
@@ -212,7 +212,7 @@ export function StepEditor({
 					value={step.durationType}
 					onChange={handleDurationTypeChange}
 					aria-label="Duration type"
-					className="w-24 rounded bg-gray-800 border border-gray-700 px-1.5 py-1 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50"
+					className="w-24 rounded bg-gray-800 border border-gray-700 px-1.5 py-1 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
 				>
 					{DURATION_TYPE_OPTIONS.map((d) => (
 						<option key={d} value={d}>
@@ -230,7 +230,7 @@ export function StepEditor({
 							step={step.durationType === "time" ? "0.5" : distanceUnit === "m" ? "25" : "0.1"}
 							min="0"
 							aria-label="Duration value"
-							className="w-16 rounded bg-gray-800 border border-gray-700 px-1.5 py-1 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/50"
+							className="w-16 rounded bg-gray-800 border border-gray-700 px-1.5 py-1 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
 						/>
 						{step.durationType === "distance" ? (
 							<fieldset className="flex rounded overflow-hidden border border-gray-700" aria-label="Distance unit">
@@ -241,7 +241,7 @@ export function StepEditor({
 										onClick={() => onDistanceUnitChange(u)}
 										aria-pressed={distanceUnit === u}
 										className={`px-1.5 py-1 text-xs font-medium transition-colors ${
-											distanceUnit === u ? "bg-red-600 text-white" : "bg-gray-800 text-gray-500 hover:text-gray-200"
+											distanceUnit === u ? "bg-orange-600 text-white" : "bg-gray-800 text-gray-500 hover:text-gray-200"
 										} ${u !== "mi" ? "border-l border-gray-700" : ""}`}
 									>
 										{u}
@@ -262,7 +262,7 @@ export function StepEditor({
 				onChange={handleNameChange}
 				placeholder="Name…"
 				aria-label="Step name"
-				className="hidden sm:block w-24 rounded bg-gray-800 border border-gray-700 px-1.5 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500/50"
+				className="hidden sm:block w-24 rounded bg-gray-800 border border-gray-700 px-1.5 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
 			/>
 
 			{/* Target config */}

@@ -367,8 +367,8 @@ export function WorkoutBuilderPage() {
 								maxLength={50}
 								placeholder="e.g. 5x1000m Intervals"
 								aria-label="Workout name"
-								className={`w-full max-w-sm rounded-lg bg-gray-800 border px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/50 transition-colors ${
-									errors.name ? "border-red-500" : "border-gray-700 focus:border-red-500"
+								className={`w-full max-w-sm rounded-lg bg-gray-800 border px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-colors ${
+									errors.name ? "border-red-500" : "border-gray-700 focus:border-orange-500"
 								}`}
 							/>
 							{errors.name && <p className="text-xs text-red-400 mt-1">{errors.name}</p>}
@@ -387,7 +387,7 @@ export function WorkoutBuilderPage() {
 											aria-pressed={state.sport === value}
 											className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
 												state.sport === value
-													? "bg-red-600 text-white"
+													? "bg-orange-600 text-white"
 													: "bg-gray-800 text-gray-400 border border-gray-700 hover:text-gray-200 hover:border-gray-600"
 											}`}
 										>
@@ -409,7 +409,7 @@ export function WorkoutBuilderPage() {
 								onChange={(e) => dispatch({ type: "SET_DESCRIPTION", description: e.target.value })}
 								placeholder="Workout notes…"
 								rows={2}
-								className="w-full max-w-sm rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-colors resize-none"
+								className="w-full max-w-sm rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors resize-none"
 							/>
 						</div>
 					</div>
@@ -551,7 +551,7 @@ export function WorkoutBuilderPage() {
 								? "bg-green-600 text-white"
 								: hasErrors
 									? "bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700"
-									: "bg-red-600 hover:bg-red-700 text-white"
+									: "bg-orange-600 hover:bg-orange-700 text-white"
 						} disabled:opacity-50 disabled:cursor-not-allowed`}
 					>
 						{generating ? (
