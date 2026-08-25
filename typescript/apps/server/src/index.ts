@@ -1,8 +1,6 @@
 import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
 import { cors } from "hono/cors";
-import sql, { SCHEMA } from "./db.js";
-import { runMigrations } from "./migrations/add-scheduled-date.js";
 import { activitiesRoutes } from "./routes/activities.js";
 import { autoLapsRoutes } from "./routes/auto-laps.js";
 import { calendarRoutes } from "./routes/calendar.js";
@@ -16,18 +14,16 @@ import { sessionsRoutes } from "./routes/sessions.js";
 import { similarRoutes } from "./routes/similar.js";
 import { workoutsRoutes } from "./routes/workouts.js";
 
-// Run database migrations on startup
-runMigrations(sql, SCHEMA).catch((err) => {
-	console.error("Migration failed:", err);
-});
-
 const app = new Hono();
 
 app.use(
-	"*",
-	cors({
-		origin: process.env.NODE_ENV === "production" ? "*" : process.env.CLIENT_ORIGIN || "http://localhost:5173",
-	}),
+  "*",
+  cors({
+    origin:
+      process.env.NODE_ENV === "production"
+        ? "*"
+        : process.env.CLIENT_ORIGIN || "http://localhost:5173",
+  }),
 );
 
 app.route("/api/calendar", calendarRoutes);
@@ -47,8 +43,8 @@ app.get("/health", (c) => c.json({ status: "ok" }));
 
 // Serve static client build in production
 if (process.env.NODE_ENV === "production") {
-	app.use("/*", serveStatic({ root: "../client/dist" }));
-	app.get("*", serveStatic({ path: "../client/dist/index.html" }));
+  app.use("/*", serveStatic({ root: "../client/dist" }));
+  app.get("*", serveStatic({ path: "../client/dist/index.html" }));
 }
 
 const port = Number(process.env.PORT) || 3000;
