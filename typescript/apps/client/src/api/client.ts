@@ -85,7 +85,7 @@ export async function downloadScheduledWorkoutFit(workoutId: number, scheduledDa
 	const url = URL.createObjectURL(blob);
 	const a = document.createElement("a");
 	a.href = url;
-	a.download = `${scheduledDate}.fit`;
+	a.download = `${scheduledDate.slice(0, 10)}.fit`;
 	a.click();
 	URL.revokeObjectURL(url);
 }

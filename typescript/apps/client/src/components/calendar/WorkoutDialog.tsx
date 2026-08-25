@@ -68,7 +68,11 @@ export function WorkoutDialog({ workoutId, scheduledDate, open, onClose }: Props
 	const [error, setError] = useState<string | null>(null);
 
 	const sport = (workout?.sport ?? "running") as WorkoutSport;
-	const formattedDate = new Date(`${scheduledDate}T00:00:00`).toLocaleDateString(undefined, {
+	// scheduledDate may arrive as a full ISO timestamp (e.g. "2026-08-25T00:00:00.000Z") or
+	// a plain date string ("2026-08-25"). Extract just the YYYY-MM-DD portion to avoid
+	// constructing an invalid Date like "2026-08-25T00:00:00.000ZT00:00:00".
+	const dateOnly = scheduledDate.slice(0, 10);
+	const formattedDate = new Date(`${dateOnly}T00:00:00`).toLocaleDateString(undefined, {
 		weekday: "long",
 		year: "numeric",
 		month: "long",

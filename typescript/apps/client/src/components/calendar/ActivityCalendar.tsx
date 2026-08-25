@@ -47,7 +47,7 @@ function toFullCalendarEvents(events: CalendarEvent[]) {
 
 function toWorkoutFullCalendarEvents(workouts: CalendarWorkoutEvent[]) {
 	return workouts.map((w) => ({
-		title: `🏋️ ${w.name}`,
+		title: w.name,
 		start: w.scheduledDate,
 		backgroundColor: "transparent",
 		borderColor: WORKOUT_EVENT_COLOR,
