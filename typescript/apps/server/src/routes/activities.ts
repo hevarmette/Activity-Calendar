@@ -23,8 +23,8 @@ import sql, { SCHEMA } from "../db.js";
 export const activitiesRoutes = new Hono();
 
 activitiesRoutes.get("/:id", async (c) => {
-	const id = Number(c.req.param("id"));
-	const rows = await sql`
+  const id = Number(c.req.param("id"));
+  const rows = await sql`
 		SELECT
 			a.activity_id,
 			a.adjusted_distance AS distance,
@@ -41,92 +41,94 @@ activitiesRoutes.get("/:id", async (c) => {
 		WHERE a.activity_id = ${id}
 		LIMIT 1
 	`;
-	if (rows.length === 0) return c.json({ error: "Not found" }, 404);
-	return c.json(rows[0]);
+  if (rows.length === 0) return c.json({ error: "Not found" }, 404);
+  return c.json(rows[0]);
 });
 
 const activityUpdateSchema = z.object({
-	adjustedDistance: z.number().optional(),
-	adjustedDuration: z.number().optional(),
-	description: z.string().nullable().optional(),
-	workoutFeel: z.number().nullable().optional(),
-	effort: z.number().nullable().optional(),
-	activityName: z.string().nullable().optional(),
-	category: z.string().nullable().optional(),
+  adjustedDistance: z.number().optional(),
+  adjustedDuration: z.number().optional(),
+  description: z.string().nullable().optional(),
+  workoutFeel: z.number().nullable().optional(),
+  effort: z.number().nullable().optional(),
+  activityName: z.string().nullable().optional(),
+  category: z.string().nullable().optional(),
 });
 
 activitiesRoutes.patch("/:id", async (c) => {
-	const id = Number(c.req.param("id"));
-	const body = activityUpdateSchema.parse(await c.req.json());
+  const id = Number(c.req.param("id"));
+  const body = activityUpdateSchema.parse(await c.req.json());
 
-	const updates: string[] = [];
-	const values: unknown[] = [];
+  const updates: string[] = [];
+  const values: unknown[] = [];
 
-	if (body.adjustedDistance !== undefined) {
-		updates.push("adjusted_distance");
-		values.push(body.adjustedDistance);
-	}
-	if (body.adjustedDuration !== undefined) {
-		updates.push("adjusted_duration");
-		values.push(body.adjustedDuration);
-	}
-	if (body.description !== undefined) {
-		updates.push("description");
-		values.push(body.description);
-	}
-	if (body.workoutFeel !== undefined) {
-		updates.push("workout_feel");
-		values.push(body.workoutFeel);
-	}
-	if (body.effort !== undefined) {
-		updates.push("effort");
-		values.push(body.effort);
-	}
-	if (body.activityName !== undefined) {
-		updates.push("activity_name");
-		values.push(body.activityName);
-	}
-	if (body.category !== undefined) {
-		updates.push("category");
-		values.push(body.category);
-	}
+  if (body.adjustedDistance !== undefined) {
+    updates.push("adjusted_distance");
+    values.push(body.adjustedDistance);
+  }
+  if (body.adjustedDuration !== undefined) {
+    updates.push("adjusted_duration");
+    values.push(body.adjustedDuration);
+  }
+  if (body.description !== undefined) {
+    updates.push("description");
+    values.push(body.description);
+  }
+  if (body.workoutFeel !== undefined) {
+    updates.push("workout_feel");
+    values.push(body.workoutFeel);
+  }
+  if (body.effort !== undefined) {
+    updates.push("effort");
+    values.push(body.effort);
+  }
+  if (body.activityName !== undefined) {
+    updates.push("activity_name");
+    values.push(body.activityName);
+  }
+  if (body.category !== undefined) {
+    updates.push("category");
+    values.push(body.category);
+  }
 
-	if (updates.length === 0) return c.json({ success: true, sql: null });
+  if (updates.length === 0) return c.json({ success: true, sql: null });
 
-	const setClause = Object.fromEntries(updates.map((col, i) => [col, values[i]]));
+  const setClause = Object.fromEntries(
+    updates.map((col, i) => [col, values[i]]),
+  );
 
-	await sql`
+  await sql`
 		UPDATE ${sql(SCHEMA)}.activity
 		SET ${sql(setClause)}
 		WHERE activity_id = ${id}
 	`;
 
-	const sqlString = `UPDATE ${SCHEMA}.activity SET ${updates.map((col, i) => `${col} = ${JSON.stringify(values[i])}`).join(", ")} WHERE activity_id = ${id};`;
+  const sqlString = `UPDATE ${SCHEMA}.activity SET ${updates.map((col, i) => `${col} = ${JSON.stringify(values[i])}`).join(", ")} WHERE activity_id = ${id};`;
 
-	return c.json({ success: true, sql: sqlString });
+  return c.json({ success: true, sql: sqlString });
 });
 
 // --- Manual activity creation ---
 
 const createLapSchema = z.object({
-	distance: z.number().min(0),
-	time: z.number().min(0),
-	intensity: z.string().optional(),
+  distance: z.number().min(0),
+  time: z.number().min(0),
+  intensity: z.string().optional(),
 });
 
 const createActivitySchema = z.object({
-	title: z.string().min(1).max(200),
-	description: z.string().optional(),
-	sport: z.enum(["running", "cycling", "swimming"]),
-	subSport: z.string().optional(),
-	category: z.string().max(15).optional(),
-	localTimestamp: z.string().min(1),
-	duration: z.number().positive(),
-	distance: z.number().min(0).optional(),
-	workoutFeel: z.number().nullable().optional(),
-	effort: z.number().min(1).max(10).nullable().optional(),
-	laps: z.array(createLapSchema),
-	debugSql: z.boolean().optional(),
+  title: z.string().min(1).max(200),
+  description: z.string().optional(),
+  sport: z.enum(["running", "cycling", "swimming"]),
+  subSport: z.string().optional(),
+  category: z.string().max(15).optional(),
+  localTimestamp: z.string().min(1),
+  duration: z.number().positive(),
+  distance: z.number().min(0).optional(),
+  workoutFeel: z.number().nullable().optional(),
+  effort: z.number().min(1).max(10).nullable().optional(),
+  laps: z.array(createLapSchema),
+  debugSql: z.boolean().optional(),
 });
 
 /**
@@ -139,49 +141,65 @@ const createActivitySchema = z.object({
  * Response: { activityId: number } with status 201
  */
 activitiesRoutes.post("/", async (c) => {
-	const body = await c.req.json();
+  const body = await c.req.json();
 
-	const result = createActivitySchema.safeParse(body);
-	if (!result.success) {
-		return c.json({ error: "Invalid request body", details: result.error.flatten() }, 400);
-	}
+  const result = createActivitySchema.safeParse(body);
+  if (!result.success) {
+    return c.json(
+      { error: "Invalid request body", details: result.error.flatten() },
+      400,
+    );
+  }
 
-	const data = result.data;
+  const data = result.data;
 
-	// Validate sub_sport against allowed values for the sport
-	if (data.subSport) {
-		const allowed = SUB_SPORT_OPTIONS[data.sport];
-		if (!allowed || !allowed.includes(data.subSport)) {
-			return c.json({ error: `Invalid subSport "${data.subSport}" for sport "${data.sport}"` }, 400);
-		}
-	}
+  // Validate sub_sport against allowed values for the sport
+  if (data.subSport) {
+    const allowed = SUB_SPORT_OPTIONS[data.sport];
+    if (!allowed || !allowed.includes(data.subSport)) {
+      return c.json(
+        {
+          error: `Invalid subSport "${data.subSport}" for sport "${data.sport}"`,
+        },
+        400,
+      );
+    }
+  }
 
-	// Compute derived values
-	const laps = data.laps.length > 0 ? data.laps : [{ distance: data.distance ?? 0, time: data.duration, intensity: undefined }];
-	const lapDistance = laps.reduce((sum, lap) => sum + lap.distance, 0);
-	const totalDistance = data.distance ?? lapDistance;
-	const totalDuration = data.duration;
-	const numLaps = laps.length;
-	const enhancedAvgSpeed = totalDuration > 0 ? totalDistance / totalDuration : 0;
-	const subSport = data.subSport || "generic";
+  // Compute derived values
+  const laps =
+    data.laps.length > 0
+      ? data.laps
+      : [
+          {
+            distance: data.distance ?? 0,
+            time: data.duration,
+            intensity: undefined,
+          },
+        ];
+  const lapDistance = laps.reduce((sum, lap) => sum + lap.distance, 0);
+  const totalDistance = data.distance ?? lapDistance;
+  const totalDuration = data.duration;
+  const numLaps = laps.length;
+  const subSport = data.subSport || "generic";
 
-	// Convert local timestamp to UTC by using PostgreSQL's timezone conversion.
-	// The localTimestamp is stored as-is in local_timestamp column,
-	// and we derive the UTC timestamp via AT TIME ZONE.
-	const localTs = data.localTimestamp;
+  // Convert local timestamp to UTC by using PostgreSQL's timezone conversion.
+  // The localTimestamp is stored as-is in local_timestamp column,
+  // and we derive the UTC timestamp via AT TIME ZONE.
+  const localTs = data.localTimestamp;
 
-	// Build SQL debug strings if requested
-	const sqlStatements: string[] = [];
-	const wantDebug = data.debugSql === true;
+  // Build SQL debug strings if requested
+  const sqlStatements: string[] = [];
+  const wantDebug = data.debugSql === true;
 
-	const activityId = await sql.begin(async (tx) => {
-		// 1. Insert activity row
-		if (wantDebug) {
-			sqlStatements.push(
-				`INSERT INTO ${SCHEMA}.activity ("timestamp", local_timestamp, activity_name, description, category, workout_feel, effort, total_timer_time, adjusted_distance, adjusted_duration, num_sessions, type, event, event_type) VALUES (('${localTs}'::timestamp AT TIME ZONE '${TIMEZONE}'), '${localTs}'::timestamp, '${data.title}', ${data.description ? `'${data.description}'` : "NULL"}, ${data.category ? `'${data.category}'` : "NULL"}, ${data.workoutFeel ?? "NULL"}, ${data.effort ?? "NULL"}, ${totalDuration}, ${totalDistance}, ${totalDuration}, 1, 'activity', 'activity', 'stop') RETURNING activity_id;`,
-			);
-		}
-		const activityRows = await tx`
+  const activityId = await sql.begin(async (tx) => {
+    // 1. Insert activity row
+    if (wantDebug) {
+      sqlStatements.push(
+        `INSERT INTO ${SCHEMA}.activity ("timestamp", local_timestamp, activity_name, description, category, workout_feel, effort, total_timer_time, adjusted_distance, adjusted_duration, num_sessions, type, event, event_type) VALUES (('${localTs}'::timestamp AT TIME ZONE '${TIMEZONE}'), '${localTs}'::timestamp, '${data.title}', ${data.description ? `'${data.description}'` : "NULL"}, ${data.category ? `'${data.category}'` : "NULL"}, ${data.workoutFeel ?? "NULL"}, ${data.effort ?? "NULL"}, ${totalDuration}, ${totalDistance}, ${totalDuration}, 1, 'activity', 'activity', 'stop') RETURNING activity_id;`,
+      );
+    }
+    const activityRows = await tx`
 			INSERT INTO ${sql(SCHEMA)}.activity (
 				"timestamp",
 				local_timestamp,
@@ -215,15 +233,15 @@ activitiesRoutes.post("/", async (c) => {
 			)
 			RETURNING activity_id
 		`;
-		const id = activityRows[0].activityId as number;
+    const id = activityRows[0].activityId as number;
 
-		// 2. Insert session row
-		if (wantDebug) {
-			sqlStatements.push(
-				`INSERT INTO ${SCHEMA}.session (activity_id, "timestamp", start_time, total_elapsed_time, total_timer_time, total_distance, sport, sub_sport, enhanced_avg_speed, num_laps, first_lap_index, event, event_type, trigger, message_index) VALUES (${id}, ('${localTs}'::timestamp AT TIME ZONE '${TIMEZONE}'), ('${localTs}'::timestamp AT TIME ZONE '${TIMEZONE}'), ${totalDuration}, ${totalDuration}, ${totalDistance}, '${data.sport}', '${subSport}', ${enhancedAvgSpeed}, ${numLaps}, 0, 'lap', 'stop', 'activity_end', 0);`,
-			);
-		}
-		await tx`
+    // 2. Insert session row
+    if (wantDebug) {
+      sqlStatements.push(
+        `INSERT INTO ${SCHEMA}.session (activity_id, "timestamp", start_time, total_elapsed_time, total_timer_time, total_distance, sport, sub_sport, num_laps, first_lap_index, event, event_type, trigger, message_index) VALUES (${id}, ('${localTs}'::timestamp AT TIME ZONE '${TIMEZONE}'), ('${localTs}'::timestamp AT TIME ZONE '${TIMEZONE}'), ${totalDuration}, ${totalDuration}, ${totalDistance}, '${data.sport}', '${subSport}', ${numLaps}, 0, 'lap', 'stop', 'activity_end', 0);`,
+      );
+    }
+    await tx`
 			INSERT INTO ${sql(SCHEMA)}.session (
 				activity_id,
 				"timestamp",
@@ -233,7 +251,6 @@ activitiesRoutes.post("/", async (c) => {
 				total_distance,
 				sport,
 				sub_sport,
-				enhanced_avg_speed,
 				num_laps,
 				first_lap_index,
 				event,
@@ -249,7 +266,6 @@ activitiesRoutes.post("/", async (c) => {
 				${totalDistance},
 				${data.sport},
 				${subSport},
-				${enhancedAvgSpeed},
 				${numLaps},
 				${0},
 				${"lap"},
@@ -259,18 +275,18 @@ activitiesRoutes.post("/", async (c) => {
 			)
 		`;
 
-		// 3. Insert lap rows with sequential start times
-		let lapStartOffset = 0;
-		for (let i = 0; i < laps.length; i++) {
-			const lap = laps[i];
-			const intensity = lap.intensity || null;
+    // 3. Insert lap rows with sequential start times
+    let lapStartOffset = 0;
+    for (let i = 0; i < laps.length; i++) {
+      const lap = laps[i];
+      const intensity = lap.intensity || null;
 
-			if (wantDebug) {
-				sqlStatements.push(
-					`INSERT INTO ${SCHEMA}.lap (activity_id, start_time, number, total_distance, total_timer_time, intensity) VALUES (${id}, (('${localTs}'::timestamp AT TIME ZONE '${TIMEZONE}') + INTERVAL '1 second' * ${lapStartOffset}), ${i}, ${lap.distance}, ${lap.time}, ${intensity ? `'${intensity}'` : "NULL"});`,
-				);
-			}
-			await tx`
+      if (wantDebug) {
+        sqlStatements.push(
+          `INSERT INTO ${SCHEMA}.lap (activity_id, start_time, number, total_distance, total_timer_time, intensity) VALUES (${id}, (('${localTs}'::timestamp AT TIME ZONE '${TIMEZONE}') + INTERVAL '1 second' * ${lapStartOffset}), ${i}, ${lap.distance}, ${lap.time}, ${intensity ? `'${intensity}'` : "NULL"});`,
+        );
+      }
+      await tx`
 				INSERT INTO ${sql(SCHEMA)}.lap (
 					activity_id,
 					start_time,
@@ -287,14 +303,14 @@ activitiesRoutes.post("/", async (c) => {
 					${intensity}
 				)
 			`;
-			lapStartOffset += lap.time;
-		}
+      lapStartOffset += lap.time;
+    }
 
-		return id;
-	});
+    return id;
+  });
 
-	const response: { activityId: number; sql?: string[] } = { activityId };
-	if (wantDebug) response.sql = sqlStatements;
+  const response: { activityId: number; sql?: string[] } = { activityId };
+  if (wantDebug) response.sql = sqlStatements;
 
-	return c.json(response, 201);
+  return c.json(response, 201);
 });
