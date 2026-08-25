@@ -6,6 +6,8 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 
 ### Calendar View
 - Interactive monthly calendar displaying all activities, color-coded by sport
+- Scheduled workouts displayed on the calendar alongside activities (dashed violet border, distinct from activity events)
+- Click any scheduled workout to open a dialog with workout details, step summary, .fit download, edit link, and unschedule option
 - Click any event to open a summary dialog with distance, duration, pace/speed, and an embedded GPS map with start/end markers and lap markers
 - Click any empty date cell to create a manual activity (no GPS data) with that date pre-filled
 - Manual activity creation dialog with title, sport, sub-sport, category, duration, lap splits (distance + time + intensity per lap), workout feel, and perceived effort
@@ -35,6 +37,7 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 ### Activity Search Page
 - Text search by title/description with fuzzy matching (handles variations like 5x600m vs 5 x 600m)
 - Separate title and description search with exact case-insensitive substring matching
+- Search executes on Enter key press (not on every keystroke) for a responsive editing experience
 - Filter by sport, sub-sport, category, date range, distance range, and duration range
 - Sort controls (distance, duration, ascending/descending)
 - Click through to Activity Details for any result
@@ -55,13 +58,15 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 - Export as Garmin .fit file for direct upload to a watch (tested with Forerunner 570)
 - Move, duplicate, and remove steps with always-visible action buttons
 - Save/update workouts to the database with persistent URL (?id=N)
+- Schedule workouts on specific calendar dates (optional scheduled_date field)
 - Keyboard shortcut: S to save (matches activity details pattern)
 - Load saved workouts from URL for editing
 
 ### Workout Library
 - Browse all saved workouts in a compact list view
 - Filter by sport (Running, Cycling, Swimming)
-- Each row shows name, sport badge, created date, and description
+- Each row shows name, sport badge, created date, scheduled date (if any), and description
+- Quick schedule/unschedule button with inline date picker on each workout row
 - Edit saved workouts (navigates to builder with ?id=N)
 - Download .fit files directly from the list
 - Delete workouts with confirmation dialog

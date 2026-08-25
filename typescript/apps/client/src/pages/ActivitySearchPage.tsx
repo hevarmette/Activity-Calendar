@@ -50,20 +50,6 @@ function canonicalSport(sport: string, numSessions: number): string {
 	return sports[0] ?? "other";
 }
 
-/**
- * Custom hook for debouncing a text value. Returns the debounced value after the
- * specified delay (default 300ms). Used by the search inputs to avoid firing API
- * requests on every keystroke.
- */
-function useDebouncedValue(value: string, delay = 300): string {
-	const [debounced, setDebounced] = useState(value);
-	useEffect(() => {
-		const timer = setTimeout(() => setDebounced(value), delay);
-		return () => clearTimeout(timer);
-	}, [value, delay]);
-	return debounced;
-}
-
 export function ActivitySearchPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
 
@@ -72,24 +58,38 @@ export function ActivitySearchPage() {
 	const titleParam = searchParams.get("titleSearch") ?? "";
 	const descParam = searchParams.get("descriptionSearch") ?? "";
 
+	// Live input state for controlled inputs
 	const [searchText, setSearchText] = useState(qParam);
 	const [titleText, setTitleText] = useState(titleParam);
 	const [descText, setDescText] = useState(descParam);
 
-	const debouncedQ = useDebouncedValue(searchText);
-	const debouncedTitle = useDebouncedValue(titleText);
-	const debouncedDesc = useDebouncedValue(descText);
+	// Committed values — only update when user presses Enter
+	const [committedQ, setCommittedQ] = useState(qParam);
+	const [committedTitle, setCommittedTitle] = useState(titleParam);
+	const [committedDesc, setCommittedDesc] = useState(descParam);
 
-	// Sync debounced text values back to URL search params
+	/**
+	 * Commits all text search fields at once. Called when the user presses Enter
+	 * in any of the search inputs. This triggers the API request and URL update.
+	 */
+	function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+		if (e.key === "Enter") {
+			setCommittedQ(searchText);
+			setCommittedTitle(titleText);
+			setCommittedDesc(descText);
+		}
+	}
+
+	// Sync committed text values back to URL search params
 	useEffect(() => {
 		setSearchParams((prev) => {
 			const next = new URLSearchParams(prev);
 			let changed = false;
 
 			for (const [key, val] of [
-				["q", debouncedQ],
-				["titleSearch", debouncedTitle],
-				["descriptionSearch", debouncedDesc],
+				["q", committedQ],
+				["titleSearch", committedTitle],
+				["descriptionSearch", committedDesc],
 			] as const) {
 				const current = prev.get(key) ?? "";
 				if (val !== current) {
@@ -105,18 +105,18 @@ export function ActivitySearchPage() {
 			}
 			return prev;
 		});
-	}, [debouncedQ, debouncedTitle, debouncedDesc, setSearchParams]);
+	}, [committedQ, committedTitle, committedDesc, setSearchParams]);
 
 	// Build search params object for the API hook
 	const searchApiParams = useMemo(() => {
-		const hasAny = debouncedQ || debouncedTitle || debouncedDesc;
+		const hasAny = committedQ || committedTitle || committedDesc;
 		if (!hasAny) return undefined;
 		return {
-			q: debouncedQ || undefined,
-			titleSearch: debouncedTitle || undefined,
-			descriptionSearch: debouncedDesc || undefined,
+			q: committedQ || undefined,
+			titleSearch: committedTitle || undefined,
+			descriptionSearch: committedDesc || undefined,
 		};
-	}, [debouncedQ, debouncedTitle, debouncedDesc]);
+	}, [committedQ, committedTitle, committedDesc]);
 
 	const { data, isLoading } = useSearch(searchApiParams);
 
@@ -132,9 +132,9 @@ export function ActivitySearchPage() {
 	const sortField = searchParams.get("sort") || "date";
 	const sortDir = searchParams.get("dir") || "desc";
 	const hasFilters =
-		!!debouncedQ ||
-		!!debouncedTitle ||
-		!!debouncedDesc ||
+		!!committedQ ||
+		!!committedTitle ||
+		!!committedDesc ||
 		sports.length > 0 ||
 		categories.length > 0 ||
 		dateFrom ||
@@ -218,7 +218,7 @@ export function ActivitySearchPage() {
 		<div className="space-y-4">
 			{/* Fuzzy search — matches variations like "5x600m" vs "5 x 600m" */}
 			<div>
-				<label htmlFor="search-fuzzy" className="text-xs font-medium text-gray-400 block mb-2">
+				<label htmlFor="search-fuzzy" className="text-xs font-medium text-gray-400 block mb-1">
 					Fuzzy Search
 				</label>
 				<input
@@ -226,10 +226,12 @@ export function ActivitySearchPage() {
 					type="text"
 					value={searchText}
 					onChange={(e) => setSearchText(e.target.value)}
-					placeholder="Fuzzy match (e.g. 5x600m)..."
-					aria-label="Fuzzy search activities by title or description"
+					onKeyDown={handleSearchKeyDown}
+					placeholder="Fuzzy match (e.g. 5x600m)…"
+					aria-label="Fuzzy search activities by title or description, press Enter to search"
 					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 				/>
+				<p className="text-[10px] text-gray-600 mt-1">Press Enter to search</p>
 			</div>
 			{/* Exact title search — case-insensitive substring match on activity name */}
 			<div>
@@ -241,6 +243,7 @@ export function ActivitySearchPage() {
 					type="text"
 					value={titleText}
 					onChange={(e) => setTitleText(e.target.value)}
+					onKeyDown={handleSearchKeyDown}
 					placeholder="Exact title match..."
 					aria-label="Search activities by exact title"
 					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
@@ -256,6 +259,7 @@ export function ActivitySearchPage() {
 					type="text"
 					value={descText}
 					onChange={(e) => setDescText(e.target.value)}
+					onKeyDown={handleSearchKeyDown}
 					placeholder="Exact description match..."
 					aria-label="Search activities by exact description"
 					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"

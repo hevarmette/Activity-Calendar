@@ -217,3 +217,20 @@ export interface CreateActivityResponse {
 	/** SQL statements executed (only present when debugSql was true in request). */
 	sql?: string[];
 }
+
+/**
+ * A scheduled workout event for the calendar view.
+ *
+ * Returned by the calendar API alongside CalendarEvent items so the UI
+ * can render upcoming workouts on their scheduled dates.
+ */
+export interface CalendarWorkoutEvent {
+	/** The database-assigned workout ID. */
+	workoutId: number;
+	/** ISO date string (YYYY-MM-DD) when the workout is scheduled. */
+	scheduledDate: string;
+	/** Workout name displayed on the calendar. */
+	name: string;
+	/** Sport type (e.g. "running", "cycling", "swimming"). */
+	sport: string;
+}

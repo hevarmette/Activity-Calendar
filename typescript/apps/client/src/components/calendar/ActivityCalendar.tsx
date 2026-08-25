@@ -1,5 +1,5 @@
 import { SPORT_COLORS, Sport } from "@activity-calendar/shared";
-import type { CalendarEvent } from "@activity-calendar/shared";
+import type { CalendarEvent, CalendarWorkoutEvent } from "@activity-calendar/shared";
 import type { EventClickArg } from "@fullcalendar/core";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -15,6 +15,17 @@ export interface CalendarActivity {
 	numSessions: number;
 }
 
+/** Info passed when a scheduled workout event is clicked on the calendar. */
+export interface CalendarWorkoutClick {
+	workoutId: number;
+	scheduledDate: string;
+	name: string;
+	sport: string;
+}
+
+/** Distinct color for scheduled workout events on the calendar. */
+const WORKOUT_EVENT_COLOR = "#8B5CF6";
+
 function toFullCalendarEvents(events: CalendarEvent[]) {
 	return events.map((e) => {
 		const sports = e.sport.split(",").map((s) => s.trim());
@@ -25,6 +36,7 @@ function toFullCalendarEvents(events: CalendarEvent[]) {
 			backgroundColor: SPORT_COLORS[canonical] ?? "#7F7F7F",
 			borderColor: SPORT_COLORS[canonical] ?? "#7F7F7F",
 			extendedProps: {
+				type: "activity" as const,
 				activityId: e.activityId,
 				sport: canonical,
 				numSessions: e.numSessions,
@@ -33,15 +45,46 @@ function toFullCalendarEvents(events: CalendarEvent[]) {
 	});
 }
 
+function toWorkoutFullCalendarEvents(workouts: CalendarWorkoutEvent[]) {
+	return workouts.map((w) => ({
+		title: `🏋️ ${w.name}`,
+		start: w.scheduledDate,
+		backgroundColor: "transparent",
+		borderColor: WORKOUT_EVENT_COLOR,
+		textColor: WORKOUT_EVENT_COLOR,
+		classNames: ["workout-event"],
+		extendedProps: {
+			type: "workout" as const,
+			workoutId: w.workoutId,
+			scheduledDate: w.scheduledDate,
+			name: w.name,
+			sport: w.sport,
+		},
+	}));
+}
+
 interface Props {
 	events: CalendarEvent[];
+	workoutEvents?: CalendarWorkoutEvent[];
 	initialDate: string;
 	onEventClick: (activity: CalendarActivity) => void;
+	onWorkoutClick?: (workout: CalendarWorkoutClick) => void;
 	/** Fires when clicking an empty date cell — used to open the create activity dialog. */
 	onDateClick?: (dateStr: string) => void;
 }
 
-export function ActivityCalendar({ events, initialDate, onEventClick, onDateClick }: Props) {
+/**
+ * FullCalendar wrapper that renders activity events (solid colored) and
+ * scheduled workout events (dashed border, violet/purple).
+ */
+export function ActivityCalendar({
+	events,
+	workoutEvents,
+	initialDate,
+	onEventClick,
+	onWorkoutClick,
+	onDateClick,
+}: Props) {
 	const calRef = useRef<FullCalendar>(null);
 
 	useEffect(() => {
@@ -49,19 +92,26 @@ export function ActivityCalendar({ events, initialDate, onEventClick, onDateClic
 	}, [initialDate]);
 
 	function handleEventClick(info: EventClickArg) {
-		const props = info.event.extendedProps as {
-			activityId: number;
-			sport: string;
-			numSessions: number;
-		};
-		onEventClick({
-			activityId: props.activityId,
-			title: info.event.title,
-			date: info.event.startStr,
-			sport: props.sport,
-			numSessions: props.numSessions,
-		});
+		const props = info.event.extendedProps;
+		if (props.type === "workout") {
+			onWorkoutClick?.({
+				workoutId: props.workoutId as number,
+				scheduledDate: props.scheduledDate as string,
+				name: props.name as string,
+				sport: props.sport as string,
+			});
+		} else {
+			onEventClick({
+				activityId: props.activityId as number,
+				title: info.event.title,
+				date: info.event.startStr,
+				sport: props.sport as string,
+				numSessions: props.numSessions as number,
+			});
+		}
 	}
+
+	const allEvents = [...toFullCalendarEvents(events), ...toWorkoutFullCalendarEvents(workoutEvents ?? [])];
 
 	return (
 		<FullCalendar
@@ -69,7 +119,7 @@ export function ActivityCalendar({ events, initialDate, onEventClick, onDateClic
 			plugins={[dayGridPlugin, interactionPlugin]}
 			initialView="dayGridMonth"
 			initialDate={initialDate}
-			events={toFullCalendarEvents(events)}
+			events={allEvents}
 			eventClick={handleEventClick}
 			dateClick={(info: DateClickArg) => onDateClick?.(info.dateStr)}
 			headerToolbar={{

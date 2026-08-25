@@ -3,11 +3,13 @@
  *
  * Compact list view with sport filter pills at the top. Each row is a clickable
  * Link that navigates to the workout builder for editing. The row shows the
- * workout name, sport badge, created date, and right-aligned action buttons
- * (Download, Delete) that use preventDefault to avoid triggering navigation.
+ * workout name, sport badge, created date, scheduled date (if any), and
+ * right-aligned action buttons (Schedule, Download, Delete) that use
+ * preventDefault to avoid triggering navigation.
  *
  * Navigation:
  * - Click row → /workouts/builder?id=N (edit the workout)
+ * - Schedule button → quick date picker to schedule/unschedule on the calendar
  * - Download button → triggers .fit generation from saved workout
  * - Delete button → confirmation dialog then mutation
  * - "+ New Workout" → /workouts/builder (no id)
@@ -16,7 +18,7 @@ import type { WorkoutSport } from "@activity-calendar/shared";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { downloadSavedWorkoutFit } from "../api/client.js";
-import { useDeleteWorkout, useWorkouts } from "../api/workout-queries.js";
+import { useDeleteWorkout, useScheduleWorkout, useWorkouts } from "../api/workout-queries.js";
 
 /** Available sort options for the workout list. */
 type SortOption = "newest" | "oldest" | "name-asc" | "name-desc" | "sport";
@@ -40,10 +42,12 @@ export function WorkoutsListPage() {
 	const [sortBy, setSortBy] = useState<SortOption>("newest");
 	const [downloadingId, setDownloadingId] = useState<number | null>(null);
 	const [deletingId, setDeletingId] = useState<number | null>(null);
+	const [schedulingId, setSchedulingId] = useState<number | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
 	const { data: workouts, isLoading } = useWorkouts(sportFilter || undefined);
 	const deleteWorkoutMutation = useDeleteWorkout();
+	const scheduleWorkoutMutation = useScheduleWorkout();
 
 	/** Workouts sorted by the selected criteria. Sorting is applied after the sport filter. */
 	const sortedWorkouts = useMemo(() => {
@@ -93,6 +97,39 @@ export function WorkoutsListPage() {
 			setError(err instanceof Error ? err.message : "Delete failed");
 		} finally {
 			setDeletingId(null);
+		}
+	}
+
+	/** Toggle scheduling: if already scheduled, unschedule; otherwise show the date picker. */
+	async function handleScheduleToggle(workoutId: number, currentDate: string | null | undefined) {
+		if (currentDate) {
+			// Unschedule
+			setError(null);
+			setSchedulingId(workoutId);
+			try {
+				await scheduleWorkoutMutation.mutateAsync({ workoutId, scheduledDate: null });
+			} catch (err) {
+				setError(err instanceof Error ? err.message : "Failed to unschedule");
+			} finally {
+				setSchedulingId(null);
+			}
+		} else {
+			// Show native date picker by toggling scheduling ID
+			setSchedulingId((prev) => (prev === workoutId ? null : workoutId));
+		}
+	}
+
+	/** Schedule on a specific date picked from the inline date input. */
+	async function handleScheduleDate(workoutId: number, date: string) {
+		if (!date) return;
+		setError(null);
+		setSchedulingId(workoutId);
+		try {
+			await scheduleWorkoutMutation.mutateAsync({ workoutId, scheduledDate: date });
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Failed to schedule");
+		} finally {
+			setSchedulingId(null);
 		}
 	}
 
@@ -220,9 +257,33 @@ export function WorkoutsListPage() {
 										month: "short",
 										day: "numeric",
 									})}
+									{w.scheduledDate && (
+										<span className="ml-2 text-violet-400">
+											📅{" "}
+											{new Date(`${w.scheduledDate}T00:00:00`).toLocaleDateString(undefined, {
+												month: "short",
+												day: "numeric",
+											})}
+										</span>
+									)}
 									{w.description && <span className="ml-2 text-gray-600">· {w.description}</span>}
 								</p>
 							</div>
+
+							{/* Inline date picker for scheduling (shown when schedule button clicked) */}
+							{schedulingId === w.workoutId && !w.scheduledDate && (
+								<div onClick={(e) => e.preventDefault()} onKeyDown={(e) => e.stopPropagation()}>
+									<input
+										type="date"
+										aria-label={`Pick schedule date for ${w.name}`}
+										className="rounded bg-gray-800 border border-gray-700 px-2 py-1 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-violet-500/50"
+										onChange={(e) => {
+											e.preventDefault();
+											handleScheduleDate(w.workoutId, e.target.value);
+										}}
+									/>
+								</div>
+							)}
 
 							{/* Action buttons — stopPropagation prevents navigation when clicking these */}
 							<div
@@ -232,6 +293,40 @@ export function WorkoutsListPage() {
 									if (e.key === "Enter" || e.key === " ") e.stopPropagation();
 								}}
 							>
+								{/* Schedule/Unschedule */}
+								<button
+									type="button"
+									onClick={(e) => {
+										e.preventDefault();
+										handleScheduleToggle(w.workoutId, w.scheduledDate);
+									}}
+									disabled={scheduleWorkoutMutation.isPending && schedulingId === w.workoutId}
+									aria-label={w.scheduledDate ? `Unschedule ${w.name}` : `Schedule ${w.name}`}
+									title={w.scheduledDate ? "Remove from calendar" : "Schedule on calendar"}
+									className={`p-1.5 rounded transition-colors disabled:opacity-50 ${
+										w.scheduledDate
+											? "text-violet-400 hover:text-violet-300 hover:bg-gray-700"
+											: "text-gray-400 hover:text-violet-400 hover:bg-gray-700"
+									}`}
+								>
+									<svg
+										aria-hidden="true"
+										width="14"
+										height="14"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth="2"
+										strokeLinecap="round"
+										strokeLinejoin="round"
+									>
+										<rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+										<line x1="16" y1="2" x2="16" y2="6" />
+										<line x1="8" y1="2" x2="8" y2="6" />
+										<line x1="3" y1="10" x2="21" y2="10" />
+										{w.scheduledDate && <polyline points="9 16 11 18 15 14" />}
+									</svg>
+								</button>
 								{/* Download */}
 								<button
 									type="button"

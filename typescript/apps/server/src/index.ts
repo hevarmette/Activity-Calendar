@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
 import { cors } from "hono/cors";
+import sql, { SCHEMA } from "./db.js";
+import { runMigrations } from "./migrations/add-scheduled-date.js";
 import { activitiesRoutes } from "./routes/activities.js";
 import { autoLapsRoutes } from "./routes/auto-laps.js";
 import { calendarRoutes } from "./routes/calendar.js";
@@ -13,6 +15,11 @@ import { searchRoutes } from "./routes/search.js";
 import { sessionsRoutes } from "./routes/sessions.js";
 import { similarRoutes } from "./routes/similar.js";
 import { workoutsRoutes } from "./routes/workouts.js";
+
+// Run database migrations on startup
+runMigrations(sql, SCHEMA).catch((err) => {
+	console.error("Migration failed:", err);
+});
 
 const app = new Hono();
 

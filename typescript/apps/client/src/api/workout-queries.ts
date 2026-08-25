@@ -1,10 +1,10 @@
 /**
- * TanStack Query hooks for workout persistence (CRUD + generate).
+ * TanStack Query hooks for workout persistence (CRUD + generate + scheduling).
  *
  * Separated from queries.ts to keep file sizes manageable since queries.ts
  * already handles all activity-related data fetching.
  */
-import type { SavedWorkout, WorkoutDefinition, WorkoutListItem } from "@activity-calendar/shared";
+import type { CalendarWorkoutEvent, SavedWorkout, WorkoutDefinition, WorkoutListItem } from "@activity-calendar/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client.js";
 
@@ -12,6 +12,7 @@ export const workoutQueryKeys = {
 	all: ["workouts"] as const,
 	list: (sport?: string) => (sport ? ["workouts", { sport }] : ["workouts"]) as const,
 	detail: (id: number) => ["workouts", id] as const,
+	calendarWorkouts: ["calendar-workouts"] as const,
 };
 
 /** Fetch all saved workouts, optionally filtered by sport. */
@@ -75,6 +76,31 @@ export function useDeleteWorkout() {
 			}),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: workoutQueryKeys.all });
+			queryClient.invalidateQueries({ queryKey: workoutQueryKeys.calendarWorkouts });
+		},
+	});
+}
+
+/** Fetch scheduled workouts for the calendar view. */
+export function useCalendarWorkouts() {
+	return useQuery({
+		queryKey: workoutQueryKeys.calendarWorkouts,
+		queryFn: () => api<CalendarWorkoutEvent[]>("/api/calendar/workouts"),
+	});
+}
+
+/** Schedule or unschedule a workout by setting its scheduledDate. */
+export function useScheduleWorkout() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: ({ workoutId, scheduledDate }: { workoutId: number; scheduledDate: string | null }) =>
+			api<{ success: boolean }>(`/api/workouts/${workoutId}/schedule`, {
+				method: "PATCH",
+				body: JSON.stringify({ scheduledDate }),
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: workoutQueryKeys.all });
+			queryClient.invalidateQueries({ queryKey: workoutQueryKeys.calendarWorkouts });
 		},
 	});
 }

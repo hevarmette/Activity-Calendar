@@ -37,6 +37,7 @@ interface WorkoutBuilderState {
 	name: string;
 	sport: WorkoutSport;
 	description: string;
+	scheduledDate: string;
 	steps: WorkoutStepOrRepeat[];
 }
 
@@ -44,6 +45,7 @@ type Action =
 	| { type: "SET_NAME"; name: string }
 	| { type: "SET_SPORT"; sport: WorkoutSport }
 	| { type: "SET_DESCRIPTION"; description: string }
+	| { type: "SET_SCHEDULED_DATE"; scheduledDate: string }
 	| { type: "ADD_STEP"; step: WorkoutStep }
 	| { type: "ADD_REPEAT"; repeat: RepeatStep }
 	| { type: "UPDATE_STEP"; index: number; step: WorkoutStepOrRepeat }
@@ -57,6 +59,7 @@ const INITIAL_STATE: WorkoutBuilderState = {
 	name: "My Workout",
 	sport: "running",
 	description: "",
+	scheduledDate: "",
 	steps: [
 		{ durationType: "open", targetType: "open", intensity: "warmup", name: "Warmup" },
 		{ durationType: "distance", durationValue: 1609.344, targetType: "open", intensity: "active" },
@@ -87,6 +90,8 @@ function reducer(state: WorkoutBuilderState, action: Action): WorkoutBuilderStat
 			return { ...state, sport: action.sport };
 		case "SET_DESCRIPTION":
 			return { ...state, description: action.description };
+		case "SET_SCHEDULED_DATE":
+			return { ...state, scheduledDate: action.scheduledDate };
 		case "ADD_STEP": {
 			const steps = [...state.steps];
 			const insertAt = findInsertIndex(steps);
@@ -201,6 +206,7 @@ export function WorkoutBuilderPage() {
 					name: savedWorkout.name,
 					sport: savedWorkout.sport,
 					description: savedWorkout.description ?? "",
+					scheduledDate: savedWorkout.scheduledDate ?? "",
 					steps: savedWorkout.definition,
 				},
 			});
@@ -241,7 +247,7 @@ export function WorkoutBuilderPage() {
 		const repeat: RepeatStep = {
 			repeatCount: 4,
 			steps: [
-				{ durationType: "distance", durationValue: 800, targetType: "open", intensity: "interval" },
+				{ durationType: "distance", durationValue: 800, targetType: "open", intensity: "active" },
 				{ durationType: "time", durationValue: 120, targetType: "open", intensity: "rest" },
 			],
 		};
@@ -275,6 +281,7 @@ export function WorkoutBuilderPage() {
 			name: state.name.trim(),
 			sport: state.sport,
 			description: state.description || undefined,
+			scheduledDate: state.scheduledDate || undefined,
 			steps: state.steps,
 		};
 	}, [state]);
@@ -411,6 +418,22 @@ export function WorkoutBuilderPage() {
 								rows={2}
 								className="w-full max-w-sm rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors resize-none"
 							/>
+						</div>
+
+						{/* Schedule Date */}
+						<div>
+							<label htmlFor="workout-schedule-date" className="text-xs font-medium text-gray-400 block mb-1">
+								Schedule Date (optional)
+							</label>
+							<input
+								id="workout-schedule-date"
+								type="date"
+								value={state.scheduledDate}
+								onChange={(e) => dispatch({ type: "SET_SCHEDULED_DATE", scheduledDate: e.target.value })}
+								aria-label="Schedule workout on a specific date"
+								className="w-full max-w-[180px] rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
+							/>
+							<p className="text-[10px] text-gray-600 mt-1">Shows on the calendar when set</p>
 						</div>
 					</div>
 

@@ -48,6 +48,20 @@
 	color: white !important;
 }
 
+/* Scheduled workout events — dashed border, semi-transparent background */
+.fc .workout-event .fc-event-main {
+	color: #8b5cf6;
+	font-weight: 500;
+	font-size: 0.7rem;
+}
+
+.fc .workout-event {
+	border-style: dashed !important;
+	border-width: 1.5px !important;
+	background: rgba(139, 92, 246, 0.08) !important;
+	opacity: 0.9;
+}
+
 ::-webkit-scrollbar {
 	width: 6px;
 	height: 6px;

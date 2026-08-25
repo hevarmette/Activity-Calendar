@@ -11,18 +11,23 @@
  *   Response: WorkoutListItem[] ordered by updated_at DESC
  *
  * POST /api/workouts
- *   Body: WorkoutDefinition JSON
+ *   Body: WorkoutDefinition JSON (with optional scheduledDate)
  *   Response: { workoutId: number } with status 201
  *   Saves a new workout to the database.
  *
  * GET /api/workouts/:id
- *   Response: SavedWorkout (includes full step definition)
+ *   Response: SavedWorkout (includes full step definition and scheduledDate)
  *   Returns 404 if not found.
  *
  * PUT /api/workouts/:id
- *   Body: WorkoutDefinition JSON
+ *   Body: WorkoutDefinition JSON (with optional scheduledDate)
  *   Response: { success: true }
  *   Updates all fields + updated_at. Returns 404 if not found.
+ *
+ * PATCH /api/workouts/:id/schedule
+ *   Body: { scheduledDate: string | null } (ISO date YYYY-MM-DD or null to unschedule)
+ *   Response: { success: true }
+ *   Updates only the scheduled_date column. Returns 404 if not found.
  *
  * DELETE /api/workouts/:id
  *   Response: { success: true }
@@ -30,6 +35,7 @@
  * POST /api/workouts/:id/generate
  *   Response: Binary .fit file (application/octet-stream)
  *   Generates a FIT file from a saved workout. Uses workout_id as serialNumber.
+ *   When scheduled_date is set, filename is the date (e.g., "2026-08-18.fit").
  */
 
 import { type WorkoutDefinition, type WorkoutStepOrRepeat, isRepeatStep } from "@activity-calendar/shared";
@@ -64,6 +70,7 @@ const workoutDefinitionSchema = z.object({
 	sport: z.enum(["running", "cycling", "swimming"]),
 	description: z.string().optional(),
 	steps: z.array(workoutStepOrRepeatSchema).min(1),
+	scheduledDate: z.string().date().optional().nullable(),
 });
 
 // --- FIT encoding helpers ---
@@ -323,13 +330,13 @@ workoutsRoutes.get("/", async (c) => {
 
 	const rows = sport
 		? await sql`
-			SELECT workout_id, name, sport, description, created_at, updated_at
+			SELECT workout_id, name, sport, description, scheduled_date, created_at, updated_at
 			FROM ${sql(SCHEMA)}.workout
 			WHERE sport = ${sport}
 			ORDER BY updated_at DESC
 		`
 		: await sql`
-			SELECT workout_id, name, sport, description, created_at, updated_at
+			SELECT workout_id, name, sport, description, scheduled_date, created_at, updated_at
 			FROM ${sql(SCHEMA)}.workout
 			ORDER BY updated_at DESC
 		`;
@@ -349,8 +356,8 @@ workoutsRoutes.post("/", async (c) => {
 	const workout = result.data;
 
 	const rows = await sql`
-		INSERT INTO ${sql(SCHEMA)}.workout (name, sport, description, definition)
-		VALUES (${workout.name}, ${workout.sport}, ${workout.description ?? null}, ${JSON.stringify(workout.steps)})
+		INSERT INTO ${sql(SCHEMA)}.workout (name, sport, description, definition, scheduled_date)
+		VALUES (${workout.name}, ${workout.sport}, ${workout.description ?? null}, ${JSON.stringify(workout.steps)}, ${workout.scheduledDate ?? null})
 		RETURNING workout_id
 	`;
 
@@ -362,7 +369,7 @@ workoutsRoutes.get("/:id", async (c) => {
 	const id = Number(c.req.param("id"));
 
 	const rows = await sql`
-		SELECT workout_id, name, sport, description, definition, created_at, updated_at
+		SELECT workout_id, name, sport, description, definition, scheduled_date, created_at, updated_at
 		FROM ${sql(SCHEMA)}.workout
 		WHERE workout_id = ${id}
 		LIMIT 1
@@ -372,12 +379,14 @@ workoutsRoutes.get("/:id", async (c) => {
 		return c.json({ error: "Not found" }, 404);
 	}
 
-	const row = rows[0];
+	const [row] = rows;
+	if (!row) return c.json({ error: "Not found" }, 404);
 	return c.json({
 		workoutId: row.workoutId,
 		name: row.name,
 		sport: row.sport,
 		description: row.description,
+		scheduledDate: row.scheduledDate,
 		createdAt: row.createdAt,
 		updatedAt: row.updatedAt,
 		definition: typeof row.definition === "string" ? JSON.parse(row.definition) : row.definition,
@@ -402,6 +411,7 @@ workoutsRoutes.put("/:id", async (c) => {
 			sport = ${workout.sport},
 			description = ${workout.description ?? null},
 			definition = ${JSON.stringify(workout.steps)},
+			scheduled_date = ${workout.scheduledDate ?? null},
 			updated_at = NOW()
 		WHERE workout_id = ${id}
 		RETURNING workout_id
@@ -414,7 +424,38 @@ workoutsRoutes.put("/:id", async (c) => {
 	return c.json({ success: true });
 });
 
-// 6. DELETE /:id — Delete a workout
+// 6. PATCH /:id/schedule — Update only the scheduled_date for a workout
+const scheduleSchema = z.object({
+	scheduledDate: z.string().date().nullable(),
+});
+
+workoutsRoutes.patch("/:id/schedule", async (c) => {
+	const id = Number(c.req.param("id"));
+	const body = await c.req.json();
+
+	const result = scheduleSchema.safeParse(body);
+	if (!result.success) {
+		return c.json({ error: "Invalid schedule payload", details: result.error.flatten() }, 400);
+	}
+
+	const { scheduledDate } = result.data;
+
+	const rows = await sql`
+		UPDATE ${sql(SCHEMA)}.workout
+		SET scheduled_date = ${scheduledDate},
+			updated_at = NOW()
+		WHERE workout_id = ${id}
+		RETURNING workout_id
+	`;
+
+	if (rows.length === 0) {
+		return c.json({ error: "Not found" }, 404);
+	}
+
+	return c.json({ success: true });
+});
+
+// 7. DELETE /:id — Delete a workout
 workoutsRoutes.delete("/:id", async (c) => {
 	const id = Number(c.req.param("id"));
 
@@ -426,12 +467,12 @@ workoutsRoutes.delete("/:id", async (c) => {
 	return c.json({ success: true });
 });
 
-// 7. POST /:id/generate — Generate FIT from a saved workout
+// 8. POST /:id/generate — Generate FIT from a saved workout
 workoutsRoutes.post("/:id/generate", async (c) => {
 	const id = Number(c.req.param("id"));
 
 	const rows = await sql`
-		SELECT workout_id, name, sport, description, definition
+		SELECT workout_id, name, sport, description, definition, scheduled_date
 		FROM ${sql(SCHEMA)}.workout
 		WHERE workout_id = ${id}
 		LIMIT 1
@@ -441,7 +482,8 @@ workoutsRoutes.post("/:id/generate", async (c) => {
 		return c.json({ error: "Not found" }, 404);
 	}
 
-	const row = rows[0];
+	const [row] = rows;
+	if (!row) return c.json({ error: "Not found" }, 404);
 	const steps: WorkoutStepOrRepeat[] = typeof row.definition === "string" ? JSON.parse(row.definition) : row.definition;
 
 	const workout: WorkoutDefinition = {
@@ -454,7 +496,10 @@ workoutsRoutes.post("/:id/generate", async (c) => {
 	try {
 		const uint8Array = encodeFitWorkout(workout, row.workoutId);
 
-		const filename = `${workout.name.replace(/[^a-zA-Z0-9_-]/g, "_")}_workout.fit`;
+		// Use scheduled_date as filename when available, otherwise fall back to workout name
+		const filename = row.scheduledDate
+			? `${row.scheduledDate}.fit`
+			: `${workout.name.replace(/[^a-zA-Z0-9_-]/g, "_")}_workout.fit`;
 
 		return new Response(uint8Array, {
 			headers: {

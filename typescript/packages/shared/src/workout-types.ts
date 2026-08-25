@@ -113,6 +113,9 @@ export interface WorkoutDefinition {
 	/** Optional description. */
 	description?: string;
 
+	/** Optional scheduled date (YYYY-MM-DD) for calendar display. */
+	scheduledDate?: string;
+
 	/**
 	 * Ordered list of steps and repeat groups.
 	 * A typical structure: [warmup, repeat({ interval, rest }), cooldown]
@@ -128,6 +131,8 @@ export interface WorkoutListItem {
 	description: string | null;
 	createdAt: string;
 	updatedAt: string;
+	/** ISO date string (YYYY-MM-DD) when this workout is scheduled on the calendar, or null if unscheduled. */
+	scheduledDate?: string | null;
 }
 
 /** A saved workout with full step definition (GET /api/workouts/:id). */

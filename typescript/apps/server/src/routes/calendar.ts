@@ -19,3 +19,21 @@ calendarRoutes.get("/", async (c) => {
 	`;
 	return c.json(rows);
 });
+
+/**
+ * GET /api/calendar/workouts
+ *
+ * Returns scheduled workouts for display on the calendar.
+ * Only workouts with a non-null scheduled_date are included.
+ *
+ * Response: CalendarWorkoutEvent[] (workoutId, scheduledDate, name, sport)
+ */
+calendarRoutes.get("/workouts", async (c) => {
+	const rows = await sql`
+		SELECT workout_id, name, sport, scheduled_date
+		FROM ${sql(SCHEMA)}.workout
+		WHERE scheduled_date IS NOT NULL
+		ORDER BY scheduled_date
+	`;
+	return c.json(rows);
+});

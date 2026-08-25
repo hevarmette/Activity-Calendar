@@ -46,13 +46,15 @@ function buildSegments(steps: WorkoutStepOrRepeat[], sport: WorkoutSport): Previ
 
 	for (const item of steps) {
 		if (isRepeatStep(item)) {
-			for (const inner of item.steps) {
-				segments.push({
-					name: inner.name,
-					intensity: inner.intensity,
-					estimatedSeconds: estimateStepSeconds(inner, sport) * item.repeatCount,
-					repeatBadge: item.repeatCount,
-				});
+			for (let rep = 0; rep < item.repeatCount; rep++) {
+				for (const inner of item.steps) {
+					segments.push({
+						name: inner.name,
+						intensity: inner.intensity,
+						estimatedSeconds: estimateStepSeconds(inner, sport),
+						repeatBadge: rep === 0 ? item.repeatCount : undefined,
+					});
+				}
 			}
 		} else {
 			segments.push({

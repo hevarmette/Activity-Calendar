@@ -13,7 +13,7 @@
  * - Always-visible delete button
  */
 import type { StepDurationType, StepIntensity, WorkoutSport, WorkoutStep } from "@activity-calendar/shared";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { TargetConfig } from "./TargetConfig.js";
 import {
 	DISTANCE_UNIT_OPTIONS,
@@ -65,7 +65,7 @@ const DURATION_TYPE_OPTIONS: StepDurationType[] = ["time", "distance", "open"];
 
 /**
  * Convert the user-facing duration value to API meters or seconds.
- * Time: user enters minutes → seconds.
+ * Time: user enters mm:ss or plain minutes → seconds.
  * Distance: user enters value in selected unit → meters.
  */
 function displayToApiDuration(value: number, durationType: StepDurationType, distanceUnit: DistanceUnit): number {
@@ -77,8 +77,29 @@ function displayToApiDuration(value: number, durationType: StepDurationType, dis
 }
 
 /**
+ * Parse a time duration string in mm:ss or plain minutes to total seconds.
+ * If the string contains ':', splits as mm:ss. Otherwise treats as minutes.
+ * Returns NaN if unparseable.
+ */
+function parseTimeDuration(input: string): number {
+	const trimmed = input.trim();
+	if (trimmed === "") return Number.NaN;
+	if (trimmed.includes(":")) {
+		const parts = trimmed.split(":");
+		const minutes = Number.parseInt(parts[0] ?? "0", 10);
+		const seconds = Number.parseInt(parts[1] ?? "0", 10);
+		if (Number.isNaN(minutes) || Number.isNaN(seconds) || minutes < 0 || seconds < 0) return Number.NaN;
+		return minutes * 60 + seconds;
+	}
+	// Backward compatible: plain number = minutes
+	const mins = Number.parseFloat(trimmed);
+	if (Number.isNaN(mins) || mins < 0) return Number.NaN;
+	return mins * 60;
+}
+
+/**
  * Convert API duration value (seconds or meters) to user-facing display value.
- * Seconds → minutes, meters → display value in the per-step distance unit.
+ * Seconds → m:ss format, meters → display value in the per-step distance unit.
  */
 function apiToDisplayDuration(
 	value: number | undefined,
@@ -87,8 +108,10 @@ function apiToDisplayDuration(
 ): string {
 	if (value == null || value === 0) return "";
 	if (durationType === "time") {
-		const min = value / 60;
-		return min % 1 === 0 ? String(min) : min.toFixed(1);
+		const totalSeconds = Math.round(value);
+		const minutes = Math.floor(totalSeconds / 60);
+		const seconds = totalSeconds % 60;
+		return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 	}
 	if (durationType === "distance") {
 		const metersPerUnit = METERS_PER_DISTANCE_UNIT[distanceUnit];
@@ -123,6 +146,17 @@ export function StepEditor({
 }: StepEditorProps) {
 	const borderClass = INTENSITY_BORDER_CLASSES[step.intensity] ?? "border-l-gray-500";
 
+	// Local editing state for the time input — allows typing intermediate values like "2:"
+	const [timeText, setTimeText] = useState(() => apiToDisplayDuration(step.durationValue, "time", distanceUnit));
+	const [isEditingTime, setIsEditingTime] = useState(false);
+
+	// Sync external changes to local state when not actively editing
+	useEffect(() => {
+		if (!isEditingTime) {
+			setTimeText(apiToDisplayDuration(step.durationValue, "time", distanceUnit));
+		}
+	}, [step.durationValue, distanceUnit, isEditingTime]);
+
 	const handleIntensityChange = useCallback(
 		(e: React.ChangeEvent<HTMLSelectElement>) => {
 			onChange({ ...step, intensity: e.target.value as StepIntensity });
@@ -140,7 +174,20 @@ export function StepEditor({
 
 	const handleDurationValueChange = useCallback(
 		(e: React.ChangeEvent<HTMLInputElement>) => {
-			const raw = Number.parseFloat(e.target.value);
+			const rawText = e.target.value;
+			if (step.durationType === "time") {
+				// Update local text state freely for typing
+				setTimeText(rawText);
+				// Only propagate to parent when parseable
+				const seconds = parseTimeDuration(rawText);
+				if (!Number.isNaN(seconds)) {
+					onChange({ ...step, durationValue: seconds });
+				} else if (rawText === "") {
+					onChange({ ...step, durationValue: undefined });
+				}
+				return;
+			}
+			const raw = Number.parseFloat(rawText);
 			if (Number.isNaN(raw) || raw < 0) {
 				onChange({ ...step, durationValue: undefined });
 			} else {
@@ -149,6 +196,16 @@ export function StepEditor({
 		},
 		[step, distanceUnit, onChange],
 	);
+
+	const handleTimeBlur = useCallback(() => {
+		setIsEditingTime(false);
+		// Re-format on blur to normalize display (e.g., "2:" → "2:00")
+		setTimeText(apiToDisplayDuration(step.durationValue, "time", distanceUnit));
+	}, [step.durationValue, distanceUnit]);
+
+	const handleTimeFocus = useCallback(() => {
+		setIsEditingTime(true);
+	}, []);
 
 	const handleNameChange = useCallback(
 		(e: React.ChangeEvent<HTMLInputElement>) => {
@@ -166,7 +223,7 @@ export function StepEditor({
 
 	/** Get the duration unit label for display. */
 	function getDurationUnit(): string {
-		if (step.durationType === "time") return "min";
+		if (step.durationType === "time") return ""; // mm:ss format is self-evident
 		if (step.durationType === "distance") return distanceUnit;
 		return "";
 	}
@@ -223,13 +280,20 @@ export function StepEditor({
 				{step.durationType !== "open" && (
 					<>
 						<input
-							type="number"
-							value={apiToDisplayDuration(step.durationValue, step.durationType, distanceUnit)}
+							type={step.durationType === "time" ? "text" : "number"}
+							value={
+								step.durationType === "time"
+									? timeText
+									: apiToDisplayDuration(step.durationValue, step.durationType, distanceUnit)
+							}
 							onChange={handleDurationValueChange}
-							placeholder="0"
-							step={step.durationType === "time" ? "0.5" : distanceUnit === "m" ? "25" : "0.1"}
-							min="0"
-							aria-label="Duration value"
+							onBlur={step.durationType === "time" ? handleTimeBlur : undefined}
+							onFocus={step.durationType === "time" ? handleTimeFocus : undefined}
+							placeholder={step.durationType === "time" ? "0:00" : "0"}
+							step={step.durationType === "distance" ? "any" : undefined}
+							min={step.durationType === "distance" ? "0" : undefined}
+							inputMode={step.durationType === "time" ? "text" : "decimal"}
+							aria-label={step.durationType === "time" ? "Duration value (mm:ss)" : "Duration value"}
 							className="w-16 rounded bg-gray-800 border border-gray-700 px-1.5 py-1 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
 						/>
 						{step.durationType === "distance" ? (
