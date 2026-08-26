@@ -206,7 +206,7 @@ export function WorkoutBuilderPage() {
 					name: savedWorkout.name,
 					sport: savedWorkout.sport,
 					description: savedWorkout.description ?? "",
-					scheduledDate: savedWorkout.scheduledDate ?? "",
+					scheduledDate: savedWorkout.scheduledDate ? savedWorkout.scheduledDate.slice(0, 10) : "",
 					steps: savedWorkout.definition,
 				},
 			});
