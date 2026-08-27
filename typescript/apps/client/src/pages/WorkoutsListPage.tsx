@@ -260,7 +260,7 @@ export function WorkoutsListPage() {
 									{w.scheduledDate && (
 										<span className="ml-2 text-violet-400">
 											📅{" "}
-											{new Date(`${w.scheduledDate}T00:00:00`).toLocaleDateString(undefined, {
+											{new Date(`${w.scheduledDate.slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, {
 												month: "short",
 												day: "numeric",
 											})}
