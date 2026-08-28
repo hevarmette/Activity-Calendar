@@ -3,6 +3,7 @@ import type { ActivityUpdatePayload } from "@activity-calendar/shared";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
+import { downloadActivityFit } from "../api/client.js";
 import { useSaveActivity, useSaveLap } from "../api/mutations.js";
 import { useActivity, useLaps, useRecords, useSessions } from "../api/queries.js";
 import { PerformanceCharts } from "../components/charts/PerformanceCharts.js";
@@ -78,6 +79,27 @@ export function ActivityDetailsPage() {
 
 	// Toast state for save error feedback (TODO #4)
 	const [saveError, setSaveError] = useState<string | null>(null);
+
+	// Activity .fit export state
+	const [isExporting, setIsExporting] = useState(false);
+	const [exportError, setExportError] = useState<string | null>(null);
+
+	async function handleExport() {
+		if (isExporting) return;
+		setExportError(null);
+		setIsExporting(true);
+		try {
+			const rawName = activity?.name ?? `activity_${id}`;
+			const safeName = rawName.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
+			await downloadActivityFit(id, `${safeName}_${id}.fit`);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "Export failed.";
+			setExportError(message);
+			setTimeout(() => setExportError(null), 5000);
+		} finally {
+			setIsExporting(false);
+		}
+	}
 
 	// Auto-lap distance state lifted for sharing between AutoLapTable and DetailMap
 	const [autoLapDist, setAutoLapDist] = useState<number | null>(null);
@@ -194,6 +216,31 @@ export function ActivityDetailsPage() {
 							</option>
 						))}
 					</select>
+					<span className="w-px h-5 bg-gray-700" />
+					<button
+						type="button"
+						onClick={handleExport}
+						disabled={isExporting}
+						aria-label="Export activity as .fit file"
+						title="Export as .fit"
+						className="p-1 text-gray-500 hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+					>
+						{isExporting ? (
+							<span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-gray-500 border-t-transparent align-middle" />
+						) : (
+							// Download icon
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 20 20"
+								fill="currentColor"
+								className="h-4 w-4"
+								aria-hidden="true"
+							>
+								<path d="M10 2a1 1 0 0 1 1 1v7.586l2.293-2.293a1 1 0 1 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 0l-4-4a1 1 0 1 1 1.414-1.414L9 10.586V3a1 1 0 0 1 1-1Z" />
+								<path d="M3 14a1 1 0 0 1 1 1v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1a1 1 0 1 1 2 0v1a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-1a1 1 0 0 1 1-1Z" />
+							</svg>
+						)}
+					</button>
 					<span className="w-px h-5 bg-gray-700" />
 					<div className="flex items-center">
 						<button
@@ -439,6 +486,23 @@ export function ActivityDetailsPage() {
 			>
 				{saveActivity.isPending ? "Saving…" : "Save Changes"}
 			</button>
+
+			{exportError && (
+				<div
+					role="alert"
+					className="rounded-lg bg-red-900/50 border border-red-700 px-4 py-3 text-sm text-red-200 flex items-center justify-between"
+				>
+					<span>Export failed: {exportError}</span>
+					<button
+						type="button"
+						onClick={() => setExportError(null)}
+						className="text-red-300 hover:text-red-100 ml-4"
+						aria-label="Dismiss export error"
+					>
+						✕
+					</button>
+				</div>
+			)}
 
 			{lastSql && (
 				<pre className="rounded-lg bg-gray-900 border border-gray-700 p-3 text-xs text-gray-300 font-mono overflow-x-auto whitespace-pre-wrap">

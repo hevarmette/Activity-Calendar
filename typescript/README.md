@@ -40,7 +40,16 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 - Search executes on Enter key press (not on every keystroke) for a responsive editing experience
 - Filter by sport, sub-sport, category, date range, distance range, and duration range
 - Sort controls (distance, duration, ascending/descending)
+- Multi-select activities with per-row checkboxes and a select-all toggle spanning every matching result
+- Export selected activities, or all matching activities, as a ZIP of Garmin .fit files
 - Click through to Activity Details for any result
+
+### Activity Export
+- Export any completed activity as a Garmin .fit file directly from the Activity Details page (download icon in the header)
+- Export a subset of activities (multi-select) or all matching activities from the Activity Search page as a single .fit-per-activity ZIP archive
+- Reconstructs full activity .fit files from stored data: GPS records (positions converted to semicircles), laps, per-session data for multisport activities, swim lengths, timer events, and the activity summary
+- Uses raw recorded values (no coordinate imputation or elevation correction) to preserve original fidelity — verified via an encode→decode round-trip
+- Large exports are guarded by a configurable server cap (`EXPORT_MAX_ACTIVITIES`, default 500); per-activity encoding failures are skipped and listed in an `_export_errors.txt` manifest inside the archive rather than aborting the whole export
 
 ### Workout Builder
 - Create structured workouts with warmup, interval, rest, recovery, cooldown, and other step types
@@ -85,6 +94,7 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 | Calendar | [FullCalendar](https://fullcalendar.io/) |
 | State | [TanStack Query](https://tanstack.com/query) |
 | Workout Encoding | [@garmin/fitsdk](https://github.com/garmin/fit-javascript-sdk) |
+| Activity Export | [@garmin/fitsdk](https://github.com/garmin/fit-javascript-sdk) + [fflate](https://github.com/101arrowz/fflate) (ZIP) |
 | Testing | [Playwright](https://playwright.dev/) |
 | Linting | [Biome](https://biomejs.dev/) |
 
@@ -102,8 +112,8 @@ typescript/
 │   │   └── public/assets/ # SVG icons for workout feel
 │   └── server/             # Hono REST API
 │       └── src/
-│           ├── routes/    # API routes (activities, laps, records, calendar, search, report, workouts, etc.)
-│           └── lib/       # Auto-laps computation
+│           ├── routes/    # API routes (activities, laps, records, calendar, search, report, workouts, export, etc.)
+│           └── lib/       # Auto-laps computation, activity .fit encoder (activity-fit), export data access
 ├── packages/
 │   └── shared/             # Shared types, constants, enums, formatting utilities, workout types
 ├── tests/
@@ -138,6 +148,23 @@ SCHEMA=your_schema_name
 ```bash
 bun run dev          # Starts client (port 5173) and server (port 3000)
 ```
+
+## Activity Export API
+
+Two endpoints reconstruct completed activities into Garmin `.fit` files:
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| `GET`  | `/api/activities/:id/export` | — | Single `.fit` file (`application/octet-stream`). `404` if the activity does not exist. |
+| `POST` | `/api/export` | `ActivityExportRequest` JSON | ZIP archive (`application/zip`) of one `.fit` per activity. |
+
+`ActivityExportRequest` selection precedence (enforced server-side):
+
+1. `activityIds: number[]` — export exactly these IDs (filters ignored).
+2. Text filters `q` / `titleSearch` / `descriptionSearch` (AND-combined, same semantics as `/api/search`).
+3. `all: true` — export the entire library (explicit guard required).
+
+A request with none of the above returns `400`. An empty match set returns `404`. Non-`all` requests exceeding `EXPORT_MAX_ACTIVITIES` (default `500`) return `413`. Per-activity encoding failures are skipped and listed in an `_export_errors.txt` file inside the archive.
 
 ## Docker
 

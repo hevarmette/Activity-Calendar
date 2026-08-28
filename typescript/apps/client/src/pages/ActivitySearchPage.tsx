@@ -2,6 +2,7 @@ import { METERS_PER_MILE, SPORT_COLORS, Sport, convertSecondsToHms, formatPaceSp
 import type { SearchRow } from "@activity-calendar/shared";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
+import { downloadActivitiesZip } from "../api/client.js";
 import { useSearch } from "../api/queries.js";
 
 const RESULTS_PER_PAGE = 20;
@@ -197,6 +198,52 @@ export function ActivitySearchPage() {
 	const totalPages = Math.max(1, Math.ceil(activities.length / RESULTS_PER_PAGE));
 	const currentPage = Math.min(page, totalPages);
 	const pageActivities = activities.slice((currentPage - 1) * RESULTS_PER_PAGE, currentPage * RESULTS_PER_PAGE);
+
+	// --- Multi-select + export state ---
+	const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+	const [isExporting, setIsExporting] = useState(false);
+	const [exportError, setExportError] = useState<string | null>(null);
+
+	// The full set of activity IDs currently matching the filters (all pages).
+	const allMatchingIds = useMemo(() => activities.map((a) => a.activityId), [activities]);
+
+	// Reset the selection whenever the matching set changes (filters/search).
+	// biome-ignore lint/correctness/useExhaustiveDependencies: selection resets when the result set identity changes.
+	useEffect(() => {
+		setSelectedIds(new Set());
+	}, [allMatchingIds]);
+
+	const allSelected = allMatchingIds.length > 0 && selectedIds.size === allMatchingIds.length;
+
+	function toggleSelected(activityId: number) {
+		setSelectedIds((prev) => {
+			const next = new Set(prev);
+			if (next.has(activityId)) next.delete(activityId);
+			else next.add(activityId);
+			return next;
+		});
+	}
+
+	function toggleSelectAll() {
+		setSelectedIds((prev) => (prev.size === allMatchingIds.length ? new Set() : new Set(allMatchingIds)));
+	}
+
+	/** Confirm before large exports, then download a ZIP of the given IDs. */
+	async function runExport(ids: number[]) {
+		if (isExporting || ids.length === 0) return;
+		if (ids.length > 50 && !window.confirm(`Export ${ids.length} activities? This may take a moment.`)) return;
+		setExportError(null);
+		setIsExporting(true);
+		try {
+			await downloadActivitiesZip({ activityIds: ids });
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "Export failed.";
+			setExportError(message);
+			setTimeout(() => setExportError(null), 6000);
+		} finally {
+			setIsExporting(false);
+		}
+	}
 
 	function updateParam(key: string, value: string) {
 		const params = new URLSearchParams(searchParams);
@@ -454,6 +501,69 @@ export function ActivitySearchPage() {
 								{Math.min(currentPage * RESULTS_PER_PAGE, activities.length)}
 							</p>
 
+							{/* Export action bar */}
+							{activities.length > 0 && (
+								<div className="flex flex-wrap items-center gap-3 py-3 border-b border-gray-800">
+									<label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
+										<input
+											type="checkbox"
+											checked={allSelected}
+											onChange={toggleSelectAll}
+											className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-red-600 focus:ring-red-500/50"
+											aria-label="Select all matching activities"
+										/>
+										Select all
+									</label>
+									{selectedIds.size > 0 && (
+										<span className="inline-flex items-center gap-2 rounded-full bg-red-600/20 text-red-300 border border-red-500/50 px-3 py-0.5 text-xs font-medium">
+											{selectedIds.size} selected
+											<button
+												type="button"
+												onClick={() => setSelectedIds(new Set())}
+												className="text-red-300 hover:text-red-100"
+												aria-label="Clear selection"
+											>
+												✕
+											</button>
+										</span>
+									)}
+									<div className="flex-1" />
+									<button
+										type="button"
+										onClick={() => runExport([...selectedIds])}
+										disabled={isExporting || selectedIds.size === 0}
+										className="rounded-lg bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-red-500/50"
+									>
+										{isExporting ? "Exporting…" : `Export selected${selectedIds.size ? ` (${selectedIds.size})` : ""}`}
+									</button>
+									<button
+										type="button"
+										onClick={() => runExport(allMatchingIds)}
+										disabled={isExporting || allMatchingIds.length === 0}
+										className="rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+									>
+										Export all ({allMatchingIds.length})
+									</button>
+								</div>
+							)}
+
+							{exportError && (
+								<div
+									role="alert"
+									className="mt-3 rounded-lg bg-red-900/50 border border-red-700 px-4 py-3 text-sm text-red-200 flex items-center justify-between"
+								>
+									<span>Export failed: {exportError}</span>
+									<button
+										type="button"
+										onClick={() => setExportError(null)}
+										className="text-red-300 hover:text-red-100 ml-4"
+										aria-label="Dismiss export error"
+									>
+										✕
+									</button>
+								</div>
+							)}
+
 							{pageActivities.map((a) => {
 								const sport = canonicalSport(a.sport, a.numSessions);
 								const miles = a.totalDistance / METERS_PER_MILE;
@@ -466,6 +576,18 @@ export function ActivitySearchPage() {
 										to={`/activity/${a.activityId}?sport=${sport}`}
 										className="border-b border-gray-800 py-3 flex items-center gap-3 hover:bg-gray-900/50 transition-colors"
 									>
+										<input
+											type="checkbox"
+											checked={selectedIds.has(a.activityId)}
+											onChange={() => toggleSelected(a.activityId)}
+											onClick={(e) => {
+												e.preventDefault();
+												e.stopPropagation();
+												toggleSelected(a.activityId);
+											}}
+											className="h-4 w-4 shrink-0 rounded border-gray-600 bg-gray-800 text-red-600 focus:ring-red-500/50"
+											aria-label={`Select ${a.activityName}`}
+										/>
 										<div className="w-0.5 h-8 rounded-full shrink-0" style={{ backgroundColor: sportColor }} />
 										<div className="flex-1 min-w-0">
 											<p className="text-sm font-medium text-gray-200 truncate">

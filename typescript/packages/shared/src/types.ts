@@ -218,6 +218,37 @@ export interface CreateActivityResponse {
 	sql?: string[];
 }
 
+// --- Activity Export ---
+
+/**
+ * Payload for POST /api/export — export a set of completed activities as Garmin
+ * .fit files bundled into a ZIP archive.
+ *
+ * Selection precedence (enforced server-side):
+ *   1. If `activityIds` is non-empty, export exactly those IDs (filters ignored).
+ *   2. Else, apply the text filters (`q` / `titleSearch` / `descriptionSearch`)
+ *      combined with AND logic, matching the GET /api/search contract.
+ *   3. Else, require `all: true` as an explicit guard to export the entire
+ *      library. A request with neither ids, filters, nor `all` is rejected.
+ *
+ * The number of activities in a non-`all` request is bounded by the server's
+ * EXPORT_MAX_ACTIVITIES cap; exceeding it returns 413.
+ *
+ * The response is a binary ZIP (`application/zip`), not JSON.
+ */
+export interface ActivityExportRequest {
+	/** Explicit guard required to export the entire library (no ids/filters). */
+	all?: boolean;
+	/** Explicit activity IDs to export. Takes precedence over all filters. */
+	activityIds?: number[];
+	/** Fuzzy text query matched against name/description (see search route). */
+	q?: string;
+	/** Exact case-insensitive substring match against activity name. */
+	titleSearch?: string;
+	/** Exact case-insensitive substring match against description. */
+	descriptionSearch?: string;
+}
+
 /**
  * A scheduled workout event for the calendar view.
  *
