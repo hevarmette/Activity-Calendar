@@ -426,32 +426,15 @@ export function ActivityDetailsPage() {
 						<p className="text-sm text-gray-500">No lap data available.</p>
 					))}
 				{tab === "details" && (
-					<>
-						<ActivityStatsGrid
-							distance={editedDistance}
-							duration={editedDuration}
-							sport={sessionSport}
-							points={sessionPoints}
-							laps={sessionLaps}
-							avgPower={activity.avgPower}
-						/>
-						{/* Show elapsed time from session data (TODO #11) */}
-						{sessions &&
-							sessions.length > 0 &&
-							(() => {
-								const session = activeSession ?? sessions[0];
-								const elapsed = session?.totalElapsedTime;
-								if (elapsed == null || elapsed <= 0) return null;
-								return (
-									<div className="mt-4 inline-block">
-										<p className="text-xs font-medium uppercase tracking-wide text-gray-500">Elapsed Time</p>
-										<p className="mt-1 text-lg font-semibold text-gray-100 tabular-nums">
-											{convertSecondsToHms(Math.round(elapsed))}
-										</p>
-									</div>
-								);
-							})()}
-					</>
+					<ActivityStatsGrid
+						distance={editedDistance}
+						duration={editedDuration}
+						sport={sessionSport}
+						points={sessionPoints}
+						laps={sessionLaps}
+						avgPower={activity.avgPower}
+						elapsedTime={(activeSession ?? sessions?.[0])?.totalElapsedTime}
+					/>
 				)}
 				{tab === "auto-laps" && <AutoLapTable activityId={id} sport={sessionSport} onDistanceChange={setAutoLapDist} />}
 			</div>

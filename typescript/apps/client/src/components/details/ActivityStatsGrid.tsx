@@ -8,6 +8,7 @@ interface Props {
 	points: RecordPoint[];
 	laps: Lap[];
 	avgPower: number | null;
+	elapsedTime?: number | null;
 }
 
 function weightedAvg(laps: Lap[], getter: (l: Lap) => number | null): number | null {
@@ -24,7 +25,7 @@ function weightedAvg(laps: Lap[], getter: (l: Lap) => number | null): number | n
 	return weight > 0 ? sum / weight : null;
 }
 
-export function ActivityStatsGrid({ distance, duration, sport, points, laps, avgPower }: Props) {
+export function ActivityStatsGrid({ distance, duration, sport, points, laps, avgPower, elapsedTime }: Props) {
 	const miles = distance / METERS_PER_MILE;
 	const isCycling = sport === Sport.Cycling;
 	const durationHr = duration / 3600;
@@ -109,6 +110,9 @@ export function ActivityStatsGrid({ distance, duration, sport, points, laps, avg
 			<div className="space-y-4">
 				{avgHr != null && <Stat label="Heart Rate" value={`${avgHr.toFixed(0)} avg / ${maxHr} max bpm`} />}
 				<Stat label="Duration" value={convertSecondsToHms(duration) ?? "—"} />
+				{elapsedTime != null && elapsedTime > 0 && (
+					<Stat label="Elapsed Time" value={convertSecondsToHms(Math.round(elapsedTime)) ?? "—"} />
+				)}
 			</div>
 
 			{/* Column 3: Elevation + Best Pace */}
