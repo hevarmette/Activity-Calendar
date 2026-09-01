@@ -338,6 +338,10 @@ export function encodeFitActivity(input: ActivityFitInput): Uint8Array {
 	};
 
 	if (!multisport) {
+		// Sum lap distances for the fallback session's total distance. Manual /
+		// session-less activities have no session row, so we reconstruct distance
+		// from the recorded laps rather than a duration field.
+		const fallbackDistance = laps.reduce((sum, lap) => sum + (num(lap.totalDistance) ?? 0), 0);
 		const session =
 			sessions[0] ??
 			({
@@ -346,7 +350,7 @@ export function encodeFitActivity(input: ActivityFitInput): Uint8Array {
 				subSport: "generic",
 				startTime: activityStart,
 				timestamp: activityEnd,
-				totalDistance: num(activity.totalTimerTime) ?? null,
+				totalDistance: fallbackDistance > 0 ? fallbackDistance : null,
 				totalTimerTime: num(activity.totalTimerTime) ?? null,
 				totalElapsedTime: num(activity.totalTimerTime) ?? null,
 				avgSpeed: null,
