@@ -126,7 +126,9 @@ const createActivitySchema = z.object({
   duration: z.number().positive(),
   distance: z.number().min(0).optional(),
   workoutFeel: z.number().nullable().optional(),
-  effort: z.number().min(1).max(10).nullable().optional(),
+  // Effort is stored on a 1–100 scale (the UI's 1–10 slider is multiplied by 10
+  // before submission, matching the details-page editor and PATCH schema).
+  effort: z.number().min(1).max(100).nullable().optional(),
   laps: z.array(createLapSchema),
   debugSql: z.boolean().optional(),
 });
