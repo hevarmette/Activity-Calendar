@@ -44,6 +44,7 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 - Multi-select activities with a hover/selected circular toggle per row and a minimal "Select all" text button; bulk export actions live in a floating bottom bar that overlays content (no layout shift)
 - Export selected activities, or all matching activities, as a ZIP of Garmin .fit files
 - Click through to Activity Details for any result
+- Select exactly two activities to reveal a Compare action (opens the Activity Comparison page); a "pick a second activity" mode (entered via `?compareWith=<id>` from Activity Details) turns results into single-select-and-go for choosing the second activity
 
 ### Activity Export
 - Export any completed activity as a Garmin .fit file directly from the Activity Details page (download icon in the header)
@@ -51,6 +52,17 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 - Reconstructs full activity .fit files from stored data: GPS records (positions converted to semicircles), laps, per-session data for multisport activities, swim lengths, timer events, and the activity summary
 - Uses raw recorded values (no coordinate imputation or elevation correction) to preserve original fidelity — verified via an encode→decode round-trip
 - Large exports are guarded by a configurable server cap (`EXPORT_MAX_ACTIVITIES`, default 500); per-activity encoding failures are skipped and listed in an `_export_errors.txt` manifest inside the archive rather than aborting the whole export
+
+### Activity Comparison
+- Compare two activities side-by-side on a dedicated page (`/compare?a=<id>&b=<id>`)
+- Synchronized map animation overlaying both GPS tracks with two color-coded moving markers driven by a single shared playback clock
+- Playback controls: play/pause, a draggable timeline scrubber, and a playback-speed selector (0.5×–8×)
+- Independent per-activity start offset (mm:ss input + slider) to align efforts by skipping warmups so both markers begin together from chosen starts
+- Smooth motion via `requestAnimationFrame` with position interpolated between ~1 Hz GPS points using each record's pause-removed elapsed time
+- Side-by-side lap comparison with a single shared Intensity pill filter (same UX and enum as the Activity Details lap table) applied to both columns
+- Marker/track/lap-header colors derive from each activity's sport, falling back to a distinct color pair on collision so the two are always distinguishable
+- Entry points — Search: select exactly two activities → Compare; Details: Compare icon → pick the second activity via `?compareWith=<id>` hand-off
+- Activities without GPS data gracefully degrade to a lap-only comparison (map and playback controls hidden)
 
 ### Workout Builder
 - Create structured workouts with warmup, interval, rest, recovery, cooldown, and other step types
@@ -106,9 +118,10 @@ typescript/
 ├── apps/
 │   ├── client/             # React SPA (Vite)
 │   │   ├── src/
-│   │   │   ├── pages/     # CalendarPage, ActivityDetailsPage, ActivityReportPage, ActivitySearchPage, WorkoutBuilderPage, WorkoutsListPage
-│   │   │   ├── components/ # UI components (maps, charts, laps, details, calendar, layout, workouts)
+│   │   │   ├── pages/     # CalendarPage, ActivityDetailsPage, ActivityReportPage, ActivitySearchPage, ActivityComparePage, WorkoutBuilderPage, WorkoutsListPage
+│   │   │   ├── components/ # UI components (maps, charts, laps, details, compare, calendar, layout, workouts)
 │   │   │   ├── api/       # TanStack Query hooks and API client
+│   │   │   ├── lib/       # Client-only helpers (geo: track downsampling + interpolation)
 │   │   │   └── hooks/     # Custom hooks (activity navigation)
 │   │   └── public/assets/ # SVG icons for workout feel
 │   └── server/             # Hono REST API

@@ -7,6 +7,7 @@ const CalendarPage = lazy(() => import("./pages/CalendarPage.js"));
 const ActivityDetailsPage = lazy(() => import("./pages/ActivityDetailsPage.js"));
 const ActivityReportPage = lazy(() => import("./pages/ActivityReportPage.js"));
 const ActivitySearchPage = lazy(() => import("./pages/ActivitySearchPage.js"));
+const ActivityComparePage = lazy(() => import("./pages/ActivityComparePage.js"));
 const WorkoutBuilderPage = lazy(() => import("./pages/WorkoutBuilderPage.js"));
 const WorkoutsListPage = lazy(() => import("./pages/WorkoutsListPage.js"));
 
@@ -48,6 +49,14 @@ export function App() {
 						element={
 							<Suspense fallback={<Loading />}>
 								<ActivitySearchPage />
+							</Suspense>
+						}
+					/>
+					<Route
+						path="/compare"
+						element={
+							<Suspense fallback={<Loading />}>
+								<ActivityComparePage />
 							</Suspense>
 						}
 					/>

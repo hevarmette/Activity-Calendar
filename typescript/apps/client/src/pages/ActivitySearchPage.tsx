@@ -1,7 +1,7 @@
 import { METERS_PER_MILE, SPORT_COLORS, Sport, convertSecondsToHms, formatPaceSpeed } from "@activity-calendar/shared";
 import type { SearchRow } from "@activity-calendar/shared";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { downloadActivitiesZip } from "../api/client.js";
 import { useSearch } from "../api/queries.js";
 
@@ -53,6 +53,29 @@ function canonicalSport(sport: string, numSessions: number): string {
 
 export function ActivitySearchPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
+	const navigate = useNavigate();
+
+	// --- Compare pick mode ---
+	// When the URL carries ?compareWith=<id> (from the Activity Details "Compare"
+	// action), the page enters a single-select-and-go mode: a banner prompts the
+	// user to pick a second activity, and clicking any result navigates straight
+	// to /compare?a=<compareWith>&b=<clicked>. Multi-select/export UI is hidden.
+	const compareWithRaw = Number(searchParams.get("compareWith"));
+	const compareWith = compareWithRaw > 0 && !Number.isNaN(compareWithRaw) ? compareWithRaw : null;
+	const isPickMode = compareWith != null;
+
+	function cancelPickMode() {
+		setSearchParams((prev) => {
+			const next = new URLSearchParams(prev);
+			next.delete("compareWith");
+			return next;
+		});
+	}
+
+	function pickSecondActivity(activityId: number) {
+		if (compareWith == null || activityId === compareWith) return;
+		navigate(`/compare?a=${compareWith}&b=${activityId}`);
+	}
 
 	// --- Text search state (fuzzy, title, description) ---
 	const qParam = searchParams.get("q") ?? "";
@@ -530,6 +553,21 @@ export function ActivitySearchPage() {
 
 				{/* Results */}
 				<div className="space-y-0">
+					{isPickMode && (
+						<output
+							aria-live="polite"
+							className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-orange-500/50 bg-orange-600/10 px-4 py-3 text-sm text-orange-200"
+						>
+							<span>Pick a second activity to compare with #{compareWith}</span>
+							<button
+								type="button"
+								onClick={cancelPickMode}
+								className="shrink-0 text-xs font-medium text-orange-300 hover:text-orange-100"
+							>
+								Cancel
+							</button>
+						</output>
+					)}
 					{activities.length > 0 ? (
 						<>
 							<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -547,6 +585,7 @@ export function ActivitySearchPage() {
 									onClick={toggleSelectAll}
 									className="text-xs font-medium text-gray-500 hover:text-red-300 transition-colors"
 									aria-pressed={allSelected}
+									hidden={isPickMode}
 								>
 									{allSelected ? "Clear selection" : `Select all ${allMatchingIds.length}`}
 								</button>
@@ -576,45 +615,62 @@ export function ActivitySearchPage() {
 								const date = new Date(a.localTimestamp).toLocaleDateString();
 								const sportColor = SPORT_COLORS[sport] ?? "#6b7280";
 								const isSelected = selectedIds.has(a.activityId);
+								const isCompareOrigin = isPickMode && a.activityId === compareWith;
 								return (
 									<Link
 										key={a.activityId}
 										to={`/activity/${a.activityId}?sport=${sport}`}
+										onClick={
+											isPickMode
+												? (e) => {
+														e.preventDefault();
+														if (!isCompareOrigin) pickSecondActivity(a.activityId);
+													}
+												: undefined
+										}
+										aria-disabled={isCompareOrigin}
 										className={`group border-b border-gray-800 py-3 flex items-center gap-3 transition-colors ${
-											isSelected ? "bg-red-600/10 border-l-2 border-l-red-600 pl-2" : "hover:bg-gray-900/50"
+											isCompareOrigin
+												? "opacity-40 cursor-not-allowed"
+												: isSelected
+													? "bg-red-600/10 border-l-2 border-l-red-600 pl-2"
+													: "hover:bg-gray-900/50"
 										}`}
 									>
 										{/*
 										 * Selection toggle — a minimal circular check that appears on hover
 										 * and stays visible when selected. preventDefault/stopPropagation
-										 * keep it from triggering the row's navigation.
+										 * keep it from triggering the row's navigation. Hidden in pick mode,
+										 * where clicking the row itself selects the second activity.
 										 */}
-										<button
-											type="button"
-											onClick={(e) => {
-												e.preventDefault();
-												e.stopPropagation();
-												toggleSelected(a.activityId);
-											}}
-											aria-pressed={isSelected}
-											aria-label={`Select ${a.activityName}`}
-											className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
-												isSelected
-													? "border-red-500 bg-red-600 text-white opacity-100"
-													: "border-gray-600 text-transparent opacity-0 hover:border-gray-400 group-hover:opacity-100 focus:opacity-100"
-											}`}
-										>
-											<svg
-												viewBox="0 0 16 16"
-												className="h-3 w-3"
-												fill="none"
-												stroke="currentColor"
-												strokeWidth="2.5"
-												aria-hidden="true"
+										{!isPickMode && (
+											<button
+												type="button"
+												onClick={(e) => {
+													e.preventDefault();
+													e.stopPropagation();
+													toggleSelected(a.activityId);
+												}}
+												aria-pressed={isSelected}
+												aria-label={`Select ${a.activityName}`}
+												className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
+													isSelected
+														? "border-red-500 bg-red-600 text-white opacity-100"
+														: "border-gray-600 text-transparent opacity-0 hover:border-gray-400 group-hover:opacity-100 focus:opacity-100"
+												}`}
 											>
-												<path d="M3 8.5l3.5 3.5L13 4.5" strokeLinecap="round" strokeLinejoin="round" />
-											</svg>
-										</button>
+												<svg
+													viewBox="0 0 16 16"
+													className="h-3 w-3"
+													fill="none"
+													stroke="currentColor"
+													strokeWidth="2.5"
+													aria-hidden="true"
+												>
+													<path d="M3 8.5l3.5 3.5L13 4.5" strokeLinecap="round" strokeLinejoin="round" />
+												</svg>
+											</button>
+										)}
 										<div className="w-0.5 h-8 rounded-full shrink-0" style={{ backgroundColor: sportColor }} />
 										<div className="flex-1 min-w-0">
 											<p className="text-sm font-medium text-gray-200 truncate">
@@ -674,13 +730,25 @@ export function ActivitySearchPage() {
 			 */}
 			<div
 				className={`fixed bottom-6 left-1/2 z-40 -translate-x-1/2 transition-all duration-200 ${
-					selectedIds.size > 0
+					selectedIds.size > 0 && !isPickMode
 						? "pointer-events-auto translate-y-0 opacity-100"
 						: "pointer-events-none translate-y-4 opacity-0"
 				}`}
 			>
 				<div className="flex max-w-[calc(100vw-2rem)] flex-wrap items-center justify-center gap-2 rounded-full border border-gray-700 bg-gray-900/90 px-4 py-2 shadow-lg backdrop-blur-sm">
 					<span className="text-xs font-medium text-gray-200">{selectedIds.size} selected</span>
+					{selectedIds.size === 2 && (
+						<button
+							type="button"
+							onClick={() => {
+								const [id1, id2] = [...selectedIds].sort((x, y) => x - y);
+								navigate(`/compare?a=${id1}&b=${id2}`);
+							}}
+							className="rounded-full bg-orange-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+						>
+							Compare
+						</button>
+					)}
 					<button
 						type="button"
 						onClick={() => runExport([...selectedIds])}

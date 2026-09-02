@@ -2,7 +2,7 @@ import { METERS_PER_MILE, Sport, convertSecondsToHms, formatPace, parseHmsToSeco
 import type { ActivityUpdatePayload } from "@activity-calendar/shared";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useSearchParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import { downloadActivityFit } from "../api/client.js";
 import { useSaveActivity, useSaveLap } from "../api/mutations.js";
 import { useActivity, useLaps, useRecords, useSessions } from "../api/queries.js";
@@ -29,6 +29,7 @@ function normalizeCategory(category: string | null | undefined) {
 export function ActivityDetailsPage() {
 	const { activityId } = useParams<{ activityId: string }>();
 	const [searchParams] = useSearchParams();
+	const navigate = useNavigate();
 	const id = Number(activityId);
 	const sport = searchParams.get("sport") || Sport.Running;
 
@@ -240,6 +241,25 @@ export function ActivityDetailsPage() {
 								<path d="M3 14a1 1 0 0 1 1 1v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1a1 1 0 1 1 2 0v1a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-1a1 1 0 0 1 1-1Z" />
 							</svg>
 						)}
+					</button>
+					<span className="w-px h-5 bg-gray-700" />
+					<button
+						type="button"
+						onClick={() => navigate(`/search?compareWith=${id}`)}
+						aria-label="Compare with another activity"
+						title="Compare"
+						className="p-1 text-gray-500 hover:text-gray-200 transition-colors"
+					>
+						{/* Compare icon (two opposing arrows) */}
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							viewBox="0 0 20 20"
+							fill="currentColor"
+							className="h-4 w-4"
+							aria-hidden="true"
+						>
+							<path d="M8 3a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6.414L5.707 7.707a1 1 0 0 1-1.414-1.414l3-3A1 1 0 0 1 8 3Zm4 14a1 1 0 0 1-1-1V4a1 1 0 1 1 2 0v9.586l1.293-1.293a1 1 0 0 1 1.414 1.414l-3 3A1 1 0 0 1 12 17Z" />
+						</svg>
 					</button>
 					<span className="w-px h-5 bg-gray-700" />
 					<div className="flex items-center">
