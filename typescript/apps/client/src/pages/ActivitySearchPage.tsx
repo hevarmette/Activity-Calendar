@@ -132,18 +132,30 @@ export function ActivitySearchPage() {
 	const page = Number(searchParams.get("page")) || 1;
 	const sortField = searchParams.get("sort") || "date";
 	const sortDir = searchParams.get("dir") || "desc";
-	const hasFilters =
-		!!committedQ ||
-		!!committedTitle ||
-		!!committedDesc ||
-		sports.length > 0 ||
-		categories.length > 0 ||
-		dateFrom ||
-		dateTo ||
-		minDist ||
-		maxDist ||
-		minDur ||
-		maxDur;
+
+	// --- Date filter local state ---
+	// Native `type=date` inputs emit intermediate empty/partial values while the
+	// user types a year (e.g. "202" before "2026"), which — if committed directly
+	// to the URL — would wipe the value and reset the page. We hold the input value
+	// in local state and only commit a *complete valid* date (or an explicit clear
+	// on blur) to the URL. Mirrors the previously-fixed calendar-year bug.
+	const [fromInput, setFromInput] = useState(dateFrom);
+	const [toInput, setToInput] = useState(dateTo);
+
+	// Keep local input state in sync when the URL param changes externally
+	// (e.g. back/forward navigation, shared links).
+	useEffect(() => {
+		setFromInput(dateFrom);
+	}, [dateFrom]);
+	useEffect(() => {
+		setToInput(dateTo);
+	}, [dateTo]);
+
+	/** True for the empty string or a complete YYYY-MM-DD date the browser accepts. */
+	function isCommittableDate(value: string): boolean {
+		if (value === "") return true;
+		return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
+	}
 
 	const availableSports = useMemo(() => {
 		if (!data) return [];
@@ -207,11 +219,17 @@ export function ActivitySearchPage() {
 	// The full set of activity IDs currently matching the filters (all pages).
 	const allMatchingIds = useMemo(() => activities.map((a) => a.activityId), [activities]);
 
+	// Stable signature of the matching id set. Using a string here (instead of the
+	// array reference) means the reset effect below only fires when the actual set
+	// of matching activities changes — not on every render — so toggling "Select
+	// all" persists rather than being wiped by a fresh array identity.
+	const matchingIdsSignature = useMemo(() => allMatchingIds.join(","), [allMatchingIds]);
+
 	// Reset the selection whenever the matching set changes (filters/search).
-	// biome-ignore lint/correctness/useExhaustiveDependencies: selection resets when the result set identity changes.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: selection resets only when the matching id set (by value) changes.
 	useEffect(() => {
 		setSelectedIds(new Set());
-	}, [allMatchingIds]);
+	}, [matchingIdsSignature]);
 
 	const allSelected = allMatchingIds.length > 0 && selectedIds.size === allMatchingIds.length;
 
@@ -380,8 +398,18 @@ export function ActivitySearchPage() {
 					<input
 						id="filter-from"
 						type="date"
-						value={dateFrom}
-						onChange={(e) => updateParam("from", e.target.value)}
+						value={fromInput}
+						onChange={(e) => {
+							const value = e.target.value;
+							setFromInput(value);
+							// Only commit a complete valid date (or an explicit empty clear) so
+							// partial values while typing a year don't wipe the URL param.
+							if (isCommittableDate(value) && value !== "") updateParam("from", value);
+						}}
+						onBlur={(e) => {
+							const value = e.target.value;
+							if (isCommittableDate(value) && value !== dateFrom) updateParam("from", value);
+						}}
 						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 					/>
 				</div>
@@ -392,8 +420,16 @@ export function ActivitySearchPage() {
 					<input
 						id="filter-to"
 						type="date"
-						value={dateTo}
-						onChange={(e) => updateParam("to", e.target.value)}
+						value={toInput}
+						onChange={(e) => {
+							const value = e.target.value;
+							setToInput(value);
+							if (isCommittableDate(value) && value !== "") updateParam("to", value);
+						}}
+						onBlur={(e) => {
+							const value = e.target.value;
+							if (isCommittableDate(value) && value !== dateTo) updateParam("to", value);
+						}}
 						className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 					/>
 				</div>
@@ -494,58 +530,27 @@ export function ActivitySearchPage() {
 
 				{/* Results */}
 				<div className="space-y-0">
-					{hasFilters ? (
+					{activities.length > 0 ? (
 						<>
-							<p className="text-sm text-gray-500">
-								{activities.length} activities found — showing {(currentPage - 1) * RESULTS_PER_PAGE + 1}–
-								{Math.min(currentPage * RESULTS_PER_PAGE, activities.length)}
-							</p>
-
-							{/* Export action bar */}
-							{activities.length > 0 && (
-								<div className="flex flex-wrap items-center gap-3 py-3 border-b border-gray-800">
-									<label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
-										<input
-											type="checkbox"
-											checked={allSelected}
-											onChange={toggleSelectAll}
-											className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-red-600 focus:ring-red-500/50"
-											aria-label="Select all matching activities"
-										/>
-										Select all
-									</label>
-									{selectedIds.size > 0 && (
-										<span className="inline-flex items-center gap-2 rounded-full bg-red-600/20 text-red-300 border border-red-500/50 px-3 py-0.5 text-xs font-medium">
-											{selectedIds.size} selected
-											<button
-												type="button"
-												onClick={() => setSelectedIds(new Set())}
-												className="text-red-300 hover:text-red-100"
-												aria-label="Clear selection"
-											>
-												✕
-											</button>
-										</span>
-									)}
-									<div className="flex-1" />
-									<button
-										type="button"
-										onClick={() => runExport([...selectedIds])}
-										disabled={isExporting || selectedIds.size === 0}
-										className="rounded-lg bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-red-500/50"
-									>
-										{isExporting ? "Exporting…" : `Export selected${selectedIds.size ? ` (${selectedIds.size})` : ""}`}
-									</button>
-									<button
-										type="button"
-										onClick={() => runExport(allMatchingIds)}
-										disabled={isExporting || allMatchingIds.length === 0}
-										className="rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-									>
-										Export all ({allMatchingIds.length})
-									</button>
-								</div>
-							)}
+							<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+								<p className="text-sm text-gray-500">
+									{activities.length} activities found — showing {(currentPage - 1) * RESULTS_PER_PAGE + 1}–
+									{Math.min(currentPage * RESULTS_PER_PAGE, activities.length)}
+								</p>
+								{/*
+								 * Minimal ghost select-all toggle placed next to the results count.
+								 * Replaces the old bulky checkbox + inline action bar. Bulk actions
+								 * live in the floating bottom bar (zero layout shift).
+								 */}
+								<button
+									type="button"
+									onClick={toggleSelectAll}
+									className="text-xs font-medium text-gray-500 hover:text-red-300 transition-colors"
+									aria-pressed={allSelected}
+								>
+									{allSelected ? "Clear selection" : `Select all ${allMatchingIds.length}`}
+								</button>
+							</div>
 
 							{exportError && (
 								<div
@@ -570,24 +575,46 @@ export function ActivitySearchPage() {
 								const paceSpeed = formatPaceSpeed(sport, a.totalDistance, a.totalTimerTime);
 								const date = new Date(a.localTimestamp).toLocaleDateString();
 								const sportColor = SPORT_COLORS[sport] ?? "#6b7280";
+								const isSelected = selectedIds.has(a.activityId);
 								return (
 									<Link
 										key={a.activityId}
 										to={`/activity/${a.activityId}?sport=${sport}`}
-										className="border-b border-gray-800 py-3 flex items-center gap-3 hover:bg-gray-900/50 transition-colors"
+										className={`group border-b border-gray-800 py-3 flex items-center gap-3 transition-colors ${
+											isSelected ? "bg-red-600/10 border-l-2 border-l-red-600 pl-2" : "hover:bg-gray-900/50"
+										}`}
 									>
-										<input
-											type="checkbox"
-											checked={selectedIds.has(a.activityId)}
-											onChange={() => toggleSelected(a.activityId)}
+										{/*
+										 * Selection toggle — a minimal circular check that appears on hover
+										 * and stays visible when selected. preventDefault/stopPropagation
+										 * keep it from triggering the row's navigation.
+										 */}
+										<button
+											type="button"
 											onClick={(e) => {
 												e.preventDefault();
 												e.stopPropagation();
 												toggleSelected(a.activityId);
 											}}
-											className="h-4 w-4 shrink-0 rounded border-gray-600 bg-gray-800 text-red-600 focus:ring-red-500/50"
+											aria-pressed={isSelected}
 											aria-label={`Select ${a.activityName}`}
-										/>
+											className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
+												isSelected
+													? "border-red-500 bg-red-600 text-white opacity-100"
+													: "border-gray-600 text-transparent opacity-0 hover:border-gray-400 group-hover:opacity-100 focus:opacity-100"
+											}`}
+										>
+											<svg
+												viewBox="0 0 16 16"
+												className="h-3 w-3"
+												fill="none"
+												stroke="currentColor"
+												strokeWidth="2.5"
+												aria-hidden="true"
+											>
+												<path d="M3 8.5l3.5 3.5L13 4.5" strokeLinecap="round" strokeLinejoin="round" />
+											</svg>
+										</button>
 										<div className="w-0.5 h-8 rounded-full shrink-0" style={{ backgroundColor: sportColor }} />
 										<div className="flex-1 min-w-0">
 											<p className="text-sm font-medium text-gray-200 truncate">
@@ -633,9 +660,51 @@ export function ActivitySearchPage() {
 						</>
 					) : (
 						<div className="flex items-center justify-center py-16 text-gray-500 text-sm">
-							Select filters to search activities
+							No activities match your filters
 						</div>
 					)}
+				</div>
+			</div>
+
+			{/*
+			 * Floating export action bar — pinned to the bottom of the viewport and
+			 * overlaid via position:fixed so it never reflows results (zero layout
+			 * shift). Fades/slides in when activities are selected. Red accent matches
+			 * the export flow. Mirrors the LapTable selection bar for cohesion.
+			 */}
+			<div
+				className={`fixed bottom-6 left-1/2 z-40 -translate-x-1/2 transition-all duration-200 ${
+					selectedIds.size > 0
+						? "pointer-events-auto translate-y-0 opacity-100"
+						: "pointer-events-none translate-y-4 opacity-0"
+				}`}
+			>
+				<div className="flex max-w-[calc(100vw-2rem)] flex-wrap items-center justify-center gap-2 rounded-full border border-gray-700 bg-gray-900/90 px-4 py-2 shadow-lg backdrop-blur-sm">
+					<span className="text-xs font-medium text-gray-200">{selectedIds.size} selected</span>
+					<button
+						type="button"
+						onClick={() => runExport([...selectedIds])}
+						disabled={isExporting || selectedIds.size === 0}
+						className="rounded-full bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-red-500/50"
+					>
+						{isExporting ? "Exporting…" : `Export selected (${selectedIds.size})`}
+					</button>
+					<button
+						type="button"
+						onClick={() => runExport(allMatchingIds)}
+						disabled={isExporting || allMatchingIds.length === 0}
+						className="rounded-full bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+					>
+						Export all ({allMatchingIds.length})
+					</button>
+					<button
+						type="button"
+						onClick={() => setSelectedIds(new Set())}
+						className="rounded-full px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:text-gray-200"
+						aria-label="Clear selection"
+					>
+						Clear
+					</button>
 				</div>
 			</div>
 		</div>

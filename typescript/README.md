@@ -19,7 +19,7 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 - Performance charts (Recharts) plotted against distance: pace, heart rate, altitude, cadence, power
 - Synchronized chart range selection that filters the map view
 - Editable lap table with inline editing for distance, time, and intensity
-- Lap selection with copy-paste intensity patterns (Ctrl+C/V) supporting cyclic repeat for bulk editing
+- Lap selection by clicking a row (Shift+Click for range selection), with copy-paste intensity patterns (Ctrl+C/V) supporting cyclic repeat for bulk editing; selection actions live in a floating bottom bar that overlays content (no layout shift)
 - Auto laps computed from GPS data at configurable intervals with interpolated splits, elevation, HR, and cadence
 - Activity stats grid with running dynamics (vertical oscillation, ground contact time, stride length, vertical ratio) and best lap
 - Interval summary with clustering algorithm that auto-detects distance or time grouping, shows deviation trends
@@ -36,11 +36,12 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 
 ### Activity Search Page
 - Text search by title/description with fuzzy matching (handles variations like 5x600m vs 5 x 600m)
+- Browse the full activity library with no search criteria — filters and sort apply on top, so date/sport/category/distance/duration filters work on their own
 - Separate title and description search with exact case-insensitive substring matching
 - Search executes on Enter key press (not on every keystroke) for a responsive editing experience
 - Filter by sport, sub-sport, category, date range, distance range, and duration range
 - Sort controls (distance, duration, ascending/descending)
-- Multi-select activities with per-row checkboxes and a select-all toggle spanning every matching result
+- Multi-select activities with a hover/selected circular toggle per row and a minimal "Select all" text button; bulk export actions live in a floating bottom bar that overlays content (no layout shift)
 - Export selected activities, or all matching activities, as a ZIP of Garmin .fit files
 - Click through to Activity Details for any result
 

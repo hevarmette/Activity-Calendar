@@ -10,7 +10,7 @@ import { api } from "./client.js";
 
 export const workoutQueryKeys = {
 	all: ["workouts"] as const,
-	list: (sport?: string) => (sport ? ["workouts", { sport }] : ["workouts"]) as const,
+	list: (sport?: string) => (sport ? (["workouts", { sport }] as const) : (["workouts"] as const)),
 	detail: (id: number) => ["workouts", id] as const,
 	calendarWorkouts: ["calendar-workouts"] as const,
 };
