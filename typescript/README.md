@@ -26,7 +26,7 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 - Editable description, title, category, workout feel (SVG icons), and perceived effort slider
 - Adjustable distance and duration in summary cards
 - Previous/next activity navigation and keyboard shortcut (S) to save
-- Similar activities comparison
+- Similar activities comparison (for training/racing activities, each similar-activity row shows a Compare icon that jumps straight to the Activity Comparison page against the current activity)
 
 ### Activity Report Page
 - Aggregated training summary grouped by daily, weekly, monthly, or yearly periods
@@ -59,7 +59,7 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 - Playback controls: play/pause, a draggable timeline scrubber, and a playback-speed selector (0.5×–8×)
 - Independent per-activity start offset (mm:ss input + slider) to align efforts by skipping warmups so both markers begin together from chosen starts
 - Smooth motion via `requestAnimationFrame` with position interpolated between ~1 Hz GPS points using each record's pause-removed elapsed time
-- Side-by-side lap comparison with a single shared Intensity pill filter (same UX and enum as the Activity Details lap table) applied to both columns
+- Side-by-side lap comparison with a single shared Intensity pill filter (same UX and enum as the Activity Details lap table) applied to both columns; the second activity's column shows per-lap split deltas (distance, time, pace/speed) computed against the same visible lap index in the first activity — faster reads green, slower reads red, with "—" where no paired lap exists at that index
 - Marker/track/lap-header colors derive from each activity's sport, falling back to a distinct color pair on collision so the two are always distinguishable
 - Entry points — Search: select exactly two activities → Compare; Details: Compare icon → pick the second activity via `?compareWith=<id>` hand-off
 - Activities without GPS data gracefully degrade to a lap-only comparison (map and playback controls hidden)

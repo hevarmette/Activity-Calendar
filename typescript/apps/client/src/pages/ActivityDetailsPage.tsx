@@ -517,7 +517,7 @@ export function ActivityDetailsPage() {
 			{(category === "training" || category === "race") && title && (
 				<div className="border-t border-gray-800 pt-6">
 					<h3 className="text-sm font-medium uppercase tracking-wide text-gray-500 mb-3">Similar Activities</h3>
-					<SimilarActivities activityId={id} title={title} sport={sport} />
+					<SimilarActivities activityId={id} title={title} sport={sport} category={category} />
 				</div>
 			)}
 		</div>
