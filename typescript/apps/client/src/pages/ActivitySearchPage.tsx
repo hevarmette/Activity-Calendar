@@ -321,10 +321,10 @@ export function ActivitySearchPage() {
 				/>
 				<p className="text-[10px] text-gray-600 mt-1">Press Enter to search</p>
 			</div>
-			{/* Exact title search — case-insensitive substring match on activity name */}
+			{/* Regex title search — case-insensitive POSIX regex match on activity name */}
 			<div>
 				<label htmlFor="search-title" className="text-xs font-medium text-gray-400 block mb-2">
-					Title
+					Title (regex)
 				</label>
 				<input
 					id="search-title"
@@ -332,15 +332,15 @@ export function ActivitySearchPage() {
 					value={titleText}
 					onChange={(e) => setTitleText(e.target.value)}
 					onKeyDown={handleSearchKeyDown}
-					placeholder="Exact title match..."
-					aria-label="Search activities by exact title"
+					placeholder="Regex, e.g. ^long run|\d+mi"
+					aria-label="Search activities by title using a case-insensitive regular expression"
 					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 				/>
 			</div>
-			{/* Exact description search — case-insensitive substring match on description */}
+			{/* Regex description search — case-insensitive POSIX regex match on description */}
 			<div>
 				<label htmlFor="search-description" className="text-xs font-medium text-gray-400 block mb-2">
-					Description
+					Description (regex)
 				</label>
 				<input
 					id="search-description"
@@ -348,8 +348,8 @@ export function ActivitySearchPage() {
 					value={descText}
 					onChange={(e) => setDescText(e.target.value)}
 					onKeyDown={handleSearchKeyDown}
-					placeholder="Exact description match..."
-					aria-label="Search activities by exact description"
+					placeholder="Regex, e.g. tempo|threshold"
+					aria-label="Search activities by description using a case-insensitive regular expression"
 					className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors"
 				/>
 			</div>

@@ -104,9 +104,9 @@ export function useReport() {
 export interface SearchParams {
 	/** Fuzzy text search across title and description. */
 	q?: string;
-	/** Exact case-insensitive substring match on activity title. */
+	/** Case-insensitive regular-expression match on activity title. */
 	titleSearch?: string;
-	/** Exact case-insensitive substring match on activity description. */
+	/** Case-insensitive regular-expression match on activity description. */
 	descriptionSearch?: string;
 }
 

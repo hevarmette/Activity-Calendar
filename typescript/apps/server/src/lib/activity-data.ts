@@ -134,10 +134,28 @@ export async function fetchActivityFitInputs(ids: number[]): Promise<ActivityFit
 }
 
 /**
+ * Validate a user-supplied regex pattern before handing it to Postgres `~*`.
+ * Returns null for empty input (no filter), the pattern verbatim when valid, or
+ * an impossible-match sentinel when the pattern is malformed (so the export
+ * simply matches nothing instead of erroring). Mirrors routes/search.ts.
+ */
+function toRegexPattern(input: string): string | null {
+	const trimmed = input.trim();
+	if (!trimmed) return null;
+	try {
+		new RegExp(trimmed);
+		return trimmed;
+	} catch {
+		return "$.^";
+	}
+}
+
+/**
  * Resolve the set of activity IDs matching text-search filters, mirroring the
- * GET /api/search normalization (ILIKE + trigram fuzzy on q). Returns IDs
- * ordered by local_timestamp DESC. When no filters are given, returns every
- * activity id (used by the `all: true` export path).
+ * GET /api/search normalization (ILIKE + trigram fuzzy on q; case-insensitive
+ * regex `~*` on titleSearch/descriptionSearch). Returns IDs ordered by
+ * local_timestamp DESC. When no filters are given, returns every activity id
+ * (used by the `all: true` export path).
  */
 export async function resolveExportIds(filters: {
 	q?: string;
@@ -158,15 +176,15 @@ export async function resolveExportIds(filters: {
 	}
 
 	const normalized = q ? q.toLowerCase().replace(/\s+/g, " ").trim() : "";
-	const titlePattern = titleSearch ? `%${titleSearch.toLowerCase().replace(/\s+/g, " ").trim()}%` : null;
-	const descPattern = descriptionSearch ? `%${descriptionSearch.toLowerCase().replace(/\s+/g, " ").trim()}%` : null;
+	const titlePattern = toRegexPattern(titleSearch);
+	const descPattern = toRegexPattern(descriptionSearch);
 
 	const rows = await sql<{ activityId: number }[]>`
 		SELECT a.activity_id
 		FROM ${sql(SCHEMA)}.activity a
 		WHERE
-			(${titlePattern}::text IS NULL OR a.activity_name ILIKE ${titlePattern ?? ""})
-			AND (${descPattern}::text IS NULL OR a.description ILIKE ${descPattern ?? ""})
+			(${titlePattern}::text IS NULL OR a.activity_name ~* ${titlePattern ?? ""})
+			AND (${descPattern}::text IS NULL OR a.description ~* ${descPattern ?? ""})
 			${
 				q
 					? sql`AND (

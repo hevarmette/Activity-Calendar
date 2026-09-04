@@ -11,11 +11,14 @@
  *     Input is normalized (lowercased, trimmed, whitespace collapsed) before comparison.
  *     This handles variations like "5x600m" vs "5 x 600m".
  *
- *   - titleSearch (optional): Exact case-insensitive substring match against activity_name.
- *     Uses ILIKE for matching. No fuzzy/trigram logic applied.
+ *   - titleSearch (optional): Case-insensitive POSIX regular-expression match against
+ *     activity_name (Postgres `~*` operator). The value is treated as a raw regex
+ *     pattern (not a literal substring), so tokens like `\d`, `.*`, `^`, `$`, and
+ *     alternation `(a|b)` work. No fuzzy/trigram logic applied. An invalid pattern
+ *     is treated as matching nothing rather than erroring the request.
  *
- *   - descriptionSearch (optional): Exact case-insensitive substring match against description.
- *     Uses ILIKE for matching. No fuzzy/trigram logic applied.
+ *   - descriptionSearch (optional): Case-insensitive POSIX regular-expression match
+ *     against description (Postgres `~*` operator). Same semantics as titleSearch.
  *
  *   When multiple search params are provided, they are combined with AND logic.
  *   When none are provided, all activities are returned ordered by local_timestamp DESC.
@@ -27,6 +30,27 @@ import { TIMEZONE } from "../config.js";
 import sql, { SCHEMA } from "../db.js";
 
 export const searchRoutes = new Hono();
+
+/**
+ * Validate a user-supplied regex pattern before handing it to Postgres.
+ *
+ * Postgres `~*` throws a query error on a malformed pattern, which would 500 the
+ * request. We pre-validate with the JS engine (a close-enough proxy for POSIX
+ * ARE syntax) and, when invalid, substitute a sentinel that matches nothing so
+ * the search simply returns no rows instead of erroring.
+ */
+function toRegexPattern(input: string): string | null {
+	const trimmed = input.trim();
+	if (!trimmed) return null;
+	try {
+		new RegExp(trimmed);
+		return trimmed;
+	} catch {
+		// A pattern that can never match — Postgres treats this literally as an
+		// impossible assertion, so the column matches no rows.
+		return "$.^";
+	}
+}
 
 searchRoutes.get("/", async (c) => {
 	const q = c.req.query("q")?.trim() || "";
@@ -64,10 +88,12 @@ searchRoutes.get("/", async (c) => {
 			return c.json(rows);
 		}
 
-		// Targeted search with titleSearch and/or descriptionSearch (exact ILIKE, AND logic)
-		// Also supports combining with q for additional fuzzy filtering
-		const titlePattern = titleSearch ? `%${titleSearch.toLowerCase().replace(/\s+/g, " ").trim()}%` : null;
-		const descPattern = descriptionSearch ? `%${descriptionSearch.toLowerCase().replace(/\s+/g, " ").trim()}%` : null;
+		// Targeted search with titleSearch and/or descriptionSearch (case-insensitive
+		// regex via `~*`, AND logic). Also supports combining with q for additional
+		// fuzzy filtering. Regex patterns are used verbatim (no %-wrapping or
+		// whitespace normalization, which would corrupt tokens like \s+).
+		const titlePattern = toRegexPattern(titleSearch);
+		const descPattern = toRegexPattern(descriptionSearch);
 
 		const rows = await sql`
 			SELECT
@@ -80,8 +106,8 @@ searchRoutes.get("/", async (c) => {
 			FROM ${sql(SCHEMA)}.activity a
 			JOIN ${sql(SCHEMA)}.session s ON a.activity_id = s.activity_id
 			WHERE
-				(${titlePattern}::text IS NULL OR a.activity_name ILIKE ${titlePattern ?? ""})
-				AND (${descPattern}::text IS NULL OR a.description ILIKE ${descPattern ?? ""})
+				(${titlePattern}::text IS NULL OR a.activity_name ~* ${titlePattern ?? ""})
+				AND (${descPattern}::text IS NULL OR a.description ~* ${descPattern ?? ""})
 				${
 					q
 						? sql`AND (

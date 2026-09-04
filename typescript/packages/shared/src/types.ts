@@ -243,9 +243,9 @@ export interface ActivityExportRequest {
 	activityIds?: number[];
 	/** Fuzzy text query matched against name/description (see search route). */
 	q?: string;
-	/** Exact case-insensitive substring match against activity name. */
+	/** Case-insensitive regular-expression match against activity name. */
 	titleSearch?: string;
-	/** Exact case-insensitive substring match against description. */
+	/** Case-insensitive regular-expression match against description. */
 	descriptionSearch?: string;
 }
 
