@@ -44,7 +44,7 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 - Multi-select activities with a hover/selected circular toggle per row and a minimal "Select all" text button; bulk export actions live in a floating bottom bar that overlays content (no layout shift)
 - Export selected activities, or all matching activities, as a ZIP of Garmin .fit files
 - Click through to Activity Details for any result
-- Select exactly two activities to reveal a Compare action (opens the Activity Comparison page); a "pick a second activity" mode (entered via `?compareWith=<id>` from Activity Details) turns results into single-select-and-go for choosing the second activity
+- Select two or more activities to reveal a Compare action (opens the N-activity Activity Comparison page); a "pick a second activity" mode (entered via `?compareWith=<id>` from Activity Details) turns results into single-select-and-go for choosing the second activity
 
 ### Activity Export
 - Export any completed activity as a Garmin .fit file directly from the Activity Details page (download icon in the header)
@@ -54,18 +54,46 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 - Large exports are guarded by a configurable server cap (`EXPORT_MAX_ACTIVITIES`, default 500); per-activity encoding failures are skipped and listed in an `_export_errors.txt` manifest inside the archive rather than aborting the whole export
 
 ### Activity Comparison
-- Compare two activities side-by-side on a dedicated page (`/compare?a=<id>&b=<id>`)
-- Synchronized map animation overlaying both GPS tracks with two color-coded moving markers driven by a single shared playback clock
-- Playback controls: play/pause, a draggable timeline scrubber, and a playback-speed selector (0.5×–8×)
-- Independent per-activity start offset (mm:ss input + slider) to align efforts by skipping warmups so both markers begin together from chosen starts
+- Compare **any number of activities** (up to 8) side-by-side on a dedicated page, addressed by a single `?ids=` list (see [Compare URL format](#compare-url-format) below)
+- Synchronized map animation overlaying every GPS track with one color-coded moving marker per activity, all driven by a single shared playback clock; the map fits its bounds over every track
+- Playback controls: play/pause, a draggable timeline scrubber, and a playback-speed selector (0.5×–120×)
+- Independent per-activity start offset (mm:ss input + slider) to align efforts by skipping warmups so all markers begin together from chosen starts
 - Smooth motion via `requestAnimationFrame` with position interpolated between ~1 Hz GPS points using each record's pause-removed elapsed time
-- Side-by-side lap comparison with a single shared Intensity pill filter (same UX and enum as the Activity Details lap table) applied to both columns; the second activity's column shows per-lap split deltas (distance, time, pace/speed) computed against the same visible lap index in the first activity — faster reads green, slower reads red, with "—" where no paired lap exists at that index
-- Toggle the lap comparison between regular laps and auto-laps (orange pill toggle mirroring the Activity Details tabs); auto-laps mode adds a single shared distance input that recomputes splits for BOTH activities at once and shows the same B−A per-index deltas (intensity is dropped since auto-laps have none)
-- Compared activity names are clickable links (in the page header and each lap column header) that navigate straight to the corresponding Activity Details page
-- "How far behind over time" delta chart (Recharts): plots the running time gap of the second activity versus the first across a shared distance axis (delta = timeB − timeA at each mile), with a zero reference line — above zero means the second activity is behind; interpolates each activity's elapsed time onto a common distance grid and only renders when both activities carry distance data
-- Marker/track/lap-header colors derive from each activity's sport, falling back to a distinct color pair on collision so the two are always distinguishable
-- Entry points — Search: select exactly two activities → Compare; Details: Compare icon → pick the second activity via `?compareWith=<id>` hand-off
-- Activities without GPS data gracefully degrade to a lap-only comparison (map and playback controls hidden)
+- N-column lap comparison with a single shared Intensity pill filter (same UX and enum as the Activity Details lap table) applied to every column; the **first** activity is the delta baseline, and every other column shows per-lap split deltas (distance, time, pace/speed) computed against the same visible lap index in the baseline — faster reads green, slower reads red, with "—" where no paired lap exists at that index
+- Toggle the lap comparison between regular laps and auto-laps (orange pill toggle mirroring the Activity Details tabs); auto-laps mode adds a single shared distance input that recomputes splits for ALL activities at once and shows the same per-index deltas against the baseline (intensity is dropped since auto-laps have none)
+- Compared activity names are clickable links (in the page header and each lap column header) that navigate to the corresponding Activity Details page — **except** cross-group (schema-qualified) activities, whose names render as plain text since their detail pages resolve against your own data only
+- "How far behind over time" delta chart (Recharts): plots the running time gap of each non-baseline activity versus the baseline across a shared distance axis (delta = time − timeBaseline at each mile), one line per activity in its palette color, with a zero reference line — above zero means that activity is behind; interpolates each activity's elapsed time onto a common distance grid and only renders when the baseline and at least one other activity carry overlapping distance data
+- Marker/track/lap-header colors come from a fixed compare palette assigned by column order (orange, sky, green, purple, yellow, pink, teal, rose; wrapping beyond 8), so any number of activities is always distinguishable
+- **Read-only cross-group comparison** (Feature #6): an id may be schema-qualified (`group:id`) to compare against read-only data from another group's schema; an always-visible legend on the page explains the id format, and unknown/disallowed groups surface a per-activity error banner without blanking the page
+- Entry points — Search: select two or more activities → Compare; Details: Compare icon → pick the second activity via `?compareWith=<id>` hand-off
+- Guards: with a single activity there are no deltas and no time-behind chart (there is no baseline); activities without GPS data gracefully degrade to a lap-only comparison (map and playback controls hidden)
+
+#### Compare URL format
+The comparison page is addressed by a single `ids` query parameter — a comma-separated, **ordered** list of activity ids:
+
+```
+/compare?ids=<id>[,<id>…]
+```
+
+Each entry is one of:
+
+- **Bare number** (e.g. `1234`) — an activity in **your** primary schema.
+- **Schema-qualified** `group:id` (e.g. `alice:1234`) — read-only data from another group's schema (Feature #6). The `group` must be allowlisted server-side (via `DB_COMPARE_SCHEMAS`); an unknown group returns an error and is shown as a per-activity banner.
+
+Rules:
+
+- **Order matters** — the **first** id is the delta baseline that every other activity's lap deltas and time-behind lines are measured against.
+- **1–8 ids.** A single id renders that activity alone (no deltas / no time-behind chart). More than 8 ids are truncated to the first 8.
+- **Malformed tokens are dropped** (non-numeric id, empty group, extra colon, blank entry). If none remain, the page shows its empty state.
+- **Duplicate ids are allowed** and rendered as separate columns.
+
+Examples:
+
+```
+/compare?ids=101,102                # two of your activities
+/compare?ids=101,102,103,104        # four of your activities
+/compare?ids=101,alice:55,bob:88    # your activity vs. two other groups' read-only activities
+```
 
 ### Workout Builder
 - Create structured workouts with warmup, interval, rest, recovery, cooldown, and other step types
@@ -165,6 +193,38 @@ SCHEMA=your_schema_name
 ```bash
 bun run dev          # Starts client (port 5173) and server (port 3000)
 ```
+
+## Cross-schema comparison (read-only)
+
+The server can read activities from more than one database schema so activities
+living in separate schemas can be compared against each other. This is strictly
+read-only.
+
+Configure the additional schemas with a comma-separated env var (in
+`apps/server/.env`):
+
+```env
+# Primary schema — the default for every route.
+DB_SCHEMA=your_schema_name
+
+# Optional. Additional schemas that read routes may target via ?schema=.
+# Comma-separated; whitespace is trimmed, empty entries are ignored, and the
+# primary schema is always allowed regardless of whether it is listed here.
+DB_COMPARE_SCHEMAS=friend_schema,old_import
+```
+
+Read routes accept an optional `?schema=<name>` query parameter:
+
+- When the parameter is **absent**, the route reads from the primary
+  `DB_SCHEMA`.
+- When it names the primary schema or one of `DB_COMPARE_SCHEMAS`, the route
+  reads from that schema.
+- Any other value is rejected with HTTP `400` and a JSON body
+  `{ "error": "Unknown schema '<name>'" }`.
+
+Only read routes honour `?schema=`. Write routes (activity create/update, lap
+and length edits, workout mutations, exports) **always** operate on the primary
+`DB_SCHEMA` and ignore the parameter entirely.
 
 ## Activity Export API
 

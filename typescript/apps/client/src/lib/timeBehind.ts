@@ -30,6 +30,26 @@ export interface DeltaPoint {
 }
 
 /**
+ * A named, colored delta series for one non-baseline activity in the N-activity
+ * compare chart. Each entry's {@link series} holds `thisActivity − baseline`
+ * time deltas over the shared distance grid (positive = this activity behind).
+ */
+export interface NamedDeltaSeries {
+	/**
+	 * Stable unique identifier for this series (e.g. the serialized compare id).
+	 * Used as the Recharts dataKey / row key so two activities with the SAME
+	 * display name never collide into one line.
+	 */
+	key: string;
+	/** Display name of the activity this series represents (label only). */
+	name: string;
+	/** Line color (matches the activity's compare palette color). */
+	color: string;
+	/** The activity's delta-vs-baseline points over the shared distance grid. */
+	series: DeltaPoint[];
+}
+
+/**
  * Build a monotonic distance/time track from record points.
  *
  * Only points carrying a non-null distance are kept. Both distance and time are
@@ -135,4 +155,46 @@ export function buildDeltaSeries(trackA: DistTimePoint[], trackB: DistTimePoint[
 		series.push({ distMiles: dClamped, deltaSeconds: tB - tA });
 	}
 	return series;
+}
+
+/** An input activity for {@link buildMultiDeltaSeries}: its track plus display metadata. */
+export interface NamedDistTimeTrack {
+	/** Stable unique identifier (e.g. serialized compare id) — used as the series key. */
+	key: string;
+	/** Display name of the activity. */
+	name: string;
+	/** Line color (from the compare palette). */
+	color: string;
+	/** Distance/time samples (from {@link buildDistTimeTrack}). */
+	track: DistTimePoint[];
+}
+
+/**
+ * Build one delta series per non-baseline activity for the N-activity time-behind
+ * chart.
+ *
+ * The FIRST activity is the baseline (its own delta is always zero, so it is not
+ * emitted). For every other activity, {@link buildDeltaSeries} computes
+ * `thisActivity − baseline` over their shared distance range. Activities whose
+ * series come back empty — no distance data, or no overlapping distance range
+ * with the baseline — are dropped so the chart never renders a flat/empty line.
+ *
+ * @param baseline - The reference activity (delta = 0), rendered separately by name.
+ * @param others - Every other activity, in display order.
+ * @param stepMiles - Distance grid spacing in miles (default 0.05 ≈ every ~80 m).
+ * @returns One {@link NamedDeltaSeries} per non-empty non-baseline activity.
+ */
+export function buildMultiDeltaSeries(
+	baseline: DistTimePoint[],
+	others: NamedDistTimeTrack[],
+	stepMiles = 0.05,
+): NamedDeltaSeries[] {
+	if (baseline.length === 0) return [];
+	const out: NamedDeltaSeries[] = [];
+	for (const other of others) {
+		const series = buildDeltaSeries(baseline, other.track, stepMiles);
+		if (series.length === 0) continue;
+		out.push({ key: other.key, name: other.name, color: other.color, series });
+	}
+	return out;
 }

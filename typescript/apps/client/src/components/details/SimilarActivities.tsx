@@ -54,7 +54,7 @@ export function SimilarActivities({ activityId, title, sport, category }: Props)
 								onClick={(e) => {
 									e.preventDefault();
 									e.stopPropagation();
-									navigate(`/compare?a=${activityId}&b=${a.activityId}`);
+									navigate(`/compare?ids=${activityId},${a.activityId}`);
 								}}
 								aria-label="Compare"
 								title="Compare"

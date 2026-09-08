@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import sql, { SCHEMA } from "../db.js";
+import sql, { resolveReadSchema, SCHEMA, UnknownSchemaError } from "../db.js";
 
 export const lapsRoutes = new Hono();
 
@@ -10,6 +10,14 @@ lapsRoutes.get("/:activityId", async (c) => {
 	const firstLapIndex = c.req.query("first_lap_index");
 	const numLaps = c.req.query("num_laps");
 
+	let schema: string;
+	try {
+		schema = resolveReadSchema(c.req.query("schema"));
+	} catch (err) {
+		if (err instanceof UnknownSchemaError) return c.json({ error: err.message }, 400);
+		throw err;
+	}
+
 	if (firstLapIndex && numLaps) {
 		const rows = await sql`
 			SELECT lap_id, activity_id, start_time, number, total_distance,
@@ -17,7 +25,7 @@ lapsRoutes.get("/:activityId", async (c) => {
 				avg_vertical_oscillation, avg_stance_time, avg_vertical_ratio,
 				avg_stance_time_balance, avg_step_length, avg_running_cadence,
 				max_heart_rate, avg_heart_rate, intensity, avg_power, max_power
-			FROM ${sql(SCHEMA)}.lap
+			FROM ${sql(schema)}.lap
 			WHERE activity_id = ${activityId}
 				AND number >= ${Number(firstLapIndex)}
 				AND number < ${Number(firstLapIndex) + Number(numLaps)}
@@ -32,7 +40,7 @@ lapsRoutes.get("/:activityId", async (c) => {
 			avg_vertical_oscillation, avg_stance_time, avg_vertical_ratio,
 			avg_stance_time_balance, avg_step_length, avg_running_cadence,
 			max_heart_rate, avg_heart_rate, intensity, avg_power, max_power
-		FROM ${sql(SCHEMA)}.lap
+		FROM ${sql(schema)}.lap
 		WHERE activity_id = ${activityId}
 		ORDER BY number ASC
 	`;

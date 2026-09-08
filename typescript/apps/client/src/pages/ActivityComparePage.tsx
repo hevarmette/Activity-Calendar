@@ -1,34 +1,46 @@
-import { SPORT_COLORS } from "@activity-calendar/shared";
 import type { Lap, RecordPoint } from "@activity-calendar/shared";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { useActivity, useAutoLaps, useLaps, useRecords, useSessions } from "../api/queries.js";
+import { type AutoLap, useActivity, useAutoLaps, useLaps, useRecords, useSessions } from "../api/queries.js";
 import { AutoLapComparison } from "../components/compare/AutoLapComparison.js";
 import { CompareAnimationMap } from "../components/compare/CompareAnimationMap.js";
 import { CompareControls } from "../components/compare/CompareControls.js";
 import { LapComparison } from "../components/compare/LapComparison.js";
 import { TimeBehindChart } from "../components/compare/TimeBehindChart.js";
+import { type CompareId, paletteColor, parseCompareIds, serializeCompareId } from "../lib/compareId.js";
 import type { LatLngTime } from "../lib/geo.js";
-import { buildDeltaSeries, buildDistTimeTrack } from "../lib/timeBehind.js";
-
-/** Distinct fallback colors when both activities share a sport color. */
-const FALLBACK_A = "#f97316"; // orange
-const FALLBACK_B = "#38bdf8"; // sky
+import { buildDistTimeTrack, buildMultiDeltaSeries } from "../lib/timeBehind.js";
 
 /**
- * Client-local view model for one side of the comparison. Not an API contract —
- * it is assembled from the existing activity/records/laps hooks purely for the
- * compare UI, so it lives here rather than in the shared package.
+ * Maximum number of activities that can be compared at once. Because React hooks
+ * cannot be called conditionally or in a loop of varying length, the page always
+ * calls each data hook exactly this many times (the "fixed-slot" pattern) and
+ * disables the slots beyond the parsed id count. Extra ids in the URL are
+ * truncated to this cap.
+ */
+const MAX_COMPARE = 8;
+
+/**
+ * Client-local view model for one activity in the comparison. Not an API
+ * contract — it is assembled from the existing activity/records/laps hooks purely
+ * for the compare UI, so it lives here rather than in the shared package.
  */
 interface ComparisonActivity {
+	/** Stable React key = the serialized compare id (`1234` or `schema:1234`). */
+	key: string;
 	id: number;
+	/** Secondary schema, or `undefined` for the primary schema. */
+	schema?: string;
 	name: string;
 	sport: string;
 	color: string;
 	hasGps: boolean;
 	track: LatLngTime[];
 	laps: Lap[];
+	autoLaps: AutoLap[];
 	maxT: number;
+	/** Per-slot fetch error (e.g. a 400 from a disallowed schema). */
+	isError: boolean;
 }
 
 /** Build a time-stamped GPS track from record points (ascending elapsedTime). */
@@ -40,42 +52,59 @@ function buildTrack(points: RecordPoint[] | undefined): LatLngTime[] {
 }
 
 /**
- * Activity Comparison page (/compare?a=<idA>&b=<idB>).
+ * Activity Comparison page (`/compare?ids=<id>,<id>,…`).
  *
- * Loads records + laps + activity for both ids via the existing id-scoped
- * TanStack Query hooks. Overlays both GPS tracks on one animated map driven by a
- * single shared playback clock, with per-activity start offsets to align efforts.
- * Below the map, a side-by-side lap comparison shares one Intensity filter.
- * Activities without GPS gracefully degrade to a lap-only comparison.
+ * The `?ids=` param is a comma-separated list where each entry is either a bare
+ * number (an activity in YOUR primary schema) or `schema:id` (read-only data
+ * from another group's schema — Feature #6). It replaces the old `?a=&b=` pair.
+ *
+ * Loads records + laps + activity for every id via the existing id-scoped
+ * TanStack Query hooks, using a FIXED-SLOT pattern: each hook is called
+ * {@link MAX_COMPARE} times unconditionally, and unused slots pass id 0 (which
+ * disables the query). Every activity overlays its GPS track on one animated map
+ * driven by a single shared playback clock, with per-activity start offsets to
+ * align efforts. Below the map, an N-column lap comparison shares one Intensity
+ * filter and one auto-lap distance. Colors come from a fixed compare palette
+ * (index-based), so any number of activities is always distinguishable.
+ *
+ * Guards: no valid ids → empty state; N = 1 → single activity with no deltas and
+ * no time-behind chart (there is no baseline to compare against); a per-slot
+ * fetch error surfaces as a per-activity banner without blanking the page.
  */
 export function ActivityComparePage() {
 	const [sp] = useSearchParams();
-	const a = Number(sp.get("a"));
-	const b = Number(sp.get("b"));
-	const validIds = a > 0 && b > 0 && !Number.isNaN(a) && !Number.isNaN(b);
+	// Parse + cap the ids. Memoized on the raw string so the fixed-slot inputs are
+	// stable across renders (a fresh array each render would thrash the hooks).
+	const idsParam = sp.get("ids");
+	const targets = useMemo<CompareId[]>(() => parseCompareIds(idsParam).slice(0, MAX_COMPARE), [idsParam]);
 
-	const actA = useActivity(a);
-	const actB = useActivity(b);
-	const recA = useRecords(a);
-	const recB = useRecords(b);
-	const lapA = useLaps(a);
-	const lapB = useLaps(b);
-	const sesA = useSessions(a);
-	const sesB = useSessions(b);
+	// --- Fixed-slot hook calls (Rules of Hooks) ---------------------------------
+	// Build a padded array of MAX_COMPARE slots; unused slots use id 0 so the
+	// hooks stay disabled (enabled: id > 0) and never fetch.
+	const slots: CompareId[] = [];
+	for (let i = 0; i < MAX_COMPARE; i++) slots.push(targets[i] ?? { id: 0 });
+
+	// NOTE: each `.map` below calls exactly MAX_COMPARE hooks in a fixed order every
+	// render — a stable, unconditional hook sequence that satisfies the Rules of
+	// Hooks (disabled slots use id 0 so their queries never fire).
+	const acts = slots.map((s) => useActivity(s.id, s.schema));
+	const recs = slots.map((s) => useRecords(s.id, s.schema));
+	const laps = slots.map((s) => useLaps(s.id, s.schema));
+	const sess = slots.map((s) => useSessions(s.id, s.schema));
+
 	// --- Animation + filter state (ephemeral; not persisted to URL) ---
 	const [clock, setClock] = useState(0);
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [speed, setSpeed] = useState(1);
-	const [offsetA, setOffsetA] = useState(0);
-	const [offsetB, setOffsetB] = useState(0);
+	const [offsets, setOffsets] = useState<number[]>(() => Array(MAX_COMPARE).fill(0));
 	const [intensityFilter, setIntensityFilter] = useState<Set<string>>(new Set());
 
-	// --- Lap comparison mode toggle (Enhancement #4) ---
+	// --- Lap comparison mode toggle ---
 	// 'laps' shows regular laps (with the intensity filter); 'auto-laps' shows
-	// server-computed splits at a single SHARED distance applied to both columns.
+	// server-computed splits at a single SHARED distance applied to ALL columns.
 	const [lapMode, setLapMode] = useState<"laps" | "auto-laps">("laps");
 	// Raw input (miles) + its debounced value so we only refetch auto-laps ~400ms
-	// after the user stops typing. One control drives BOTH activities.
+	// after the user stops typing. One control drives EVERY activity.
 	const [autoLapInput, setAutoLapInput] = useState(1);
 	const [autoLapDist, setAutoLapDist] = useState(1);
 	useEffect(() => {
@@ -83,75 +112,77 @@ export function ActivityComparePage() {
 		return () => clearTimeout(timer);
 	}, [autoLapInput]);
 
-	// Resolve distinct colors: use sport colors, falling back to a fixed pair on
-	// collision so the two markers/tracks are always distinguishable. Sport is read
-	// per-activity from its first session (ActivityDetails carries no sport field).
-	const rawSportA = sesA.data?.[0]?.sport ?? "";
-	const rawSportB = sesB.data?.[0]?.sport ?? "";
+	// Sport per slot (read from the first session; ActivityDetails carries no sport).
+	const sports = slots.map((_, i) => sess[i]?.data?.[0]?.sport ?? "");
 
-	// Auto-laps for both activities at the SHARED debounced distance (Enhancement #4).
-	// Sport is required by the endpoint; both queries are id-scoped and cached.
-	const autoLapA = useAutoLaps(a, rawSportA, autoLapDist);
-	const autoLapB = useAutoLaps(b, rawSportB, autoLapDist);
-	const { colorA, colorB } = useMemo(() => {
-		const cA = SPORT_COLORS[rawSportA] ?? FALLBACK_A;
-		const cB = SPORT_COLORS[rawSportB] ?? FALLBACK_B;
-		if (cA === cB) return { colorA: FALLBACK_A, colorB: FALLBACK_B };
-		return { colorA: cA, colorB: cB };
-	}, [rawSportA, rawSportB]);
+	// Auto-laps for every slot at the SHARED debounced distance. Sport is required
+	// by the endpoint; each query is id-scoped, schema-scoped, and cached. Same
+	// fixed-slot hook pattern as the loops above.
+	const autoLaps = slots.map((s, i) => useAutoLaps(s.id, sports[i] ?? "", autoLapDist, s.schema));
 
-	const compA = useMemo<ComparisonActivity>(() => {
-		const track = buildTrack(recA.data);
-		return {
-			id: a,
-			name: actA.data?.name ?? `Activity ${a}`,
-			sport: rawSportA,
-			color: colorA,
-			hasGps: track.length > 0,
-			track,
-			laps: lapA.data ?? [],
-			maxT: track.length ? (track[track.length - 1]?.t ?? 0) : 0,
-		};
-	}, [a, actA.data, recA.data, lapA.data, rawSportA, colorA]);
+	// Assemble the N view models (only the active slots). Colors are index-based
+	// from the compare palette so any count stays distinguishable.
+	const activities = useMemo<ComparisonActivity[]>(() => {
+		return targets.map((target, i) => {
+			const track = buildTrack(recs[i]?.data);
+			const color = paletteColor(i);
+			return {
+				key: serializeCompareId(target),
+				id: target.id,
+				schema: target.schema,
+				name: acts[i]?.data?.name ?? `Activity ${target.id}`,
+				sport: sports[i] ?? "",
+				color,
+				hasGps: track.length > 0,
+				track,
+				laps: laps[i]?.data ?? [],
+				autoLaps: autoLaps[i]?.data ?? [],
+				maxT: track.length ? (track[track.length - 1]?.t ?? 0) : 0,
+				isError:
+					(acts[i]?.isError ?? false) ||
+					(recs[i]?.isError ?? false) ||
+					(laps[i]?.isError ?? false) ||
+					(sess[i]?.isError ?? false),
+			};
+		});
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [targets, acts, recs, laps, sess, autoLaps, sports]);
 
-	const compB = useMemo<ComparisonActivity>(() => {
-		const track = buildTrack(recB.data);
-		return {
-			id: b,
-			name: actB.data?.name ?? `Activity ${b}`,
-			sport: rawSportB,
-			color: colorB,
-			hasGps: track.length > 0,
-			track,
-			laps: lapB.data ?? [],
-			maxT: track.length ? (track[track.length - 1]?.t ?? 0) : 0,
-		};
-	}, [b, actB.data, recB.data, lapB.data, rawSportB, colorB]);
+	// Playable range = the longest track once each activity's offset is applied.
+	const maxClock = useMemo(
+		() => activities.reduce((m, a, i) => Math.max(m, a.maxT - (offsets[i] ?? 0)), 0),
+		[activities, offsets],
+	);
 
-	const maxClock = Math.max(0, Math.max(compA.maxT - offsetA, compB.maxT - offsetB));
-
-	// --- "How far behind over time" delta series (Enhancement #3) ---
+	// --- "How far behind over time" multi-series delta (baseline = activity 0) ---
 	// Build distance/time tracks separately from the map track (buildTrack drops
-	// distance), then interpolate a shared distance grid of B−A time deltas. Only
-	// meaningful when BOTH activities carry distance data.
-	const deltaSeries = useMemo(() => {
-		const trackA = buildDistTimeTrack(recA.data);
-		const trackB = buildDistTimeTrack(recB.data);
-		if (trackA.length === 0 || trackB.length === 0) return [];
-		return buildDeltaSeries(trackA, trackB);
-	}, [recA.data, recB.data]);
+	// distance), then diff every other activity against the first. Empty/no-overlap
+	// series are dropped by buildMultiDeltaSeries.
+	const seriesList = useMemo(() => {
+		if (activities.length < 2) return [];
+		const distTracks = activities.map((_, i) => buildDistTimeTrack(recs[i]?.data));
+		const baseline = distTracks[0] ?? [];
+		if (baseline.length === 0) return [];
+		const others = activities.slice(1).map((a, idx) => ({
+			key: a.key,
+			name: a.name,
+			color: a.color,
+			track: distTracks[idx + 1] ?? [],
+		}));
+		return buildMultiDeltaSeries(baseline, others);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [activities, recs]);
 
-	// Reset the clock + stop playback when the compared ids change.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: reset only on id change.
+	// Reset ephemeral state when the compared ids change.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: reset only on id-set change.
 	useEffect(() => {
 		setClock(0);
 		setIsPlaying(false);
-		setOffsetA(0);
-		setOffsetB(0);
+		setOffsets(Array(MAX_COMPARE).fill(0));
 		setLapMode("laps");
 		setAutoLapInput(1);
 		setAutoLapDist(1);
-	}, [a, b]);
+	}, [idsParam]);
 
 	// Re-clamp the clock when offsets shrink the playable range.
 	useEffect(() => {
@@ -189,10 +220,29 @@ export function ActivityComparePage() {
 		});
 	}
 
-	if (!validIds) {
+	function setOffsetAt(index: number, seconds: number) {
+		setOffsets((prev) => {
+			const next = [...prev];
+			next[index] = seconds;
+			return next;
+		});
+	}
+
+	// Always-visible legend explaining the id format.
+	const legend = (
+		<p className="rounded-lg border border-gray-800 bg-gray-900 px-4 py-2 text-xs text-gray-500">
+			<span className="font-medium text-gray-400">Comparing ids:</span> a bare number (e.g.{" "}
+			<code className="text-gray-300">1234</code>) is your own data; <code className="text-gray-300">group:id</code>{" "}
+			(e.g. <code className="text-gray-300">alice:1234</code>) is another group's read-only data. Cross-group activity
+			names are shown as plain text since their detail pages aren't linkable.
+		</p>
+	);
+
+	if (targets.length === 0) {
 		return (
 			<div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
-				<p className="text-gray-400">Pick two activities to compare.</p>
+				<p className="text-gray-400">Pick activities to compare.</p>
+				{legend}
 				<Link to="/search" className="text-sm font-medium text-orange-400 hover:text-orange-300">
 					Go to Activity Search →
 				</Link>
@@ -200,66 +250,76 @@ export function ActivityComparePage() {
 		);
 	}
 
-	const isLoading =
-		actA.isLoading ||
-		actB.isLoading ||
-		recA.isLoading ||
-		recB.isLoading ||
-		lapA.isLoading ||
-		lapB.isLoading ||
-		sesA.isLoading ||
-		sesB.isLoading;
+	const isLoading = targets.some(
+		(_, i) =>
+			(acts[i]?.isLoading ?? false) ||
+			(recs[i]?.isLoading ?? false) ||
+			(laps[i]?.isLoading ?? false) ||
+			(sess[i]?.isLoading ?? false),
+	);
 
 	if (isLoading) {
 		return <div className="py-10 text-center text-gray-400">Loading comparison…</div>;
 	}
 
-	if (!actA.data || !actB.data) {
-		return (
-			<div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
-				<p className="text-gray-400">One or both activities could not be found.</p>
-				<Link to="/search" className="text-sm font-medium text-orange-400 hover:text-orange-300">
-					Back to Activity Search →
-				</Link>
-			</div>
-		);
-	}
-
-	const bothHaveGps = compA.hasGps && compB.hasGps;
+	// Which activities carry GPS — the map needs at least two overlapping tracks
+	// to be meaningful, but we still render it for a single GPS track (animated).
+	const gpsActivities = activities.filter((a) => a.hasGps);
+	const showMap = gpsActivities.length > 0;
 
 	return (
 		<div className="space-y-6">
 			<div>
 				<h1 className="text-2xl font-bold text-gray-100">Activity Comparison</h1>
 				<p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500">
-					<span className="inline-flex items-center gap-1.5">
-						<span className="h-3 w-3 rounded-full" style={{ backgroundColor: colorA }} aria-hidden="true" />
-						<Link to={`/activity/${compA.id}?sport=${compA.sport}`} className="transition-colors hover:text-orange-300">
-							{compA.name}
-						</Link>
-					</span>
-					<span className="text-gray-700">vs</span>
-					<span className="inline-flex items-center gap-1.5">
-						<span className="h-3 w-3 rounded-full" style={{ backgroundColor: colorB }} aria-hidden="true" />
-						<Link to={`/activity/${compB.id}?sport=${compB.sport}`} className="transition-colors hover:text-orange-300">
-							{compB.name}
-						</Link>
-					</span>
+					{activities.map((a, i) => (
+						<span key={a.key} className="inline-flex items-center gap-1.5">
+							{i > 0 && <span className="text-gray-700">vs</span>}
+							<span className="h-3 w-3 rounded-full" style={{ backgroundColor: a.color }} aria-hidden="true" />
+							{a.schema == null ? (
+								<Link to={`/activity/${a.id}?sport=${a.sport}`} className="transition-colors hover:text-orange-300">
+									{a.name}
+								</Link>
+							) : (
+								<span title={`${a.name} (${a.schema})`}>
+									{a.name}
+									<span className="ml-1 text-gray-600">({a.schema})</span>
+								</span>
+							)}
+						</span>
+					))}
 				</p>
 			</div>
 
-			{bothHaveGps ? (
+			{legend}
+
+			{/* Per-activity fetch errors (e.g. a disallowed schema returns 400). */}
+			{activities.some((a) => a.isError) && (
+				<div className="space-y-1.5">
+					{activities
+						.filter((a) => a.isError)
+						.map((a) => (
+							<p
+								key={a.key}
+								role="alert"
+								className="rounded-lg border border-red-800 bg-red-950/40 px-4 py-2 text-sm text-red-300"
+							>
+								Couldn't load <span className="font-medium">{a.schema ? `${a.schema}:${a.id}` : `#${a.id}`}</span> — it
+								may be an unknown group or a missing activity.
+							</p>
+						))}
+				</div>
+			)}
+
+			{showMap ? (
 				<div className="space-y-4">
 					<CompareAnimationMap
-						trackA={compA.track}
-						trackB={compB.track}
-						colorA={colorA}
-						colorB={colorB}
+						tracks={gpsActivities.map((a) => {
+							// Offset is stored by the activity's index in `activities`.
+							const idx = activities.indexOf(a);
+							return { track: a.track, color: a.color, name: a.name, offset: offsets[idx] ?? 0 };
+						})}
 						clock={clock}
-						offsetA={offsetA}
-						offsetB={offsetB}
-						nameA={compA.name}
-						nameB={compB.name}
 					/>
 					<CompareControls
 						isPlaying={isPlaying}
@@ -272,16 +332,13 @@ export function ActivityComparePage() {
 						}}
 						speed={speed}
 						onSpeedChange={setSpeed}
-						offsetA={offsetA}
-						offsetB={offsetB}
-						onOffsetA={setOffsetA}
-						onOffsetB={setOffsetB}
-						maxA={compA.maxT}
-						maxB={compB.maxT}
-						colorA={colorA}
-						colorB={colorB}
-						nameA={compA.name}
-						nameB={compB.name}
+						activities={activities.map((a, i) => ({
+							name: a.name,
+							color: a.color,
+							offset: offsets[i] ?? 0,
+							max: a.maxT,
+						}))}
+						onOffset={setOffsetAt}
 					/>
 				</div>
 			) : (
@@ -290,17 +347,19 @@ export function ActivityComparePage() {
 				</p>
 			)}
 
-			{/* Enhancement #3: time-behind delta chart, only when both have distance data. */}
-			{deltaSeries.length > 0 ? (
-				<TimeBehindChart series={deltaSeries} nameA={compA.name} nameB={compB.name} />
-			) : (
-				<p className="rounded-lg border border-gray-800 bg-gray-900 px-4 py-3 text-sm text-gray-500">
-					No distance data for delta chart.
-				</p>
-			)}
+			{/* Time-behind delta chart — needs a baseline, so only when N >= 2. */}
+			{activities.length >= 2 ? (
+				seriesList.length > 0 ? (
+					<TimeBehindChart baselineName={activities[0]?.name ?? "baseline"} seriesList={seriesList} />
+				) : (
+					<p className="rounded-lg border border-gray-800 bg-gray-900 px-4 py-3 text-sm text-gray-500">
+						No distance data for delta chart.
+					</p>
+				)
+			) : null}
 
 			<div className="space-y-4">
-				{/* Enhancement #4: toggle between regular laps and auto-laps. */}
+				{/* Toggle between regular laps and auto-laps. */}
 				<div className="flex flex-wrap items-center gap-3">
 					<div
 						className="inline-flex rounded-lg border border-gray-700 bg-gray-800 p-0.5"
@@ -333,7 +392,7 @@ export function ActivityComparePage() {
 						</button>
 					</div>
 
-					{/* Single shared distance control applying to BOTH activities. */}
+					{/* Single shared distance control applying to ALL activities. */}
 					{lapMode === "auto-laps" && (
 						<div className="flex items-center gap-2">
 							<input
@@ -345,47 +404,40 @@ export function ActivityComparePage() {
 								aria-label="Auto-lap distance in miles"
 								className="w-20 rounded border border-gray-700 bg-gray-800 px-2 py-1 text-sm text-white focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
 							/>
-							<span className="text-xs text-gray-500">mi splits (both activities)</span>
+							<span className="text-xs text-gray-500">mi splits (all activities)</span>
 						</div>
 					)}
 				</div>
 
 				{lapMode === "laps" ? (
 					<LapComparison
-						idA={compA.id}
-						idB={compB.id}
-						nameA={compA.name}
-						nameB={compB.name}
-						colorA={colorA}
-						colorB={colorB}
-						sportA={compA.sport}
-						sportB={compB.sport}
-						lapsA={compA.laps}
-						lapsB={compB.laps}
+						columns={activities.map((a) => ({
+							id: a.id,
+							name: a.name,
+							color: a.color,
+							sport: a.sport,
+							laps: a.laps,
+							schema: a.schema,
+						}))}
 						filter={intensityFilter}
 						onToggleFilter={toggleFilter}
 						onClearFilter={() => setIntensityFilter(new Set())}
 					/>
 				) : (
 					<>
-						{/* Keep the previous distance's splits visible would be ideal, but the
-						    hook doesn't set placeholderData; instead show a subtle fetching
-						    hint so the table doesn't look stale/empty while re-fetching after
-						    a distance change or the first switch into this mode. */}
-						{autoLapA.isFetching || autoLapB.isFetching ? (
+						{/* Subtle fetching hint while auto-laps recompute (no placeholderData). */}
+						{targets.some((_, i) => autoLaps[i]?.isFetching) ? (
 							<p className="text-xs text-gray-500">Computing auto-lap splits…</p>
 						) : null}
 						<AutoLapComparison
-							idA={compA.id}
-							idB={compB.id}
-							nameA={compA.name}
-							nameB={compB.name}
-							colorA={colorA}
-							colorB={colorB}
-							sportA={compA.sport}
-							sportB={compB.sport}
-							lapsA={autoLapA.data ?? []}
-							lapsB={autoLapB.data ?? []}
+							columns={activities.map((a) => ({
+								id: a.id,
+								name: a.name,
+								color: a.color,
+								sport: a.sport,
+								laps: a.autoLaps,
+								schema: a.schema,
+							}))}
 						/>
 					</>
 				)}

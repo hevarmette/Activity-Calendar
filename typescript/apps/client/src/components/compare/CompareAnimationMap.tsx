@@ -4,18 +4,23 @@ import { MapContainer, Marker, Polyline, TileLayer } from "react-leaflet";
 import { type LatLngTime, downsample, interpolatePoint } from "../../lib/geo.js";
 import "leaflet/dist/leaflet.css";
 
+/** One activity's animated track on the shared compare map. */
+export interface CompareTrack {
+	/** Time-stamped GPS points for this activity. */
+	track: LatLngTime[];
+	/** Marker/polyline color (from the compare palette). */
+	color: string;
+	/** Display name (marker tooltip). */
+	name: string;
+	/** Start offset in seconds, subtracted from the shared clock for this track. */
+	offset: number;
+}
+
 interface Props {
-	trackA: LatLngTime[];
-	trackB: LatLngTime[];
-	colorA: string;
-	colorB: string;
+	/** All activities to overlay; each gets one polyline + one moving marker. */
+	tracks: CompareTrack[];
 	/** Shared playback clock in seconds (0-based). */
 	clock: number;
-	/** Per-activity start offset in seconds, subtracted from the shared clock. */
-	offsetA: number;
-	offsetB: number;
-	nameA: string;
-	nameB: string;
 }
 
 /** Build a filled circular divIcon marker matching DetailMap's start/end style. */
@@ -29,53 +34,66 @@ function markerIcon(color: string): L.DivIcon {
 }
 
 /**
- * Overlays two GPS tracks on a single react-leaflet map with a moving marker per
- * activity. Both markers are driven by a single shared clock (owned by the page);
+ * Overlays N GPS tracks on a single react-leaflet map with one moving marker per
+ * activity. Every marker is driven by a single shared clock (owned by the page);
  * each activity's marker position is interpolated at `clock + offset` along its
  * full track for smooth motion despite ~1 Hz records.
  *
  * Polylines are downsampled (max 1000 points) for render performance while the
  * markers interpolate against the full track — mirroring DetailMap's approach.
+ * The map fits its bounds over every track's downsampled line.
  */
-export function CompareAnimationMap({ trackA, trackB, colorA, colorB, clock, offsetA, offsetB, nameA, nameB }: Props) {
-	const lineA = useMemo(
+export function CompareAnimationMap({ tracks, clock }: Props) {
+	// Downsample each track's polyline once per track change. `lines` stays index-
+	// aligned with `tracks` so the bounds/render loops can zip the two together.
+	const lines = useMemo(
 		() =>
-			downsample(
-				trackA.map((p) => [p.lat, p.lng] as [number, number]),
-				1000,
+			tracks.map((t) =>
+				downsample(
+					t.track.map((p) => [p.lat, p.lng] as [number, number]),
+					1000,
+				),
 			),
-		[trackA],
-	);
-	const lineB = useMemo(
-		() =>
-			downsample(
-				trackB.map((p) => [p.lat, p.lng] as [number, number]),
-				1000,
-			),
-		[trackB],
+		[tracks],
 	);
 
 	const bounds = useMemo(() => {
-		const all = [...lineA, ...lineB];
+		const all = lines.flat();
 		if (all.length === 0) return null;
 		return L.latLngBounds(all.map(([lat, lng]) => L.latLng(lat, lng)));
-	}, [lineA, lineB]);
+	}, [lines]);
 
-	const posA = interpolatePoint(trackA, clock + offsetA);
-	const posB = interpolatePoint(trackB, clock + offsetB);
-
-	const iconA = useMemo(() => markerIcon(colorA), [colorA]);
-	const iconB = useMemo(() => markerIcon(colorB), [colorB]);
+	// One divIcon per color; memoized so panning/scrubbing doesn't rebuild icons.
+	const icons = useMemo(() => tracks.map((t) => markerIcon(t.color)), [tracks]);
 
 	if (!bounds) return null;
 
 	return (
 		<MapContainer bounds={bounds} scrollWheelZoom preferCanvas className="h-[500px] w-full rounded-lg">
 			<TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-			{lineA.length > 1 && <Polyline positions={lineA} pathOptions={{ color: colorA, weight: 4, opacity: 0.85 }} />}
-			{lineB.length > 1 && <Polyline positions={lineB} pathOptions={{ color: colorB, weight: 4, opacity: 0.85 }} />}
-			{posA && <Marker position={posA} icon={iconA} title={nameA} />}
-			{posB && <Marker position={posB} icon={iconB} title={nameB} />}
+			{tracks.map((t, i) => {
+				const line = lines[i] ?? [];
+				return line.length > 1 ? (
+					<Polyline
+						// biome-ignore lint/suspicious/noArrayIndexKey: tracks are index-stable within a render pass.
+						key={`line-${i}`}
+						positions={line}
+						pathOptions={{ color: t.color, weight: 4, opacity: 0.85 }}
+					/>
+				) : null;
+			})}
+			{tracks.map((t, i) => {
+				const pos = interpolatePoint(t.track, clock + t.offset);
+				return pos ? (
+					<Marker
+						// biome-ignore lint/suspicious/noArrayIndexKey: tracks are index-stable within a render pass.
+						key={`marker-${i}`}
+						position={pos}
+						icon={icons[i] ?? markerIcon(t.color)}
+						title={t.name}
+					/>
+				) : null;
+			})}
 		</MapContainer>
 	);
 }

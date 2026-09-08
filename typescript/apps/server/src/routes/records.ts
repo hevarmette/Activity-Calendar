@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import sql, { SCHEMA } from "../db.js";
+import sql, { resolveReadSchema, UnknownSchemaError } from "../db.js";
 
 export const recordsRoutes = new Hono();
 
@@ -12,12 +12,19 @@ const HELPER_SCRIPT = join(import.meta.dirname ?? ".", "..", "..", "elevation_he
 
 // ─── Elevation Cache ─────────────────────────────────────────────────────────
 
-function getCachePath(activityId: number): string {
-	return join(CACHE_DIR, `${activityId}.json`);
+/**
+ * On-disk cache path for an activity's corrected elevations.
+ *
+ * The filename is prefixed with the resolved schema so activity ids that
+ * collide across schemas (Feature #6 cross-schema reads) get independent cache
+ * entries and one schema's cached elevation can't mask another's.
+ */
+function getCachePath(schema: string, activityId: number): string {
+	return join(CACHE_DIR, `${schema}__${activityId}.json`);
 }
 
-function readCache(activityId: number): (number | null)[] | null {
-	const path = getCachePath(activityId);
+function readCache(schema: string, activityId: number): (number | null)[] | null {
+	const path = getCachePath(schema, activityId);
 	if (!existsSync(path)) return null;
 	try {
 		return JSON.parse(readFileSync(path, "utf-8"));
@@ -26,9 +33,9 @@ function readCache(activityId: number): (number | null)[] | null {
 	}
 }
 
-function writeCache(activityId: number, elevations: (number | null)[]): void {
+function writeCache(schema: string, activityId: number, elevations: (number | null)[]): void {
 	if (!existsSync(CACHE_DIR)) mkdirSync(CACHE_DIR, { recursive: true });
-	writeFileSync(getCachePath(activityId), JSON.stringify(elevations));
+	writeFileSync(getCachePath(schema, activityId), JSON.stringify(elevations));
 }
 
 // ─── pyhigh Elevation via subprocess ─────────────────────────────────────────
@@ -45,10 +52,14 @@ function writeCache(activityId: number, elevations: (number | null)[]): void {
  *
  * If the subprocess fails (Python not available, pyhigh not installed),
  * falls back to raw altitude from the FIT file.
+ *
+ * @param schema - Resolved read schema, used to namespace the on-disk cache.
+ * @param activityId - Activity whose records are being corrected.
+ * @param records - Ordered record rows carrying latitude/longitude/altitude.
  */
-function fetchElevationsPyhigh(activityId: number, records: any[]): (number | null)[] {
+function fetchElevationsPyhigh(schema: string, activityId: number, records: any[]): (number | null)[] {
 	// Check cache first
-	const cached = readCache(activityId);
+	const cached = readCache(schema, activityId);
 	if (cached && cached.length === records.length) return cached;
 
 	// Filter to records with valid coordinates
@@ -92,7 +103,7 @@ function fetchElevationsPyhigh(activityId: number, records: any[]): (number | nu
 		}
 
 		// Cache the result
-		writeCache(activityId, elevations as number[]);
+		writeCache(schema, activityId, elevations as number[]);
 		return elevations as number[];
 	} catch (err) {
 		console.warn(
@@ -159,6 +170,14 @@ function computeElapsedTimes(records: any[], events: any[]): number[] {
 recordsRoutes.get("/:activityId", async (c) => {
 	const activityId = Number(c.req.param("activityId"));
 
+	let schema: string;
+	try {
+		schema = resolveReadSchema(c.req.query("schema"));
+	} catch (err) {
+		if (err instanceof UnknownSchemaError) return c.json({ error: err.message }, 400);
+		throw err;
+	}
+
 	const [rows, events] = await Promise.all([
 		sql`
 			WITH groups AS (
@@ -168,7 +187,7 @@ recordsRoutes.get("/:activityId", async (c) => {
 					enhanced_speed, distance,
 					COUNT(latitude) OVER (ORDER BY "timestamp" ASC) as fwd_grp,
 					COUNT(latitude) OVER (ORDER BY "timestamp" DESC) as bwd_grp
-				FROM ${sql(SCHEMA)}.record
+				FROM ${sql(schema)}.record
 				WHERE activity_id = ${activityId}
 			),
 			imputed_bounds AS (
@@ -190,13 +209,13 @@ recordsRoutes.get("/:activityId", async (c) => {
 		`,
 		sql`
 			SELECT "timestamp", event, event_type
-			FROM ${sql(SCHEMA)}.event
+			FROM ${sql(schema)}.event
 			WHERE activity_id = ${activityId} AND event = 'timer'
 			ORDER BY "timestamp" ASC
 		`,
 	]);
 
-	const elevations = fetchElevationsPyhigh(activityId, rows as any[]);
+	const elevations = fetchElevationsPyhigh(schema, activityId, rows as any[]);
 	const elapsedTimes = computeElapsedTimes(rows as any[], events as any[]);
 
 	const result = (rows as any[]).map((r, i) => ({

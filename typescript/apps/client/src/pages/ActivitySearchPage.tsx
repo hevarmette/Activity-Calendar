@@ -59,7 +59,7 @@ export function ActivitySearchPage() {
 	// When the URL carries ?compareWith=<id> (from the Activity Details "Compare"
 	// action), the page enters a single-select-and-go mode: a banner prompts the
 	// user to pick a second activity, and clicking any result navigates straight
-	// to /compare?a=<compareWith>&b=<clicked>. Multi-select/export UI is hidden.
+	// to /compare?ids=<compareWith>,<clicked>. Multi-select/export UI is hidden.
 	const compareWithRaw = Number(searchParams.get("compareWith"));
 	const compareWith = compareWithRaw > 0 && !Number.isNaN(compareWithRaw) ? compareWithRaw : null;
 	const isPickMode = compareWith != null;
@@ -74,7 +74,7 @@ export function ActivitySearchPage() {
 
 	function pickSecondActivity(activityId: number) {
 		if (compareWith == null || activityId === compareWith) return;
-		navigate(`/compare?a=${compareWith}&b=${activityId}`);
+		navigate(`/compare?ids=${compareWith},${activityId}`);
 	}
 
 	// --- Text search state (fuzzy, title, description) ---
@@ -737,16 +737,16 @@ export function ActivitySearchPage() {
 			>
 				<div className="flex max-w-[calc(100vw-2rem)] flex-wrap items-center justify-center gap-2 rounded-full border border-gray-700 bg-gray-900/90 px-4 py-2 shadow-lg backdrop-blur-sm">
 					<span className="text-xs font-medium text-gray-200">{selectedIds.size} selected</span>
-					{selectedIds.size === 2 && (
+					{selectedIds.size >= 2 && (
 						<button
 							type="button"
 							onClick={() => {
-								const [id1, id2] = [...selectedIds].sort((x, y) => x - y);
-								navigate(`/compare?a=${id1}&b=${id2}`);
+								const ids = [...selectedIds].sort((x, y) => x - y);
+								navigate(`/compare?ids=${ids.join(",")}`);
 							}}
 							className="rounded-full bg-orange-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
 						>
-							Compare
+							Compare ({selectedIds.size})
 						</button>
 					)}
 					<button

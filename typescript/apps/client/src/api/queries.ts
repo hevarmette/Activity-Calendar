@@ -26,6 +26,21 @@ export const queryKeys = {
 	search: ["search"] as const,
 };
 
+/**
+ * Build the optional `?schema=`/`&schema=` fragment for cross-schema reads
+ * (Feature #6). Returns an empty string when no schema is requested (primary),
+ * so existing primary-schema callers produce byte-identical URLs.
+ *
+ * @param schema - The secondary schema name, or `undefined` for the primary schema.
+ * @param hasQuery - `true` when the URL already carries a query string (so the
+ *   fragment is joined with `&` instead of `?`).
+ * @returns `""`, `"?schema=<enc>"`, or `"&schema=<enc>"`.
+ */
+function schemaQuery(schema: string | undefined, hasQuery: boolean): string {
+	if (!schema) return "";
+	return `${hasQuery ? "&" : "?"}schema=${encodeURIComponent(schema)}`;
+}
+
 export function useCalendar() {
 	return useQuery({
 		queryKey: queryKeys.calendar,
@@ -33,35 +48,35 @@ export function useCalendar() {
 	});
 }
 
-export function useActivity(id: number) {
+export function useActivity(id: number, schema?: string) {
 	return useQuery({
-		queryKey: queryKeys.activity(id),
-		queryFn: () => api<ActivityDetails>(`/api/activities/${id}`),
+		queryKey: [...queryKeys.activity(id), schema] as const,
+		queryFn: () => api<ActivityDetails>(`/api/activities/${id}${schemaQuery(schema, false)}`),
 		enabled: id > 0,
 	});
 }
 
-export function useRecords(id: number) {
+export function useRecords(id: number, schema?: string) {
 	return useQuery({
-		queryKey: queryKeys.records(id),
-		queryFn: () => api<RecordPoint[]>(`/api/records/${id}`),
+		queryKey: [...queryKeys.records(id), schema] as const,
+		queryFn: () => api<RecordPoint[]>(`/api/records/${id}${schemaQuery(schema, false)}`),
 		enabled: id > 0,
 		staleTime: Number.POSITIVE_INFINITY,
 	});
 }
 
-export function useSessions(id: number) {
+export function useSessions(id: number, schema?: string) {
 	return useQuery({
-		queryKey: queryKeys.sessions(id),
-		queryFn: () => api<Session[]>(`/api/sessions/${id}`),
+		queryKey: [...queryKeys.sessions(id), schema] as const,
+		queryFn: () => api<Session[]>(`/api/sessions/${id}${schemaQuery(schema, false)}`),
 		enabled: id > 0,
 	});
 }
 
-export function useLaps(id: number) {
+export function useLaps(id: number, schema?: string) {
 	return useQuery({
-		queryKey: queryKeys.laps(id),
-		queryFn: () => api<Lap[]>(`/api/laps/${id}`),
+		queryKey: [...queryKeys.laps(id), schema] as const,
+		queryFn: () => api<Lap[]>(`/api/laps/${id}${schemaQuery(schema, false)}`),
 		enabled: id > 0,
 	});
 }
@@ -142,10 +157,13 @@ export interface AutoLap {
 	cumulativeTimeSeconds: number;
 }
 
-export function useAutoLaps(id: number, sport: string, dist: number) {
+export function useAutoLaps(id: number, sport: string, dist: number, schema?: string) {
 	return useQuery({
-		queryKey: ["activity", id, "auto-laps", sport, dist] as const,
-		queryFn: () => api<AutoLap[]>(`/api/activities/${id}/auto-laps?sport=${encodeURIComponent(sport)}&dist=${dist}`),
+		queryKey: ["activity", id, "auto-laps", sport, dist, schema] as const,
+		queryFn: () =>
+			api<AutoLap[]>(
+				`/api/activities/${id}/auto-laps?sport=${encodeURIComponent(sport)}&dist=${dist}${schemaQuery(schema, true)}`,
+			),
 		enabled: id > 0,
 	});
 }

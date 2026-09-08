@@ -18,12 +18,19 @@ import { SUB_SPORT_OPTIONS } from "@activity-calendar/shared";
 import { Hono } from "hono";
 import { z } from "zod";
 import { TIMEZONE } from "../config.js";
-import sql, { SCHEMA } from "../db.js";
+import sql, { resolveReadSchema, SCHEMA, UnknownSchemaError } from "../db.js";
 
 export const activitiesRoutes = new Hono();
 
 activitiesRoutes.get("/:id", async (c) => {
   const id = Number(c.req.param("id"));
+  let schema: string;
+  try {
+    schema = resolveReadSchema(c.req.query("schema"));
+  } catch (err) {
+    if (err instanceof UnknownSchemaError) return c.json({ error: err.message }, 400);
+    throw err;
+  }
   const rows = await sql`
 		SELECT
 			a.activity_id,
@@ -36,8 +43,8 @@ activitiesRoutes.get("/:id", async (c) => {
 			COALESCE(a.local_timestamp, a.timestamp AT TIME ZONE ${TIMEZONE}) AS local_timestamp,
 			a.activity_name AS name,
 			a.category
-		FROM ${sql(SCHEMA)}.activity a
-		JOIN ${sql(SCHEMA)}.session s ON a.activity_id = s.activity_id
+		FROM ${sql(schema)}.activity a
+		JOIN ${sql(schema)}.session s ON a.activity_id = s.activity_id
 		WHERE a.activity_id = ${id}
 		LIMIT 1
 	`;

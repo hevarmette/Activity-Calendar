@@ -10,9 +10,14 @@ interface ColumnProps {
 	sport: string;
 	laps: AutoLap[];
 	/**
+	 * Secondary schema this activity lives in, or `undefined` for primary. When
+	 * set, the header renders as plain text (the detail route is primary-only).
+	 */
+	schema?: string;
+	/**
 	 * When provided, this column renders per-row split deltas relative to the
-	 * auto-lap at the SAME visible index in this array. Used only for column B so
-	 * deltas read B − A, aligned row-for-row (mirrors LapComparison).
+	 * auto-lap at the SAME visible index in this array. Passed to non-baseline
+	 * columns so deltas read column − baseline, row-for-row (mirrors LapComparison).
 	 */
 	deltaAgainst?: AutoLap[];
 }
@@ -64,20 +69,32 @@ function formatPaceSpeedDelta(sport: string, a: AutoLap, b: AutoLap) {
 }
 
 /** A single read-only auto-lap table for one activity (no intensity column). */
-function AutoLapColumn({ id, name, color, sport, laps, deltaAgainst }: ColumnProps) {
+function AutoLapColumn({ id, name, color, sport, laps, schema, deltaAgainst }: ColumnProps) {
 	const isCycling = sport === Sport.Cycling;
 
 	return (
 		<div className="min-w-0">
 			<div className="mb-2 flex items-center gap-2">
 				<span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
-				<Link
-					to={`/activity/${id}?sport=${sport}`}
-					className="truncate text-sm font-medium text-gray-200 transition-colors hover:text-orange-300"
-					title={name}
-				>
-					{name}
-				</Link>
+				{/*
+				 * Primary-schema columns link to the detail page; secondary-schema
+				 * columns render plain text (the detail route is primary-only, so a
+				 * cross-schema deep link would not resolve).
+				 */}
+				{schema == null ? (
+					<Link
+						to={`/activity/${id}?sport=${sport}`}
+						className="truncate text-sm font-medium text-gray-200 transition-colors hover:text-orange-300"
+						title={name}
+					>
+						{name}
+					</Link>
+				) : (
+					<span className="truncate text-sm font-medium text-gray-200" title={`${name} (${schema})`}>
+						{name}
+						<span className="ml-1 text-xs font-normal text-gray-500">({schema})</span>
+					</span>
+				)}
 			</div>
 			{laps.length === 0 ? (
 				<p className="rounded-xl border border-gray-800 bg-gray-900 px-4 py-6 text-center text-sm text-gray-500">
@@ -142,44 +159,72 @@ function AutoLapColumn({ id, name, color, sport, laps, deltaAgainst }: ColumnPro
 	);
 }
 
+/** One activity column for {@link AutoLapComparison}. */
+export interface AutoLapColumnData {
+	id: number;
+	name: string;
+	color: string;
+	sport: string;
+	laps: AutoLap[];
+	/** Secondary schema, or `undefined` for the primary schema. */
+	schema?: string;
+}
+
 interface Props {
-	idA: number;
-	idB: number;
-	nameA: string;
-	nameB: string;
-	colorA: string;
-	colorB: string;
-	sportA: string;
-	sportB: string;
-	lapsA: AutoLap[];
-	lapsB: AutoLap[];
+	columns: AutoLapColumnData[];
 }
 
 /**
- * Side-by-side read-only AUTO-lap comparison for two activities.
+ * Side-by-side read-only AUTO-lap comparison for N activities.
  *
  * Auto-laps are computed server-side at a shared distance interval (the parent
- * page owns that single distance control and passes both activities' results
+ * page owns that single distance control and passes each activity's results
  * in). Unlike regular laps, auto-laps have no intensity, so this mode drops the
  * intensity filter/column entirely.
  *
- * Column B shows per-row split DELTAS (B − A) for Dist, Time, and Pace/Speed,
- * aligned by VISIBLE lap index — the i-th auto-lap of B is compared against the
- * i-th auto-lap of A. Faster (lower time/pace, higher speed) reads green; slower
- * reads red; distance deltas stay neutral. Where B has more laps than A, the
- * delta shows "—". This mirrors LapComparison's visual language exactly.
+ * Column 0 is the delta baseline. Every other column shows per-row split DELTAS
+ * (column − baseline) for Dist, Time, and Pace/Speed, aligned by VISIBLE lap
+ * index — the i-th auto-lap of the column is compared against the i-th auto-lap
+ * of the baseline. Faster (lower time/pace, higher speed) reads green; slower
+ * reads red; distance deltas stay neutral. Where a column has more laps than the
+ * baseline, the delta shows "—". This mirrors LapComparison's visual language.
  */
-export function AutoLapComparison({ idA, idB, nameA, nameB, colorA, colorB, sportA, sportB, lapsA, lapsB }: Props) {
+export function AutoLapComparison({ columns }: Props) {
+	const baseline = columns[0];
+	const baselineLaps = baseline?.laps ?? [];
+	const baselineName = baseline?.name ?? "baseline";
+
+	const gridCols =
+		columns.length <= 1
+			? "grid-cols-1"
+			: columns.length === 2
+				? "grid-cols-1 md:grid-cols-2"
+				: columns.length === 3
+					? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+					: "grid-cols-1 md:grid-cols-2 lg:grid-cols-4";
+
 	return (
 		<div className="space-y-4">
-			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-				<AutoLapColumn id={idA} name={nameA} color={colorA} sport={sportA} laps={lapsA} />
-				<AutoLapColumn id={idB} name={nameB} color={colorB} sport={sportB} laps={lapsB} deltaAgainst={lapsA} />
+			<div className={`grid gap-4 ${gridCols}`}>
+				{columns.map((col, index) => (
+					<AutoLapColumn
+						key={`${col.schema ?? ""}:${col.id}:${index}`}
+						id={col.id}
+						name={col.name}
+						color={col.color}
+						sport={col.sport}
+						laps={col.laps}
+						schema={col.schema}
+						deltaAgainst={index === 0 ? undefined : baselineLaps}
+					/>
+				))}
 			</div>
-			<p className="text-xs text-gray-500">
-				Deltas on {nameB} compare each auto-lap to the same-position auto-lap on {nameA} —{" "}
-				<span className="text-green-400">green</span> is faster, <span className="text-red-400">red</span> is slower.
-			</p>
+			{columns.length > 1 && (
+				<p className="text-xs text-gray-500">
+					Deltas compare each auto-lap to the same-position auto-lap on {baselineName} (baseline) —{" "}
+					<span className="text-green-400">green</span> is faster, <span className="text-red-400">red</span> is slower.
+				</p>
+			)}
 		</div>
 	);
 }

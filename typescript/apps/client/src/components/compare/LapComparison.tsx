@@ -11,12 +11,17 @@ interface ColumnProps {
 	color: string;
 	sport: string;
 	laps: Lap[];
+	/**
+	 * Secondary schema this activity lives in, or `undefined` for primary. When
+	 * set, the header renders as plain text (the detail route is primary-only).
+	 */
+	schema?: string;
 	/** Shared intensity filter (empty = show all). */
 	filter: Set<string>;
 	/**
 	 * When provided, this column renders per-row split deltas relative to the
 	 * lap at the SAME visible index in this array (already filtered upstream).
-	 * Used only for column B so deltas read B − A, aligned row-for-row.
+	 * Passed to non-baseline columns so deltas read column − baseline, row-for-row.
 	 */
 	deltaAgainst?: Lap[];
 }
@@ -83,7 +88,7 @@ function formatPaceSpeedDelta(sport: string, distA: number, timeA: number, distB
 }
 
 /** A single read-only lap table for one activity, styled like the details LapTable. */
-function LapColumn({ id, name, color, sport, laps, filter, deltaAgainst }: ColumnProps) {
+function LapColumn({ id, name, color, sport, laps, schema, filter, deltaAgainst }: ColumnProps) {
 	const isCycling = sport === Sport.Cycling;
 	const shown = visibleLaps(laps, filter);
 
@@ -91,14 +96,26 @@ function LapColumn({ id, name, color, sport, laps, filter, deltaAgainst }: Colum
 		<div className="min-w-0">
 			<div className="mb-2 flex items-center gap-2">
 				<span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
-				{/* Header links to the activity's detail page (mirrors ActivityDialog / SimilarActivities). */}
-				<Link
-					to={`/activity/${id}?sport=${sport}`}
-					className="truncate text-sm font-medium text-gray-200 transition-colors hover:text-orange-300"
-					title={name}
-				>
-					{name}
-				</Link>
+				{/*
+				 * Primary-schema columns link to the activity's detail page (mirrors
+				 * ActivityDialog / SimilarActivities). Secondary-schema columns render
+				 * plain text — the detail route resolves against the primary schema only,
+				 * so a cross-schema deep link would not load the right activity.
+				 */}
+				{schema == null ? (
+					<Link
+						to={`/activity/${id}?sport=${sport}`}
+						className="truncate text-sm font-medium text-gray-200 transition-colors hover:text-orange-300"
+						title={name}
+					>
+						{name}
+					</Link>
+				) : (
+					<span className="truncate text-sm font-medium text-gray-200" title={`${name} (${schema})`}>
+						{name}
+						<span className="ml-1 text-xs font-normal text-gray-500">({schema})</span>
+					</span>
+				)}
 			</div>
 			{shown.length === 0 ? (
 				<p className="rounded-xl border border-gray-800 bg-gray-900 px-4 py-6 text-center text-sm text-gray-500">
@@ -178,51 +195,60 @@ function LapColumn({ id, name, color, sport, laps, filter, deltaAgainst }: Colum
 	);
 }
 
+/** One activity column for {@link LapComparison}. */
+export interface LapColumnData {
+	id: number;
+	name: string;
+	color: string;
+	sport: string;
+	laps: Lap[];
+	/** Secondary schema, or `undefined` for the primary schema. */
+	schema?: string;
+}
+
 interface Props {
-	idA: number;
-	idB: number;
-	nameA: string;
-	nameB: string;
-	colorA: string;
-	colorB: string;
-	sportA: string;
-	sportB: string;
-	lapsA: Lap[];
-	lapsB: Lap[];
+	columns: LapColumnData[];
 	filter: Set<string>;
 	onToggleFilter: (intensity: string) => void;
 	onClearFilter: () => void;
 }
 
 /**
- * Side-by-side read-only lap comparison for two activities. A single shared
+ * Side-by-side read-only lap comparison for N activities. A single shared
  * Intensity pill filter (reusing the details LapTable's pill UX and the shared
- * Intensity enum) applies to BOTH columns simultaneously.
+ * Intensity enum) applies to ALL columns simultaneously.
  *
- * Column B additionally shows per-row split DELTAS (B − A) for Dist, Time, and
- * Pace/Speed, aligned by VISIBLE lap index: the i-th shown lap of B is compared
- * against the i-th shown lap of A after the shared filter is applied. Faster
+ * Column 0 is the delta baseline. Every other column additionally shows per-row
+ * split DELTAS (column − baseline) for Dist, Time, and Pace/Speed, aligned by
+ * VISIBLE lap index: the i-th shown lap of the column is compared against the
+ * i-th shown lap of the baseline after the shared filter is applied. Faster
  * (lower time / pace, higher speed) reads green; slower reads red. Distance
- * deltas stay neutral. Where B has more visible laps than A (no pair at that
- * index), the delta shows "—".
+ * deltas stay neutral. Where a column has more visible laps than the baseline
+ * (no pair at that index), the delta shows "—". Columns are laid out in a
+ * responsive grid that widens with the activity count.
  */
-export function LapComparison({
-	idA,
-	idB,
-	nameA,
-	nameB,
-	colorA,
-	colorB,
-	sportA,
-	sportB,
-	lapsA,
-	lapsB,
-	filter,
-	onToggleFilter,
-	onClearFilter,
-}: Props) {
-	// Pre-filter A so column B can pair against the same VISIBLE index.
-	const shownA = filter.size ? lapsA.filter((l) => l.intensity != null && filter.has(l.intensity)) : lapsA;
+export function LapComparison({ columns, filter, onToggleFilter, onClearFilter }: Props) {
+	// Pre-filter the baseline (column 0) so other columns can pair against the
+	// same VISIBLE index.
+	const baseline = columns[0];
+	const shownBaseline =
+		baseline == null
+			? []
+			: filter.size
+				? baseline.laps.filter((l) => l.intensity != null && filter.has(l.intensity))
+				: baseline.laps;
+	const baselineName = baseline?.name ?? "baseline";
+
+	// Cap the grid at 4 columns per row so wide comparisons wrap instead of
+	// squeezing every column into an unreadable sliver.
+	const gridCols =
+		columns.length <= 1
+			? "grid-cols-1"
+			: columns.length === 2
+				? "grid-cols-1 md:grid-cols-2"
+				: columns.length === 3
+					? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+					: "grid-cols-1 md:grid-cols-2 lg:grid-cols-4";
 
 	return (
 		<div className="space-y-4">
@@ -254,22 +280,27 @@ export function LapComparison({
 				))}
 			</div>
 
-			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-				<LapColumn id={idA} name={nameA} color={colorA} sport={sportA} laps={lapsA} filter={filter} />
-				<LapColumn
-					id={idB}
-					name={nameB}
-					color={colorB}
-					sport={sportB}
-					laps={lapsB}
-					filter={filter}
-					deltaAgainst={shownA}
-				/>
+			<div className={`grid gap-4 ${gridCols}`}>
+				{columns.map((col, index) => (
+					<LapColumn
+						key={`${col.schema ?? ""}:${col.id}:${index}`}
+						id={col.id}
+						name={col.name}
+						color={col.color}
+						sport={col.sport}
+						laps={col.laps}
+						schema={col.schema}
+						filter={filter}
+						deltaAgainst={index === 0 ? undefined : shownBaseline}
+					/>
+				))}
 			</div>
-			<p className="text-xs text-gray-500">
-				Deltas on {nameB} compare each lap to the same-position lap on {nameA} —{" "}
-				<span className="text-green-400">green</span> is faster, <span className="text-red-400">red</span> is slower.
-			</p>
+			{columns.length > 1 && (
+				<p className="text-xs text-gray-500">
+					Deltas compare each lap to the same-position lap on {baselineName} (baseline) —{" "}
+					<span className="text-green-400">green</span> is faster, <span className="text-red-400">red</span> is slower.
+				</p>
+			)}
 		</div>
 	);
 }
