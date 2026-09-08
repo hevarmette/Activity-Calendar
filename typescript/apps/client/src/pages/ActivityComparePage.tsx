@@ -367,18 +367,27 @@ export function ActivityComparePage() {
 						onClearFilter={() => setIntensityFilter(new Set())}
 					/>
 				) : (
-					<AutoLapComparison
-						idA={compA.id}
-						idB={compB.id}
-						nameA={compA.name}
-						nameB={compB.name}
-						colorA={colorA}
-						colorB={colorB}
-						sportA={compA.sport}
-						sportB={compB.sport}
-						lapsA={autoLapA.data ?? []}
-						lapsB={autoLapB.data ?? []}
-					/>
+					<>
+						{/* Keep the previous distance's splits visible would be ideal, but the
+						    hook doesn't set placeholderData; instead show a subtle fetching
+						    hint so the table doesn't look stale/empty while re-fetching after
+						    a distance change or the first switch into this mode. */}
+						{autoLapA.isFetching || autoLapB.isFetching ? (
+							<p className="text-xs text-gray-500">Computing auto-lap splits…</p>
+						) : null}
+						<AutoLapComparison
+							idA={compA.id}
+							idB={compB.id}
+							nameA={compA.name}
+							nameB={compB.name}
+							colorA={colorA}
+							colorB={colorB}
+							sportA={compA.sport}
+							sportB={compB.sport}
+							lapsA={autoLapA.data ?? []}
+							lapsB={autoLapB.data ?? []}
+						/>
+					</>
 				)}
 			</div>
 		</div>

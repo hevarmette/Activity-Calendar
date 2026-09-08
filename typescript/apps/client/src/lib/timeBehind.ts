@@ -49,10 +49,20 @@ export function buildDistTimeTrack(points: RecordPoint[] | undefined): DistTimeP
 	const baseDistance = withDist[0]!.distance as number;
 	// biome-ignore lint/style/noNonNullAssertion: length checked above.
 	const baseTime = withDist[0]!.elapsedTime;
-	return withDist.map((p) => ({
-		distMiles: ((p.distance as number) - baseDistance) / METERS_PER_MILE,
-		t: p.elapsedTime - baseTime,
-	}));
+	// Enforce a monotonically non-decreasing distance axis: interpolateTimeAtDistance
+	// binary-searches on distance, so a backward/stationary GPS sample (occasional
+	// noise) would otherwise corrupt the interpolated delta near that point. We clamp
+	// each sample's distance to the running max rather than dropping the sample, so its
+	// (later) time still anchors the curve.
+	let runningMax = Number.NEGATIVE_INFINITY;
+	return withDist.map((p) => {
+		const dist = ((p.distance as number) - baseDistance) / METERS_PER_MILE;
+		runningMax = Math.max(runningMax, dist);
+		return {
+			distMiles: runningMax,
+			t: p.elapsedTime - baseTime,
+		};
+	});
 }
 
 /**
