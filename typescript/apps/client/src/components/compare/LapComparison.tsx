@@ -1,9 +1,12 @@
 import { Intensity, METERS_PER_MILE, Sport, convertSecondsToHms, formatPacePrecise } from "@activity-calendar/shared";
 import type { Lap } from "@activity-calendar/shared";
+import { Link } from "react-router";
 
 const INTENSITIES = Object.values(Intensity);
 
 interface ColumnProps {
+	/** Activity id — used to link the column header to the detail page. */
+	id: number;
 	name: string;
 	color: string;
 	sport: string;
@@ -80,7 +83,7 @@ function formatPaceSpeedDelta(sport: string, distA: number, timeA: number, distB
 }
 
 /** A single read-only lap table for one activity, styled like the details LapTable. */
-function LapColumn({ name, color, sport, laps, filter, deltaAgainst }: ColumnProps) {
+function LapColumn({ id, name, color, sport, laps, filter, deltaAgainst }: ColumnProps) {
 	const isCycling = sport === Sport.Cycling;
 	const shown = visibleLaps(laps, filter);
 
@@ -88,9 +91,14 @@ function LapColumn({ name, color, sport, laps, filter, deltaAgainst }: ColumnPro
 		<div className="min-w-0">
 			<div className="mb-2 flex items-center gap-2">
 				<span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
-				<h3 className="truncate text-sm font-medium text-gray-200" title={name}>
+				{/* Header links to the activity's detail page (mirrors ActivityDialog / SimilarActivities). */}
+				<Link
+					to={`/activity/${id}?sport=${sport}`}
+					className="truncate text-sm font-medium text-gray-200 transition-colors hover:text-orange-300"
+					title={name}
+				>
 					{name}
-				</h3>
+				</Link>
 			</div>
 			{shown.length === 0 ? (
 				<p className="rounded-xl border border-gray-800 bg-gray-900 px-4 py-6 text-center text-sm text-gray-500">
@@ -171,6 +179,8 @@ function LapColumn({ name, color, sport, laps, filter, deltaAgainst }: ColumnPro
 }
 
 interface Props {
+	idA: number;
+	idB: number;
 	nameA: string;
 	nameB: string;
 	colorA: string;
@@ -197,6 +207,8 @@ interface Props {
  * index), the delta shows "—".
  */
 export function LapComparison({
+	idA,
+	idB,
 	nameA,
 	nameB,
 	colorA,
@@ -243,8 +255,16 @@ export function LapComparison({
 			</div>
 
 			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-				<LapColumn name={nameA} color={colorA} sport={sportA} laps={lapsA} filter={filter} />
-				<LapColumn name={nameB} color={colorB} sport={sportB} laps={lapsB} filter={filter} deltaAgainst={shownA} />
+				<LapColumn id={idA} name={nameA} color={colorA} sport={sportA} laps={lapsA} filter={filter} />
+				<LapColumn
+					id={idB}
+					name={nameB}
+					color={colorB}
+					sport={sportB}
+					laps={lapsB}
+					filter={filter}
+					deltaAgainst={shownA}
+				/>
 			</div>
 			<p className="text-xs text-gray-500">
 				Deltas on {nameB} compare each lap to the same-position lap on {nameA} —{" "}
