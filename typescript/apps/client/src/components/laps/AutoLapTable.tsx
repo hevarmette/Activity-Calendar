@@ -76,6 +76,7 @@ export function AutoLapTable({ activityId, sport, onDistanceChange }: Props) {
 								<th className="px-2 py-1">Distance</th>
 								<th className="px-2 py-1">Time</th>
 								<th className="px-2 py-1">Cum. Dist</th>
+								<th className="px-2 py-1">Cum. Pace</th>
 								<th className="px-2 py-1">Cum. Time</th>
 								<th className="px-2 py-1">{isCycling ? "Speed" : "Pace"}</th>
 								<th className="px-2 py-1">Ascent</th>
@@ -90,6 +91,12 @@ export function AutoLapTable({ activityId, sport, onDistanceChange }: Props) {
 									<td className="px-2 py-1">{l.distanceMi.toFixed(2)} mi</td>
 									<td className="px-2 py-1">{convertSecondsToHms(l.timeSeconds)}</td>
 									<td className="px-2 py-1">{l.cumulativeDistanceMi.toFixed(2)} mi</td>
+									<td className="px-2 py-1">
+										{/* Cumulative pace/speed derived from cumulative distance + time */}
+										{isCycling
+											? `${(l.cumulativeTimeSeconds > 0 ? l.cumulativeDistanceMi / (l.cumulativeTimeSeconds / 3600) : null)?.toFixed(1) ?? "—"} mph`
+											: `${formatPacePrecise(l.cumulativeDistanceMi > 0 ? l.cumulativeTimeSeconds / 60 / l.cumulativeDistanceMi : null) ?? "—"} /mi`}
+									</td>
 									<td className="px-2 py-1">{convertSecondsToHms(l.cumulativeTimeSeconds)}</td>
 									<td className="px-2 py-1">
 										{isCycling ? `${l.speedMph?.toFixed(1)} mph` : `${formatPacePrecise(l.paceMinPerMile)} /mi`}

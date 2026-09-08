@@ -396,6 +396,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 							<th className="px-4 py-3">Distance (mi)</th>
 							<th className="px-4 py-3">Time</th>
 							<th className="px-4 py-3">Cum. Dist</th>
+							<th className="px-4 py-3">Cum. Pace</th>
 							<th className="px-4 py-3">Cum. Time</th>
 							<th className="px-4 py-3">{isCycling ? "Speed (mph)" : "Pace"}</th>
 							<th className="px-4 py-3">Ascent</th>
@@ -490,6 +491,12 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 											/>
 										</td>
 										<td className="px-4 py-3 text-gray-400 tabular-nums">{cumDist.toFixed(2)}</td>
+										<td className="px-4 py-3 text-gray-400 tabular-nums">
+											{/* Cumulative pace/speed from running totals (no premature rounding) */}
+											{isCycling
+												? ((cumTime > 0 ? cumDist / (cumTime / 3600) : null)?.toFixed(1) ?? "—")
+												: (formatPacePrecise(cumDist > 0 ? cumTime / 60 / cumDist : null) ?? "—")}
+										</td>
 										<td className="px-4 py-3 text-gray-400 tabular-nums">
 											{convertSecondsToHms(Math.round(cumTime * 100) / 100)}
 										</td>
