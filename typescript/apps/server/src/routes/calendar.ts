@@ -30,7 +30,7 @@ calendarRoutes.get("/", async (c) => {
  */
 calendarRoutes.get("/workouts", async (c) => {
 	const rows = await sql`
-		SELECT workout_id, name, sport, scheduled_date
+		SELECT workout_id, name, sport, TO_CHAR(scheduled_date, 'YYYY-MM-DD') AS scheduled_date
 		FROM ${sql(SCHEMA)}.workout
 		WHERE scheduled_date IS NOT NULL
 		ORDER BY scheduled_date

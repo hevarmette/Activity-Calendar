@@ -330,13 +330,13 @@ workoutsRoutes.get("/", async (c) => {
 
 	const rows = sport
 		? await sql`
-			SELECT workout_id, name, sport, description, scheduled_date, created_at, updated_at
+			SELECT workout_id, name, sport, description, TO_CHAR(scheduled_date, 'YYYY-MM-DD') AS scheduled_date, created_at, updated_at
 			FROM ${sql(SCHEMA)}.workout
 			WHERE sport = ${sport}
 			ORDER BY updated_at DESC
 		`
 		: await sql`
-			SELECT workout_id, name, sport, description, scheduled_date, created_at, updated_at
+			SELECT workout_id, name, sport, description, TO_CHAR(scheduled_date, 'YYYY-MM-DD') AS scheduled_date, created_at, updated_at
 			FROM ${sql(SCHEMA)}.workout
 			ORDER BY updated_at DESC
 		`;
@@ -369,7 +369,7 @@ workoutsRoutes.get("/:id", async (c) => {
 	const id = Number(c.req.param("id"));
 
 	const rows = await sql`
-		SELECT workout_id, name, sport, description, definition, scheduled_date, created_at, updated_at
+		SELECT workout_id, name, sport, description, definition, TO_CHAR(scheduled_date, 'YYYY-MM-DD') AS scheduled_date, created_at, updated_at
 		FROM ${sql(SCHEMA)}.workout
 		WHERE workout_id = ${id}
 		LIMIT 1

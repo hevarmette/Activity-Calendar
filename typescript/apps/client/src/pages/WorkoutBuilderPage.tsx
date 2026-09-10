@@ -181,7 +181,8 @@ export function WorkoutBuilderPage() {
 	const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
 	const [generating, setGenerating] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [success, setSuccess] = useState(false);
+	const [saveSuccess, setSaveSuccess] = useState(false);
+	const [downloadSuccess, setDownloadSuccess] = useState(false);
 	const [saving, setSaving] = useState(false);
 	/** Per-step distance unit. Keys are "idx" for top-level steps and "idx-innerIdx" for repeat group inner steps. */
 	const [distanceUnits, setDistanceUnits] = useState<Record<string, DistanceUnit>>({ "1": "mi" });
@@ -302,8 +303,8 @@ export function WorkoutBuilderPage() {
 					return next;
 				});
 			}
-			setSuccess(true);
-			setTimeout(() => setSuccess(false), 2000);
+			setSaveSuccess(true);
+			setTimeout(() => setSaveSuccess(false), 2000);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Failed to save workout");
 		} finally {
@@ -334,8 +335,8 @@ export function WorkoutBuilderPage() {
 		setGenerating(true);
 		try {
 			await downloadWorkoutFit(buildDefinition());
-			setSuccess(true);
-			setTimeout(() => setSuccess(false), 2000);
+			setDownloadSuccess(true);
+			setTimeout(() => setDownloadSuccess(false), 2000);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Failed to generate workout");
 		} finally {
@@ -532,7 +533,11 @@ export function WorkoutBuilderPage() {
 						type="button"
 						onClick={handleSave}
 						disabled={hasErrors || saving}
-						className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all bg-gray-800 border border-gray-700 text-gray-200 hover:bg-gray-700 hover:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+						className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+							saveSuccess
+								? "bg-green-600 border border-green-600 text-white"
+								: "bg-gray-800 border border-gray-700 text-gray-200 hover:bg-gray-700 hover:border-gray-600"
+						}`}
 					>
 						{saving ? (
 							<>
@@ -541,6 +546,23 @@ export function WorkoutBuilderPage() {
 									<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
 								</svg>
 								Saving…
+							</>
+						) : saveSuccess ? (
+							<>
+								<svg
+									aria-hidden="true"
+									width="16"
+									height="16"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="2"
+									strokeLinecap="round"
+									strokeLinejoin="round"
+								>
+									<polyline points="20 6 9 17 4 12" />
+								</svg>
+								Saved!
 							</>
 						) : (
 							<>
@@ -570,7 +592,7 @@ export function WorkoutBuilderPage() {
 						onClick={handleGenerate}
 						disabled={hasErrors || generating}
 						className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-							success
+							downloadSuccess
 								? "bg-green-600 text-white"
 								: hasErrors
 									? "bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700"
@@ -585,7 +607,7 @@ export function WorkoutBuilderPage() {
 								</svg>
 								Generating…
 							</>
-						) : success ? (
+						) : downloadSuccess ? (
 							<>
 								<svg
 									aria-hidden="true"

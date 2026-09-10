@@ -48,7 +48,11 @@ function toFullCalendarEvents(events: CalendarEvent[]) {
 function toWorkoutFullCalendarEvents(workouts: CalendarWorkoutEvent[]) {
 	return workouts.map((w) => ({
 		title: w.name,
-		start: w.scheduledDate,
+		// Use the date-only portion so FullCalendar renders it as an all-day event
+		// on the local calendar date, avoiding the UTC->local off-by-one shift that
+		// occurs when a full ISO timestamp (e.g. "2026-08-25T00:00:00.000Z") is passed.
+		start: w.scheduledDate.slice(0, 10),
+		allDay: true,
 		backgroundColor: "transparent",
 		borderColor: WORKOUT_EVENT_COLOR,
 		textColor: WORKOUT_EVENT_COLOR,
