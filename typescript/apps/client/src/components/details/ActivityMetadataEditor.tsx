@@ -43,11 +43,11 @@ export function ActivityMetadataEditor({ name, description, category, feel, effo
 				<select
 					defaultValue={category ?? ""}
 					onChange={(e) => onChange({ category: e.target.value || null })}
-					className="rounded bg-gray-800 border border-gray-600 px-3 py-1.5 text-sm"
+					className="rounded bg-gray-800 border border-gray-600 px-3 py-1.5 text-sm text-gray-200 [color-scheme:dark]"
 				>
-					<option value="">—</option>
+					<option value="" className="bg-gray-800 text-gray-200">—</option>
 					{CATEGORIES.map((c) => (
-						<option key={c} value={c}>{c}</option>
+						<option key={c} value={c} className="bg-gray-800 text-gray-200">{c}</option>
 					))}
 				</select>
 			</div>

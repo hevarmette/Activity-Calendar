@@ -650,7 +650,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 						className="rounded-full bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:bg-gray-700"
 						aria-label="Copy intensity pattern from selected laps"
 					>
-						Copy Intensity <kbd className="ml-1 text-[10px] text-gray-500">⌘C</kbd>
+						Copy Intensity
 					</button>
 					{copiedPattern.length > 0 && (
 						<button
@@ -659,7 +659,7 @@ export function LapTable({ laps, sport, category, onEdits }: Props) {
 							className="rounded-full bg-orange-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-orange-500"
 							aria-label="Paste intensity pattern onto selected laps"
 						>
-							Paste ({copiedPattern.length}) <kbd className="ml-1 text-[10px] text-orange-200">⌘V</kbd>
+							Paste ({copiedPattern.length})
 						</button>
 					)}
 					<button

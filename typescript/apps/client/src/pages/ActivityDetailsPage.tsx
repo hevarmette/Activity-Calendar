@@ -209,10 +209,10 @@ export function ActivityDetailsPage() {
 					<select
 						value={category}
 						onChange={(e) => handleChange({ category: e.target.value || null })}
-						className="bg-transparent border-none text-sm text-gray-400 hover:text-gray-200 focus:outline-none cursor-pointer transition-colors"
+						className="rounded border border-gray-700 bg-gray-800 px-2 py-1 text-sm text-gray-300 hover:border-gray-600 hover:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500/50 cursor-pointer capitalize transition-colors [color-scheme:dark]"
 					>
 						{CATEGORIES.map((c) => (
-							<option key={c} value={c}>
+							<option key={c} value={c} className="bg-gray-800 text-gray-200">
 								{c}
 							</option>
 						))}
