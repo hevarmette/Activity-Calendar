@@ -104,11 +104,16 @@ export function ActivityComparePage() {
 	// server-computed splits at a single SHARED distance applied to ALL columns.
 	const [lapMode, setLapMode] = useState<"laps" | "auto-laps">("laps");
 	// Raw input (miles) + its debounced value so we only refetch auto-laps ~400ms
-	// after the user stops typing. One control drives EVERY activity.
-	const [autoLapInput, setAutoLapInput] = useState(1);
+	// after the user stops typing. One control drives EVERY activity. The raw
+	// value is a string so the field can be cleared mid-edit without collapsing
+	// to 0 (which would divide-by-zero in the split calculation).
+	const [autoLapInput, setAutoLapInput] = useState("1");
 	const [autoLapDist, setAutoLapDist] = useState(1);
 	useEffect(() => {
-		const timer = setTimeout(() => setAutoLapDist(autoLapInput), 400);
+		// Only propagate a valid, positive distance; ignore empty/0/NaN.
+		const parsed = Number(autoLapInput);
+		if (!Number.isFinite(parsed) || parsed <= 0) return;
+		const timer = setTimeout(() => setAutoLapDist(parsed), 400);
 		return () => clearTimeout(timer);
 	}, [autoLapInput]);
 
@@ -180,7 +185,7 @@ export function ActivityComparePage() {
 		setIsPlaying(false);
 		setOffsets(Array(MAX_COMPARE).fill(0));
 		setLapMode("laps");
-		setAutoLapInput(1);
+		setAutoLapInput("1");
 		setAutoLapDist(1);
 	}, [idsParam]);
 
@@ -400,7 +405,7 @@ export function ActivityComparePage() {
 								min={0}
 								step={0.1}
 								value={autoLapInput}
-								onChange={(e) => setAutoLapInput(Number(e.target.value))}
+								onChange={(e) => setAutoLapInput(e.target.value)}
 								aria-label="Auto-lap distance in miles"
 								className="w-20 rounded border border-gray-700 bg-gray-800 px-2 py-1 text-sm text-white focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
 							/>

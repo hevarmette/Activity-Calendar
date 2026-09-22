@@ -14,13 +14,18 @@ interface Props {
  * Displays auto-lap splits for an activity with a configurable distance input and unit toggle.
  */
 export function AutoLapTable({ activityId, sport, onDistanceChange }: Props) {
-	const [inputValue, setInputValue] = useState(1);
+	// Raw string so the field can be cleared mid-edit without collapsing to 0.
+	const [inputValue, setInputValue] = useState("1");
 	const [unit, setUnit] = useState<Unit>("mi");
-	const [debouncedValue, setDebouncedValue] = useState(inputValue);
+	const [debouncedValue, setDebouncedValue] = useState(1);
 	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	useEffect(() => {
-		timerRef.current = setTimeout(() => setDebouncedValue(inputValue), 400);
+		// Only propagate a valid, positive distance; ignore empty/0/NaN so we never
+		// feed a zero divisor into the split calculation (division by zero).
+		const parsed = Number(inputValue);
+		if (!Number.isFinite(parsed) || parsed <= 0) return;
+		timerRef.current = setTimeout(() => setDebouncedValue(parsed), 400);
 		return () => {
 			if (timerRef.current) clearTimeout(timerRef.current);
 		};
@@ -44,7 +49,7 @@ export function AutoLapTable({ activityId, sport, onDistanceChange }: Props) {
 					min={0}
 					step={unit === "mi" ? 0.1 : 100}
 					value={inputValue}
-					onChange={(e) => setInputValue(Number(e.target.value))}
+					onChange={(e) => setInputValue(e.target.value)}
 					aria-label="Lap distance"
 					className="w-20 rounded bg-gray-800 border border-gray-700 px-2 py-1 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500"
 				/>
