@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { downloadActivityFit } from "../api/client.js";
-import { useSaveActivity, useSaveLap } from "../api/mutations.js";
+import { useSaveActivity, useSaveLap, useSaveSession } from "../api/mutations.js";
 import { useActivity, useLaps, useRecords, useSessions } from "../api/queries.js";
 import { PerformanceCharts } from "../components/charts/PerformanceCharts.js";
 import { ActivityStatsGrid } from "../components/details/ActivityStatsGrid.js";
@@ -40,6 +40,7 @@ export function ActivityDetailsPage() {
 
 	const saveActivity = useSaveActivity(id);
 	const saveLap = useSaveLap();
+	const saveSession = useSaveSession(id);
 	const { prev, next, goPrev, goNext } = useActivityNavigation(id, sport);
 
 	const [tab, setTab] = useState<Tab>("laps");
@@ -51,6 +52,9 @@ export function ActivityDetailsPage() {
 		setLapEditsState(edits);
 	}, []);
 	const [sessionIdx, setSessionIdx] = useState(0);
+	const [sessionEdits, setSessionEdits] = useState<Map<number, { totalDistance?: number; totalTimerTime?: number }>>(
+		new Map(),
+	);
 	const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 	const [selectedRange, setSelectedRange] = useState<[number, number] | null>(null);
 	const [lastSql, setLastSql] = useState<string | null>(null);
@@ -61,10 +65,23 @@ export function ActivityDetailsPage() {
 		setActivityEdits((prev) => ({ ...prev, ...updates }));
 	}, []);
 
+	/** Merge pending edits for a single multisport session leg, keyed by sessionId. */
+	const handleSessionChange = useCallback(
+		(sessionId: number, updates: { totalDistance?: number; totalTimerTime?: number }) => {
+			setSessionEdits((prev) => {
+				const next = new Map(prev);
+				next.set(sessionId, { ...next.get(sessionId), ...updates });
+				return next;
+			});
+		},
+		[],
+	);
+
 	// biome-ignore lint/correctness/useExhaustiveDependencies: local edits must reset when the route activity changes.
 	useEffect(() => {
 		setActivityEdits({});
 		setLapEdits([]);
+		setSessionEdits(new Map());
 		setLastSql(null);
 		setDistanceInput("");
 		setDurationInput("");
@@ -76,7 +93,7 @@ export function ActivityDetailsPage() {
 		setDurationInput(convertSecondsToHms(activity.duration ?? 0) ?? "");
 	}, [activity]);
 
-	const isDirty = Object.keys(activityEdits).length > 0 || lapEdits.length > 0;
+	const isDirty = Object.keys(activityEdits).length > 0 || lapEdits.length > 0 || sessionEdits.size > 0;
 
 	// Toast state for save error feedback (TODO #4)
 	const [saveError, setSaveError] = useState<string | null>(null);
@@ -119,8 +136,12 @@ export function ActivityDetailsPage() {
 					typeof saveLap.mutateAsync
 				>[0]);
 			}
+			for (const [sessionId, payload] of sessionEdits) {
+				await saveSession.mutateAsync({ sessionId, ...payload });
+			}
 			setActivityEdits({});
 			setLapEdits([]);
+			setSessionEdits(new Map());
 			setLastSql(sqls.length > 0 ? sqls.join("\n") : null);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "An unknown error occurred while saving.";
@@ -180,6 +201,23 @@ export function ActivityDetailsPage() {
 	const editedDuration = activityEdits.adjustedDuration ?? duration;
 	const miles = distance / METERS_PER_MILE;
 	const editedMiles = editedDistance / METERS_PER_MILE;
+
+	// For multisport, the whole-activity total is the SUM of the sessions
+	// (sessions are the source of truth), factoring in any pending per-leg edits
+	// so the total updates live as legs are edited.
+	const multisportSumMeters = isMultisport
+		? (sessions ?? []).reduce(
+				(acc, s) => acc + (sessionEdits.get(s.sessionId)?.totalDistance ?? s.totalDistance ?? 0),
+				0,
+			)
+		: 0;
+	const multisportSumSeconds = isMultisport
+		? (sessions ?? []).reduce(
+				(acc, s) => acc + (sessionEdits.get(s.sessionId)?.totalTimerTime ?? s.totalTimerTime ?? 0),
+				0,
+			)
+		: 0;
+	const multisportSumMiles = multisportSumMeters / METERS_PER_MILE;
 	const isCycling = sessionSport === Sport.Cycling;
 	const localDate = new Date(activity.localTimestamp);
 	const category =
@@ -294,63 +332,85 @@ export function ActivityDetailsPage() {
 				{localDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
 			</p>
 
-			{/* 3. Summary metrics — horizontal cards */}
+			{/* 3. Summary metrics — horizontal cards.
+			    Single-session: editable Distance/Duration (activity is source of truth).
+			    Multisport: read-only totals = SUM(sessions); edit each leg below instead. */}
 			<div className="grid grid-cols-3 gap-4">
-				<MetricBlock label="Distance">
-					<div className="mt-1 flex items-baseline">
-						<input
-							type="number"
-							min={0}
-							step="0.01"
-							value={distanceInput}
-							onChange={(e) => {
-								const nextValue = e.target.value;
-								setDistanceInput(nextValue);
-								if (nextValue.trim() === "") return;
-								const nextMiles = Number(nextValue);
-								if (!Number.isNaN(nextMiles) && nextMiles >= 0) {
-									handleChange({ adjustedDistance: nextMiles * METERS_PER_MILE });
-								}
-							}}
-							onBlur={(e) => {
-								const nextMiles = Number(e.target.value);
-								setDistanceInput(
-									!Number.isNaN(nextMiles) && nextMiles >= 0 ? nextMiles.toFixed(2) : editedMiles.toFixed(2),
-								);
-							}}
-							style={{ width: `${(distanceInput.length || 1) + 1}ch` }}
-							className="min-w-0 bg-transparent border-none p-0 text-2xl font-bold text-gray-50 tabular-nums focus:outline-none focus:text-orange-200"
-							aria-label="Distance in miles"
-						/>
-						<span className="text-2xl font-bold text-gray-500 ml-1">mi</span>
-					</div>
-				</MetricBlock>
-				<MetricBlock label="Duration">
-					<input
-						type="text"
-						value={durationInput}
-						onChange={(e) => {
-							const nextValue = e.target.value;
-							setDurationInput(nextValue);
-							const seconds = parseHmsToSeconds(nextValue);
-							if (seconds != null) handleChange({ adjustedDuration: seconds });
-						}}
-						onBlur={(e) => {
-							const seconds = parseHmsToSeconds(e.target.value);
-							setDurationInput(convertSecondsToHms(seconds ?? editedDuration) ?? "");
-						}}
-						className="mt-1 w-full bg-transparent border-none p-0 text-2xl font-bold text-gray-50 tabular-nums focus:outline-none focus:text-orange-200"
-						aria-label="Duration"
-					/>
-				</MetricBlock>
+				{isMultisport ? (
+					<>
+						<MetricBlock label="Distance">
+							<div className="mt-1 flex items-baseline">
+								<span className="text-2xl font-bold text-gray-50 tabular-nums">{multisportSumMiles.toFixed(2)}</span>
+								<span className="text-2xl font-bold text-gray-500 ml-1">mi</span>
+							</div>
+						</MetricBlock>
+						<MetricBlock label="Duration" value={convertSecondsToHms(Math.round(multisportSumSeconds)) ?? "—"} />
+					</>
+				) : (
+					<>
+						<MetricBlock label="Distance">
+							<div className="mt-1 flex items-baseline">
+								<input
+									type="number"
+									min={0}
+									step="0.01"
+									value={distanceInput}
+									onChange={(e) => {
+										const nextValue = e.target.value;
+										setDistanceInput(nextValue);
+										if (nextValue.trim() === "") return;
+										const nextMiles = Number(nextValue);
+										if (!Number.isNaN(nextMiles) && nextMiles >= 0) {
+											handleChange({ adjustedDistance: nextMiles * METERS_PER_MILE });
+										}
+									}}
+									onBlur={(e) => {
+										const nextMiles = Number(e.target.value);
+										setDistanceInput(
+											!Number.isNaN(nextMiles) && nextMiles >= 0 ? nextMiles.toFixed(2) : editedMiles.toFixed(2),
+										);
+									}}
+									style={{ width: `${(distanceInput.length || 1) + 1}ch` }}
+									className="min-w-0 bg-transparent border-none p-0 text-2xl font-bold text-gray-50 tabular-nums focus:outline-none focus:text-orange-200"
+									aria-label="Distance in miles"
+								/>
+								<span className="text-2xl font-bold text-gray-500 ml-1">mi</span>
+							</div>
+						</MetricBlock>
+						<MetricBlock label="Duration">
+							<input
+								type="text"
+								value={durationInput}
+								onChange={(e) => {
+									const nextValue = e.target.value;
+									setDurationInput(nextValue);
+									const seconds = parseHmsToSeconds(nextValue);
+									if (seconds != null) handleChange({ adjustedDuration: seconds });
+								}}
+								onBlur={(e) => {
+									const seconds = parseHmsToSeconds(e.target.value);
+									setDurationInput(convertSecondsToHms(seconds ?? editedDuration) ?? "");
+								}}
+								className="mt-1 w-full bg-transparent border-none p-0 text-2xl font-bold text-gray-50 tabular-nums focus:outline-none focus:text-orange-200"
+								aria-label="Duration"
+							/>
+						</MetricBlock>
+					</>
+				)}
 				<MetricBlock
 					label={isCycling ? (activity.avgPower ? "Power" : "Speed") : "Pace"}
 					value={
-						isCycling
-							? activity.avgPower
-								? `${activity.avgPower} W`
-								: `${(editedDuration > 0 ? editedMiles / (editedDuration / 3600) : 0).toFixed(2)} mph`
-							: `${formatPace(editedMiles > 0 ? editedDuration / 60 / editedMiles : null) ?? "—"} /mi`
+						isMultisport
+							? isCycling
+								? activity.avgPower
+									? `${activity.avgPower} W`
+									: `${(multisportSumSeconds > 0 ? multisportSumMiles / (multisportSumSeconds / 3600) : 0).toFixed(2)} mph`
+								: `${formatPace(multisportSumMiles > 0 ? multisportSumSeconds / 60 / multisportSumMiles : null) ?? "—"} /mi`
+							: isCycling
+								? activity.avgPower
+									? `${activity.avgPower} W`
+									: `${(editedDuration > 0 ? editedMiles / (editedDuration / 3600) : 0).toFixed(2)} mph`
+								: `${formatPace(editedMiles > 0 ? editedDuration / 60 / editedMiles : null) ?? "—"} /mi`
 					}
 				/>
 			</div>
@@ -404,8 +464,15 @@ export function ActivityDetailsPage() {
 				</div>
 			)}
 
-			{/* 5b. Per-leg summary metrics for multisport */}
-			{isMultisport && activeSession && <SessionSummaryCards session={activeSession} />}
+			{/* 5b. Per-leg summary metrics for multisport (editable — sessions are source of truth) */}
+			{isMultisport && activeSession && (
+				<SessionSummaryCards
+					session={activeSession}
+					editedDistance={sessionEdits.get(activeSession.sessionId)?.totalDistance}
+					editedDuration={sessionEdits.get(activeSession.sessionId)?.totalTimerTime}
+					onChange={(updates) => handleSessionChange(activeSession.sessionId, updates)}
+				/>
+			)}
 
 			{/* 6. Performance Charts (inline, not in tab) */}
 			{sessionPoints.length > 0 && (
@@ -447,8 +514,16 @@ export function ActivityDetailsPage() {
 					))}
 				{tab === "details" && (
 					<ActivityStatsGrid
-						distance={editedDistance}
-						duration={editedDuration}
+						distance={
+							isMultisport && activeSession
+								? (sessionEdits.get(activeSession.sessionId)?.totalDistance ?? activeSession.totalDistance ?? 0)
+								: editedDistance
+						}
+						duration={
+							isMultisport && activeSession
+								? (sessionEdits.get(activeSession.sessionId)?.totalTimerTime ?? activeSession.totalTimerTime ?? 0)
+								: editedDuration
+						}
 						sport={sessionSport}
 						points={sessionPoints}
 						laps={sessionLaps}
