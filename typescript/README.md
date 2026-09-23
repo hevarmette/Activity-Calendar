@@ -15,7 +15,7 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 
 ### Activity Details Page
 - Full-screen interactive Leaflet map with lap markers, auto mile markers, start/end icons, speed-colored route overlay, and fullscreen mode
-- Multisport activities render per-session tabs with scoped maps, charts, laps, and per-leg summary cards (distance, duration, pace/speed/power)
+- Multisport activities render per-session tabs with scoped maps, charts, laps, and per-leg summary cards (distance, duration, pace/speed/power); each leg's distance and duration are individually editable and the activity total is derived as the sum of its sessions
 - Performance charts (Recharts) plotted against distance: pace, heart rate, altitude, cadence, power
 - Synchronized chart range selection that filters the map view
 - Editable lap table with inline editing for distance, time, and intensity
@@ -24,7 +24,7 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 - Activity stats grid with running dynamics (vertical oscillation, ground contact time, stride length, vertical ratio) and best lap
 - Interval summary with clustering algorithm that auto-detects distance or time grouping, shows deviation trends
 - Editable description, title, category, workout feel (SVG icons), and perceived effort slider
-- Adjustable distance and duration in summary cards
+- Adjustable distance and duration in summary cards for single-session activities (the activity is the source of truth, and edits sync the underlying session); for multisport activities the whole-activity total is not directly editable — edit each leg instead, and the total is recomputed as the sum of its sessions
 - Previous/next activity navigation and keyboard shortcut (S) to save
 - Similar activities comparison (for training/racing activities, each similar-activity row shows a Compare icon that jumps straight to the Activity Comparison page against the current activity)
 
@@ -225,6 +225,33 @@ Read routes accept an optional `?schema=<name>` query parameter:
 Only read routes honour `?schema=`. Write routes (activity create/update, lap
 and length edits, workout mutations, exports) **always** operate on the primary
 `DB_SCHEMA` and ignore the parameter entirely.
+
+## Editing API
+
+Activity, session, and lap edits are write routes and **always** target the
+primary `DB_SCHEMA` (they ignore `?schema=`).
+
+| Method  | Path | Body | Response |
+|---------|------|------|----------|
+| `PATCH` | `/api/activities/:id` | `ActivityUpdatePayload` | `{ success: true, sql: string \| null }` |
+| `PATCH` | `/api/sessions/update/:sessionId` | `SessionUpdatePayload` `{ totalDistance?, totalTimerTime? }` | `{ success: true, sql: string \| null }`, `404 { error: 'Not found' }` |
+| `PATCH` | `/api/laps/update/:lapId` | `LapUpdatePayload` | `{ success: true }` |
+
+Distance/duration stay consistent between an activity and its sessions:
+
+- **Single-session activity** (`num_sessions <= 1`, or exactly one session row) —
+  the activity is the source of truth. `PATCH /api/activities/:id` with
+  `adjustedDistance`/`adjustedDuration` also writes the lone session's
+  `total_distance`/`total_timer_time` to the same values, inside one
+  transaction.
+- **Multisport activity** (more than one session row) — the sessions are the
+  source of truth. Edit each leg with `PATCH /api/sessions/update/:sessionId`;
+  the parent activity's `adjusted_distance`/`adjusted_duration` are recomputed
+  as `COALESCE(SUM(...), 0)` over its sessions in the same transaction. The
+  whole-activity distance/duration are **not** directly editable: a
+  `PATCH /api/activities/:id` that carries only `adjustedDistance`/
+  `adjustedDuration` returns `409` with
+  `{ error: 'Distance and duration for a multisport activity are derived from its sessions; edit each leg instead.' }`. Other field edits (description, category, name, feel, effort) still apply.
 
 ## Activity Export API
 
