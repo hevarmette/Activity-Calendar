@@ -159,6 +159,13 @@ export interface LapUpdatePayload {
 	intensity?: string;
 }
 
+export interface SessionUpdatePayload {
+	/** Session distance in meters. */
+	totalDistance?: number;
+	/** Session moving/timer time in seconds. */
+	totalTimerTime?: number;
+}
+
 export interface LengthUpdatePayload {
 	totalTimerTime?: number;
 	totalStrokes?: number;
