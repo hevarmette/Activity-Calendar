@@ -2,11 +2,13 @@
  * Export routes — reconstruct completed activities as Garmin .fit files.
  *
  * GET /api/activities/:id/export
+ *   Query: ?schema=<name> (optional, read-only cross-schema override)
  *   Response: Binary .fit file (application/octet-stream)
  *   Encodes a single activity from DB rows. Returns 404 if not found.
  *   Filename: "<date>_<name>_<activityId>.fit".
  *
  * POST /api/export
+ *   Query: ?schema=<name> (optional, read-only cross-schema override)
  *   Body: ActivityExportRequest JSON
  *   Response: Binary ZIP archive (application/zip) of one .fit per activity.
  *   Selection precedence: activityIds > text filters > { all: true }.
@@ -20,6 +22,7 @@
 import { zipSync } from "fflate";
 import { Hono } from "hono";
 import { z } from "zod";
+import { UnknownSchemaError, resolveReadSchema } from "../db.js";
 import { fetchActivityFitInput, fetchActivityFitInputs, resolveExportIds } from "../lib/activity-data.js";
 import { buildActivityFilename, encodeFitActivity } from "../lib/activity-fit.js";
 
@@ -48,7 +51,15 @@ exportRoutes.get("/:id/export", async (c) => {
 	const id = Number(c.req.param("id"));
 	if (!Number.isFinite(id)) return c.json({ error: "Invalid activity id" }, 400);
 
-	const input = await fetchActivityFitInput(id);
+	let schema: string;
+	try {
+		schema = resolveReadSchema(c.req.query("schema"));
+	} catch (err) {
+		if (err instanceof UnknownSchemaError) return c.json({ error: err.message }, 400);
+		throw err;
+	}
+
+	const input = await fetchActivityFitInput(id, schema);
 	if (!input) return c.json({ error: "Not found" }, 404);
 
 	try {
@@ -76,19 +87,30 @@ exportRoutes.post("/", async (c) => {
 	}
 	const req = parsed.data;
 
+	let schema: string;
+	try {
+		schema = resolveReadSchema(c.req.query("schema"));
+	} catch (err) {
+		if (err instanceof UnknownSchemaError) return c.json({ error: err.message }, 400);
+		throw err;
+	}
+
 	// Resolve the set of activity IDs to export following the documented
 	// precedence: explicit ids > text filters > all.
 	let ids: number[];
 	if (req.activityIds && req.activityIds.length > 0) {
 		ids = req.activityIds;
 	} else if (req.q || req.titleSearch || req.descriptionSearch) {
-		ids = await resolveExportIds({
-			q: req.q,
-			titleSearch: req.titleSearch,
-			descriptionSearch: req.descriptionSearch,
-		});
+		ids = await resolveExportIds(
+			{
+				q: req.q,
+				titleSearch: req.titleSearch,
+				descriptionSearch: req.descriptionSearch,
+			},
+			schema,
+		);
 	} else if (req.all === true) {
-		ids = await resolveExportIds({});
+		ids = await resolveExportIds({}, schema);
 	} else {
 		return c.json({ error: "No selection: provide activityIds, filters, or all: true" }, 400);
 	}
@@ -108,7 +130,7 @@ exportRoutes.post("/", async (c) => {
 	}
 
 	try {
-		const inputs = await fetchActivityFitInputs(ids);
+		const inputs = await fetchActivityFitInputs(ids, schema);
 
 		if (inputs.length === 0) {
 			return c.json({ error: "No activities matched" }, 404);

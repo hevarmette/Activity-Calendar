@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { downloadActivitiesZip } from "../api/client.js";
 import { useSearch } from "../api/queries.js";
+import { useActiveSchema } from "../context/ActiveSchemaContext.js";
 
 const RESULTS_PER_PAGE = 20;
 
@@ -54,6 +55,7 @@ function canonicalSport(sport: string, numSessions: number): string {
 export function ActivitySearchPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const navigate = useNavigate();
+	const { activeSchema } = useActiveSchema();
 
 	// --- Compare pick mode ---
 	// When the URL carries ?compareWith=<id> (from the Activity Details "Compare"
@@ -276,7 +278,7 @@ export function ActivitySearchPage() {
 		setExportError(null);
 		setIsExporting(true);
 		try {
-			await downloadActivitiesZip({ activityIds: ids });
+			await downloadActivitiesZip({ activityIds: ids }, activeSchema);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "Export failed.";
 			setExportError(message);

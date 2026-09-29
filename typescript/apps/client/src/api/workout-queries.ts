@@ -6,7 +6,9 @@
  */
 import type { CalendarWorkoutEvent, SavedWorkout, WorkoutDefinition, WorkoutListItem } from "@activity-calendar/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useActiveSchema } from "../context/ActiveSchemaContext.js";
 import { api } from "./client.js";
+import { schemaQuery } from "./queries.js";
 
 export const workoutQueryKeys = {
 	all: ["workouts"] as const,
@@ -17,20 +19,22 @@ export const workoutQueryKeys = {
 
 /** Fetch all saved workouts, optionally filtered by sport. */
 export function useWorkouts(sport?: string) {
+	const { activeSchema } = useActiveSchema();
 	return useQuery({
-		queryKey: workoutQueryKeys.list(sport),
+		queryKey: [...workoutQueryKeys.list(sport), activeSchema] as const,
 		queryFn: () => {
 			const qs = sport ? `?sport=${encodeURIComponent(sport)}` : "";
-			return api<WorkoutListItem[]>(`/api/workouts${qs}`);
+			return api<WorkoutListItem[]>(`/api/workouts${qs}${schemaQuery(activeSchema, qs.length > 0)}`);
 		},
 	});
 }
 
 /** Fetch a single saved workout with its full step definition. */
 export function useWorkout(id: number) {
+	const { activeSchema } = useActiveSchema();
 	return useQuery({
-		queryKey: workoutQueryKeys.detail(id),
-		queryFn: () => api<SavedWorkout>(`/api/workouts/${id}`),
+		queryKey: [...workoutQueryKeys.detail(id), activeSchema] as const,
+		queryFn: () => api<SavedWorkout>(`/api/workouts/${id}${schemaQuery(activeSchema, false)}`),
 		enabled: id > 0,
 	});
 }
@@ -83,9 +87,10 @@ export function useDeleteWorkout() {
 
 /** Fetch scheduled workouts for the calendar view. */
 export function useCalendarWorkouts() {
+	const { activeSchema } = useActiveSchema();
 	return useQuery({
-		queryKey: workoutQueryKeys.calendarWorkouts,
-		queryFn: () => api<CalendarWorkoutEvent[]>("/api/calendar/workouts"),
+		queryKey: [...workoutQueryKeys.calendarWorkouts, activeSchema] as const,
+		queryFn: () => api<CalendarWorkoutEvent[]>(`/api/calendar/workouts${schemaQuery(activeSchema, false)}`),
 	});
 }
 

@@ -4,10 +4,18 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 
 ## Features
 
+### Global Schema Switcher (read-only cross-schema viewing)
+- A compact free-text field in the app header (after Refresh) switches the **entire app** to read another dataset's schema. Type a schema name to view it; clear the field to return to your own data.
+- The field is free-form — there is no dropdown or autocomplete of available schemas. Validation is server-side: an unknown name makes read routes return an error. Your own (primary) data is the empty/cleared state.
+- While a schema is active, a persistent header pill (`viewing: <schema> · read-only`) indicates read-only mode, and **all editing is disabled**: activity save/metadata/lap/session edits, manual activity creation, and workout edit/unschedule are blocked so writes can never be mis-targeted. Exports and .fit downloads still work and read from the active schema.
+- The active schema is threaded into every read request and its cache key (so switching never serves stale data) and persisted per-tab in `sessionStorage` (a fresh tab starts on your own data). It is not stored in the URL.
+- On the Activity Comparison page the active schema also drives how `?ids=` entries resolve: a **bare number** follows the active schema (so it reads from whatever dataset you're currently viewing), while a **`schema:id`** token always pins to its named schema regardless of the active schema. Activity names link to their detail page only when they resolve to the schema you're currently viewing.
+- **Security note (deliberate design):** there is intentionally **no endpoint that lists available schemas** — the user must already know the schema name to type it. The API is unauthenticated, so publishing a schema/dataset index would enumerate user/schema names to any client on the network. Requiring prior knowledge of the name (a mild shared secret) avoids that enumeration. Unknown names simply fail validation server-side; no discovery surface is exposed.
+
 ### Calendar View
 - Interactive monthly calendar displaying all activities, color-coded by sport
 - Scheduled workouts displayed on the calendar alongside activities (dashed violet border, distinct from activity events)
-- Click any scheduled workout to open a dialog with workout details, step summary, .fit download, edit link, and unschedule option
+- Click any scheduled workout to open a dialog with workout details, step summary, .fit download, edit link, and unschedule option (Edit and unschedule are disabled while viewing another schema; download still works)
 - Click any event to open a summary dialog with distance, duration, pace/speed, and an embedded GPS map with start/end markers and lap markers
 - Click any empty date cell to create a manual activity (no GPS data) with that date pre-filled
 - Manual activity creation dialog with title, sport, sub-sport, category, duration, lap splits (distance + time + intensity per lap), workout feel, and perceived effort
@@ -61,10 +69,10 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 - Smooth motion via `requestAnimationFrame` with position interpolated between ~1 Hz GPS points using each record's pause-removed elapsed time
 - N-column lap comparison with a single shared Intensity pill filter (same UX and enum as the Activity Details lap table) applied to every column; the **first** activity is the delta baseline, and every other column shows per-lap split deltas (distance, time, pace/speed) computed against the same visible lap index in the baseline — faster reads green, slower reads red, with "—" where no paired lap exists at that index
 - Toggle the lap comparison between regular laps and auto-laps (orange pill toggle mirroring the Activity Details tabs); auto-laps mode adds a single shared distance input that recomputes splits for ALL activities at once and shows the same per-index deltas against the baseline (intensity is dropped since auto-laps have none)
-- Compared activity names are clickable links (in the page header and each lap column header) that navigate to the corresponding Activity Details page — **except** cross-group (schema-qualified) activities, whose names render as plain text since their detail pages resolve against your own data only
+- Compared activity names are clickable links (in the page header and each lap column header) that navigate to the corresponding Activity Details page — **except** columns whose resolved schema differs from the one you're currently viewing (a `group:id` token pinned to another group, or bare ids while a different global schema is active), whose names render as plain text since their detail pages resolve against the schema you're viewing
 - "How far behind over time" delta chart (Recharts): plots the running time gap of each non-baseline activity versus the baseline across a shared distance axis (delta = time − timeBaseline at each mile), one line per activity in its palette color, with a zero reference line — above zero means that activity is behind; interpolates each activity's elapsed time onto a common distance grid and only renders when the baseline and at least one other activity carry overlapping distance data
 - Marker/track/lap-header colors come from a fixed compare palette assigned by column order (orange, sky, green, purple, yellow, pink, teal, rose; wrapping beyond 8), so any number of activities is always distinguishable
-- **Read-only cross-group comparison** (Feature #6): an id may be schema-qualified (`group:id`) to compare against read-only data from another group's schema; an always-visible legend on the page explains the id format, and unknown/disallowed groups surface a per-activity error banner without blanking the page
+- **Read-only cross-group comparison** (Feature #6): an id may be schema-qualified (`group:id`) to compare against read-only data from another group's schema; an always-visible legend on the page explains the id format — including how bare ids follow the [global active schema](#global-schema-switcher-read-only-cross-schema-viewing) (Feature #7) while `group:id` tokens pin to their named schema — and unknown/disallowed groups surface a per-activity error banner without blanking the page
 - Entry points — Search: select two or more activities → Compare; Details: Compare icon → pick the second activity via `?compareWith=<id>` hand-off
 - Guards: with a single activity there are no deltas and no time-behind chart (there is no baseline); activities without GPS data gracefully degrade to a lap-only comparison (map and playback controls hidden)
 
@@ -77,8 +85,10 @@ The comparison page is addressed by a single `ids` query parameter — a comma-s
 
 Each entry is one of:
 
-- **Bare number** (e.g. `1234`) — an activity in **your** primary schema.
-- **Schema-qualified** `group:id` (e.g. `alice:1234`) — read-only data from another group's schema (Feature #6). The `group` must be allowlisted server-side (via `DB_COMPARE_SCHEMAS`); an unknown group returns an error and is shown as a per-activity banner.
+- **Bare number** (e.g. `1234`) — an activity in the schema you're **currently viewing**. By default that's your own primary schema; when the header [Global Schema Switcher](#global-schema-switcher-read-only-cross-schema-viewing) is set, bare numbers follow that active schema instead.
+- **Schema-qualified** `group:id` (e.g. `alice:1234`) — read-only data from a specific group's schema (Feature #6), **always** pinned to that named schema regardless of the active schema. The `group` must be allowlisted server-side (via `DB_COMPARE_SCHEMAS`); an unknown group returns an error and is shown as a per-activity banner.
+
+Precedence: an explicit `group:id` token wins; a bare id fills in from the active schema (`resolved = explicitSchema ?? activeSchema`). A column links to its Activity Details page only when its resolved schema equals the active schema (i.e. it's your own linkable data in the current view); otherwise the name renders as plain text.
 
 Rules:
 
@@ -114,6 +124,7 @@ Examples:
 - Schedule workouts on specific calendar dates (optional scheduled_date field)
 - Keyboard shortcut: S to save (matches activity details pattern)
 - Load saved workouts from URL for editing
+- Read-only when viewing another schema (Active-Schema Switcher, Feature #7): Save/Update is disabled and a "Read-only while viewing another schema" hint is shown; the builder still loads and downloads .fit from the active schema
 
 ### Workout Library
 - Browse all saved workouts in a compact list view
@@ -124,6 +135,8 @@ Examples:
 - Download .fit files directly from the list
 - Delete workouts with confirmation dialog
 - "+ New Workout" button to create from scratch
+- Workout read endpoints (list, detail, and .fit generation) honor an optional `?schema=` cross-schema read override (Active-Schema Switcher, Feature #7); create/update/delete/schedule remain pinned to the primary schema and reject a non-primary `?schema=` with a 400
+- When a non-primary schema is active, the list is read-only: New Workout, Schedule/Unschedule, and Delete are disabled (with a read-only hint) while browsing and .fit download continue to work against the active schema. The calendar's scheduled-workout dialog likewise disables Edit and Remove from Calendar in that mode.
 
 ## Tech Stack
 
@@ -152,6 +165,7 @@ typescript/
 │   │   │   ├── pages/     # CalendarPage, ActivityDetailsPage, ActivityReportPage, ActivitySearchPage, ActivityComparePage, WorkoutBuilderPage, WorkoutsListPage
 │   │   │   ├── components/ # UI components (maps, charts, laps, details, compare, calendar, layout, workouts)
 │   │   │   ├── api/       # TanStack Query hooks and API client
+│   │   │   ├── context/   # React context providers (ActiveSchemaContext — global read-only schema switcher state)
 │   │   │   ├── lib/       # Client-only helpers (geo: track downsampling + interpolation)
 │   │   │   └── hooks/     # Custom hooks (activity navigation)
 │   │   └── public/assets/ # SVG icons for workout feel
@@ -222,14 +236,26 @@ Read routes accept an optional `?schema=<name>` query parameter:
 - Any other value is rejected with HTTP `400` and a JSON body
   `{ "error": "Unknown schema '<name>'" }`.
 
-Only read routes honour `?schema=`. Write routes (activity create/update, lap
-and length edits, workout mutations, exports) **always** operate on the primary
-`DB_SCHEMA` and ignore the parameter entirely.
+Only read routes honour `?schema=` as a target selector. Write routes (activity
+create/update, session/lap/length edits, workout mutations) **always** operate
+on the primary `DB_SCHEMA`. To make a mismatch explicit rather than a silent
+wrong-target write, they now **reject** a request whose `?schema=` is neither
+empty nor the primary schema with HTTP `400` and a JSON body
+`{ "error": "Writes are only allowed on the primary schema (got '<name>')" }`.
+An absent or primary-matching `?schema=` is accepted and writes to `DB_SCHEMA`
+as before.
+
+The `.fit` export routes (`GET /api/activities/:id/export`, `POST /api/export`)
+are reads: they accept `?schema=` and reconstruct files from the named schema
+(no writes occur), so exporting while viewing another schema returns that
+schema's activities rather than your own.
 
 ## Editing API
 
 Activity, session, and lap edits are write routes and **always** target the
-primary `DB_SCHEMA` (they ignore `?schema=`).
+primary `DB_SCHEMA`. A request carrying a `?schema=` that is neither empty nor
+the primary schema is rejected with HTTP `400` rather than writing to the
+primary target.
 
 | Method  | Path | Body | Response |
 |---------|------|------|----------|

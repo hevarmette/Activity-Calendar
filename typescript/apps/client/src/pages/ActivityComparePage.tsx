@@ -7,6 +7,7 @@ import { CompareAnimationMap } from "../components/compare/CompareAnimationMap.j
 import { CompareControls } from "../components/compare/CompareControls.js";
 import { LapComparison } from "../components/compare/LapComparison.js";
 import { TimeBehindChart } from "../components/compare/TimeBehindChart.js";
+import { useActiveSchema } from "../context/ActiveSchemaContext.js";
 import { type CompareId, paletteColor, parseCompareIds, serializeCompareId } from "../lib/compareId.js";
 import type { LatLngTime } from "../lib/geo.js";
 import { buildDistTimeTrack, buildMultiDeltaSeries } from "../lib/timeBehind.js";
@@ -29,7 +30,11 @@ interface ComparisonActivity {
 	/** Stable React key = the serialized compare id (`1234` or `schema:1234`). */
 	key: string;
 	id: number;
-	/** Secondary schema, or `undefined` for the primary schema. */
+	/**
+	 * The RESOLVED schema for this column: the explicit `schema:id` token if the
+	 * id was qualified, otherwise the global active schema (`undefined` = primary).
+	 * This is what the read hooks queried and what column headers display.
+	 */
 	schema?: string;
 	name: string;
 	sport: string;
@@ -73,6 +78,10 @@ function buildTrack(points: RecordPoint[] | undefined): LatLngTime[] {
  */
 export function ActivityComparePage() {
 	const [sp] = useSearchParams();
+	// The global active schema (from the header switcher). `undefined` = primary
+	// ("my own data"). Bare `?ids=` numbers resolve to this; explicit `schema:id`
+	// tokens override it (precedence: explicit token ?? active schema).
+	const { activeSchema } = useActiveSchema();
 	// Parse + cap the ids. Memoized on the raw string so the fixed-slot inputs are
 	// stable across renders (a fresh array each render would thrash the hooks).
 	const idsParam = sp.get("ids");
@@ -84,13 +93,19 @@ export function ActivityComparePage() {
 	const slots: CompareId[] = [];
 	for (let i = 0; i < MAX_COMPARE; i++) slots.push(targets[i] ?? { id: 0 });
 
+	// Compute the RESOLVED schema per slot: an explicit `schema:id` token wins,
+	// otherwise the bare id follows the global active schema. This is the value
+	// threaded into every read hook so bare ids read from "the schema I'm viewing
+	// as" and qualified ids always pin to their named schema.
+	const resolvedSchemas = slots.map((s) => s.schema ?? activeSchema);
+
 	// NOTE: each `.map` below calls exactly MAX_COMPARE hooks in a fixed order every
 	// render — a stable, unconditional hook sequence that satisfies the Rules of
 	// Hooks (disabled slots use id 0 so their queries never fire).
-	const acts = slots.map((s) => useActivity(s.id, s.schema));
-	const recs = slots.map((s) => useRecords(s.id, s.schema));
-	const laps = slots.map((s) => useLaps(s.id, s.schema));
-	const sess = slots.map((s) => useSessions(s.id, s.schema));
+	const acts = slots.map((s, i) => useActivity(s.id, resolvedSchemas[i]));
+	const recs = slots.map((s, i) => useRecords(s.id, resolvedSchemas[i]));
+	const laps = slots.map((s, i) => useLaps(s.id, resolvedSchemas[i]));
+	const sess = slots.map((s, i) => useSessions(s.id, resolvedSchemas[i]));
 
 	// --- Animation + filter state (ephemeral; not persisted to URL) ---
 	const [clock, setClock] = useState(0);
@@ -123,10 +138,11 @@ export function ActivityComparePage() {
 	// Auto-laps for every slot at the SHARED debounced distance. Sport is required
 	// by the endpoint; each query is id-scoped, schema-scoped, and cached. Same
 	// fixed-slot hook pattern as the loops above.
-	const autoLaps = slots.map((s, i) => useAutoLaps(s.id, sports[i] ?? "", autoLapDist, s.schema));
+	const autoLaps = slots.map((s, i) => useAutoLaps(s.id, sports[i] ?? "", autoLapDist, resolvedSchemas[i]));
 
 	// Assemble the N view models (only the active slots). Colors are index-based
 	// from the compare palette so any count stays distinguishable.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: resolvedSchemas is derived from targets + activeSchema each render; the query-result arrays already re-run this on any schema change.
 	const activities = useMemo<ComparisonActivity[]>(() => {
 		return targets.map((target, i) => {
 			const track = buildTrack(recs[i]?.data);
@@ -134,7 +150,9 @@ export function ActivityComparePage() {
 			return {
 				key: serializeCompareId(target),
 				id: target.id,
-				schema: target.schema,
+				// Store the RESOLVED schema (explicit token ?? active schema) — this is
+				// what was queried and what the header link-gating compares against.
+				schema: resolvedSchemas[i],
 				name: acts[i]?.data?.name ?? `Activity ${target.id}`,
 				sport: sports[i] ?? "",
 				color,
@@ -233,13 +251,24 @@ export function ActivityComparePage() {
 		});
 	}
 
-	// Always-visible legend explaining the id format.
+	// Always-visible legend explaining the id format and how it interacts with the
+	// global active schema (from the header switcher).
 	const legend = (
 		<p className="rounded-lg border border-gray-800 bg-gray-900 px-4 py-2 text-xs text-gray-500">
 			<span className="font-medium text-gray-400">Comparing ids:</span> a bare number (e.g.{" "}
-			<code className="text-gray-300">1234</code>) is your own data; <code className="text-gray-300">group:id</code>{" "}
-			(e.g. <code className="text-gray-300">alice:1234</code>) is another group's read-only data. Cross-group activity
-			names are shown as plain text since their detail pages aren't linkable.
+			<code className="text-gray-300">1234</code>) follows the schema you're currently viewing — your own data by
+			default, or the{" "}
+			{activeSchema != null ? (
+				<>
+					active schema (<code className="text-gray-300">{activeSchema}</code>)
+				</>
+			) : (
+				"active schema"
+			)}{" "}
+			when the header switcher is set. A <code className="text-gray-300">group:id</code> token (e.g.{" "}
+			<code className="text-gray-300">alice:1234</code>) always pins to that named schema's read-only data, regardless
+			of the active schema. Activity names link to their detail page only when they resolve to the schema you're
+			viewing; otherwise they're shown as plain text.
 		</p>
 	);
 
@@ -281,7 +310,16 @@ export function ActivityComparePage() {
 						<span key={a.key} className="inline-flex items-center gap-1.5">
 							{i > 0 && <span className="text-gray-700">vs</span>}
 							<span className="h-3 w-3 rounded-full" style={{ backgroundColor: a.color }} aria-hidden="true" />
-							{a.schema == null ? (
+							{/*
+							 * Deep-link only when this column's RESOLVED schema equals the
+							 * active schema — i.e. it's your own linkable data (both undefined
+							 * = primary, or a bare id that resolved to the schema you're viewing
+							 * as). An explicit `schema:id` token pinning to a different schema,
+							 * or a global schema being active, means the detail route (which
+							 * resolves against the active schema) wouldn't match, so we render
+							 * plain text instead.
+							 */}
+							{a.schema === activeSchema ? (
 								<Link to={`/activity/${a.id}?sport=${a.sport}`} className="transition-colors hover:text-orange-300">
 									{a.name}
 								</Link>
@@ -424,6 +462,7 @@ export function ActivityComparePage() {
 							laps: a.laps,
 							schema: a.schema,
 						}))}
+						activeSchema={activeSchema}
 						filter={intensityFilter}
 						onToggleFilter={toggleFilter}
 						onClearFilter={() => setIntensityFilter(new Set())}
@@ -443,6 +482,7 @@ export function ActivityComparePage() {
 								laps: a.autoLaps,
 								schema: a.schema,
 							}))}
+							activeSchema={activeSchema}
 						/>
 					</>
 				)}

@@ -79,4 +79,28 @@ export function resolveReadSchema(requested?: string): string {
 	throw new UnknownSchemaError(requested);
 }
 
+/**
+ * Guard a write route against a mismatched `?schema=` query parameter.
+ *
+ * Every INSERT/UPDATE/DELETE is pinned to the primary {@link SCHEMA}; there is
+ * no cross-schema write path. A client viewing an allowlisted comparison schema
+ * (Feature #6/#7) that issues a mutation while carrying that schema's name in
+ * `?schema=` would otherwise silently write to the primary schema using the
+ * wrong target's ids. To make that failure explicit rather than silent, write
+ * handlers call this at the top of the handler:
+ *
+ * - `undefined` or empty input → allowed (the default primary target).
+ * - A value equal to the primary {@link SCHEMA} → allowed (harmless no-op).
+ * - Anything else → throws {@link UnknownSchemaError} so the route can return a
+ *   `400` instead of writing to the wrong place.
+ *
+ * @param requested - The raw `?schema=` query value, if any.
+ * @throws {UnknownSchemaError} If `requested` is non-empty and not the primary schema.
+ */
+export function assertPrimaryWriteSchema(requested?: string): void {
+	if (requested !== undefined && requested !== "" && requested !== SCHEMA) {
+		throw new UnknownSchemaError(requested);
+	}
+}
+
 export default sql;

@@ -42,23 +42,31 @@ const LENGTH_COLS = sql`
 	activity_id, message_index, total_timer_time, total_strokes,
 	avg_speed, swim_stroke, length_type`;
 
-/** Hydrate a single activity's rows for FIT encoding. Returns null if not found. */
-export async function fetchActivityFitInput(activityId: number): Promise<ActivityFitInput | null> {
+/**
+ * Hydrate a single activity's rows for FIT encoding. Returns null if not found.
+ *
+ * @param activityId - The activity to hydrate.
+ * @param schema - Optional pre-resolved (already validated) schema name to read
+ *   from; defaults to the primary `SCHEMA`. Validation is the caller's
+ *   responsibility (see `resolveReadSchema` at the route layer).
+ */
+export async function fetchActivityFitInput(activityId: number, schema?: string): Promise<ActivityFitInput | null> {
+	const s = schema ?? SCHEMA;
 	const [activityRows, sessions, laps, records, events, lengths] = await Promise.all([
-		sql<ActivityRow[]>`SELECT ${ACTIVITY_COLS} FROM ${sql(SCHEMA)}.activity WHERE activity_id = ${activityId} LIMIT 1`,
+		sql<ActivityRow[]>`SELECT ${ACTIVITY_COLS} FROM ${sql(s)}.activity WHERE activity_id = ${activityId} LIMIT 1`,
 		sql<
 			SessionRow[]
-		>`SELECT ${SESSION_COLS} FROM ${sql(SCHEMA)}.session WHERE activity_id = ${activityId} ORDER BY start_time ASC`,
-		sql<LapRow[]>`SELECT ${LAP_COLS} FROM ${sql(SCHEMA)}.lap WHERE activity_id = ${activityId} ORDER BY number ASC`,
+		>`SELECT ${SESSION_COLS} FROM ${sql(s)}.session WHERE activity_id = ${activityId} ORDER BY start_time ASC`,
+		sql<LapRow[]>`SELECT ${LAP_COLS} FROM ${sql(s)}.lap WHERE activity_id = ${activityId} ORDER BY number ASC`,
 		sql<
 			RecordRow[]
-		>`SELECT ${RECORD_COLS} FROM ${sql(SCHEMA)}.record WHERE activity_id = ${activityId} ORDER BY "timestamp" ASC`,
+		>`SELECT ${RECORD_COLS} FROM ${sql(s)}.record WHERE activity_id = ${activityId} ORDER BY "timestamp" ASC`,
 		sql<
 			EventRow[]
-		>`SELECT ${EVENT_COLS} FROM ${sql(SCHEMA)}.event WHERE activity_id = ${activityId} ORDER BY "timestamp" ASC`,
+		>`SELECT ${EVENT_COLS} FROM ${sql(s)}.event WHERE activity_id = ${activityId} ORDER BY "timestamp" ASC`,
 		sql<
 			LengthRow[]
-		>`SELECT ${LENGTH_COLS} FROM ${sql(SCHEMA)}.length WHERE activity_id = ${activityId} ORDER BY message_index ASC`,
+		>`SELECT ${LENGTH_COLS} FROM ${sql(s)}.length WHERE activity_id = ${activityId} ORDER BY message_index ASC`,
 	]);
 
 	const activity = activityRows[0];
@@ -73,27 +81,32 @@ export async function fetchActivityFitInput(activityId: number): Promise<Activit
  *
  * Returns inputs in the same order as the requested ids (skipping any id that
  * has no activity row).
+ *
+ * @param ids - The activity ids to hydrate.
+ * @param schema - Optional pre-resolved (already validated) schema name to read
+ *   from; defaults to the primary `SCHEMA`.
  */
-export async function fetchActivityFitInputs(ids: number[]): Promise<ActivityFitInput[]> {
+export async function fetchActivityFitInputs(ids: number[], schema?: string): Promise<ActivityFitInput[]> {
 	if (ids.length === 0) return [];
 
+	const s = schema ?? SCHEMA;
 	const [activityRows, sessionRows, lapRows, recordRows, eventRows, lengthRows] = await Promise.all([
-		sql<ActivityRow[]>`SELECT ${ACTIVITY_COLS} FROM ${sql(SCHEMA)}.activity WHERE activity_id = ANY(${ids})`,
+		sql<ActivityRow[]>`SELECT ${ACTIVITY_COLS} FROM ${sql(s)}.activity WHERE activity_id = ANY(${ids})`,
 		sql<
 			(SessionRow & { activityId: number })[]
-		>`SELECT ${SESSION_COLS} FROM ${sql(SCHEMA)}.session WHERE activity_id = ANY(${ids}) ORDER BY start_time ASC`,
+		>`SELECT ${SESSION_COLS} FROM ${sql(s)}.session WHERE activity_id = ANY(${ids}) ORDER BY start_time ASC`,
 		sql<
 			(LapRow & { activityId: number })[]
-		>`SELECT ${LAP_COLS} FROM ${sql(SCHEMA)}.lap WHERE activity_id = ANY(${ids}) ORDER BY number ASC`,
+		>`SELECT ${LAP_COLS} FROM ${sql(s)}.lap WHERE activity_id = ANY(${ids}) ORDER BY number ASC`,
 		sql<
 			(RecordRow & { activityId: number })[]
-		>`SELECT ${RECORD_COLS} FROM ${sql(SCHEMA)}.record WHERE activity_id = ANY(${ids}) ORDER BY "timestamp" ASC`,
+		>`SELECT ${RECORD_COLS} FROM ${sql(s)}.record WHERE activity_id = ANY(${ids}) ORDER BY "timestamp" ASC`,
 		sql<
 			(EventRow & { activityId: number })[]
-		>`SELECT ${EVENT_COLS} FROM ${sql(SCHEMA)}.event WHERE activity_id = ANY(${ids}) ORDER BY "timestamp" ASC`,
+		>`SELECT ${EVENT_COLS} FROM ${sql(s)}.event WHERE activity_id = ANY(${ids}) ORDER BY "timestamp" ASC`,
 		sql<
 			(LengthRow & { activityId: number })[]
-		>`SELECT ${LENGTH_COLS} FROM ${sql(SCHEMA)}.length WHERE activity_id = ANY(${ids}) ORDER BY message_index ASC`,
+		>`SELECT ${LENGTH_COLS} FROM ${sql(s)}.length WHERE activity_id = ANY(${ids}) ORDER BY message_index ASC`,
 	]);
 
 	const activityById = new Map<number, ActivityRow>();
@@ -156,12 +169,20 @@ function toRegexPattern(input: string): string | null {
  * regex `~*` on titleSearch/descriptionSearch). Returns IDs ordered by
  * local_timestamp DESC. When no filters are given, returns every activity id
  * (used by the `all: true` export path).
+ *
+ * @param filters - Text-search filters (q, titleSearch, descriptionSearch).
+ * @param schema - Optional pre-resolved (already validated) schema name to read
+ *   from; defaults to the primary `SCHEMA`.
  */
-export async function resolveExportIds(filters: {
-	q?: string;
-	titleSearch?: string;
-	descriptionSearch?: string;
-}): Promise<number[]> {
+export async function resolveExportIds(
+	filters: {
+		q?: string;
+		titleSearch?: string;
+		descriptionSearch?: string;
+	},
+	schema?: string,
+): Promise<number[]> {
+	const s = schema ?? SCHEMA;
 	const q = filters.q?.trim() || "";
 	const titleSearch = filters.titleSearch?.trim() || "";
 	const descriptionSearch = filters.descriptionSearch?.trim() || "";
@@ -169,7 +190,7 @@ export async function resolveExportIds(filters: {
 	if (!q && !titleSearch && !descriptionSearch) {
 		const rows = await sql<{ activityId: number }[]>`
 			SELECT activity_id
-			FROM ${sql(SCHEMA)}.activity
+			FROM ${sql(s)}.activity
 			ORDER BY COALESCE(local_timestamp, "timestamp") DESC
 		`;
 		return rows.map((r) => Number(r.activityId));
@@ -181,7 +202,7 @@ export async function resolveExportIds(filters: {
 
 	const rows = await sql<{ activityId: number }[]>`
 		SELECT a.activity_id
-		FROM ${sql(SCHEMA)}.activity a
+		FROM ${sql(s)}.activity a
 		WHERE
 			(${titlePattern}::text IS NULL OR a.activity_name ~* ${titlePattern ?? ""})
 			AND (${descPattern}::text IS NULL OR a.description ~* ${descPattern ?? ""})

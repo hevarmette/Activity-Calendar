@@ -20,6 +20,8 @@
  * - Save/Update to server with URL persistence (?id=N)
  * - Keyboard shortcut: S to save (matches activity details pattern)
  * - Load saved workouts from URL search params on mount
+ * - Read-only when a non-primary schema is active (Save/Update disabled; writes are
+ *   primary-only). Viewing and .fit download still target the active schema.
  */
 import type { RepeatStep, WorkoutSport, WorkoutStep, WorkoutStepOrRepeat } from "@activity-calendar/shared";
 import { isRepeatStep } from "@activity-calendar/shared";
@@ -30,6 +32,7 @@ import { useSaveWorkout, useUpdateWorkout, useWorkout } from "../api/workout-que
 import { StepList } from "../components/workouts/StepList.js";
 import { WorkoutPreview } from "../components/workouts/WorkoutPreview.js";
 import { type DistanceUnit, getSportVerb } from "../components/workouts/constants.js";
+import { useActiveSchema } from "../context/ActiveSchemaContext.js";
 
 // ─── State & Reducer ──────────────────────────────────────────────────────────
 
@@ -178,6 +181,11 @@ const SPORT_OPTIONS: { value: WorkoutSport; label: string }[] = [
 
 export function WorkoutBuilderPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
+	// When a non-primary schema is active (activeSchema !== undefined), the app is in
+	// read-only mode: workout writes are primary-only and the server 400s a non-primary
+	// ?schema= write. We still read/generate from the active schema so viewing works.
+	const { activeSchema } = useActiveSchema();
+	const readOnly = activeSchema !== undefined;
 	const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
 	const [generating, setGenerating] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -288,7 +296,7 @@ export function WorkoutBuilderPage() {
 	}, [state]);
 
 	const handleSave = useCallback(async () => {
-		if (hasErrors) return;
+		if (hasErrors || readOnly) return;
 		setError(null);
 		setSaving(true);
 		try {
@@ -310,7 +318,7 @@ export function WorkoutBuilderPage() {
 		} finally {
 			setSaving(false);
 		}
-	}, [hasErrors, workoutId, buildDefinition, saveWorkoutMutation, updateWorkoutMutation, setSearchParams]);
+	}, [hasErrors, workoutId, buildDefinition, saveWorkoutMutation, updateWorkoutMutation, setSearchParams, readOnly]);
 
 	// ─── Keyboard shortcut: S to save ─────────────────────────────────────────
 
@@ -334,7 +342,7 @@ export function WorkoutBuilderPage() {
 		setError(null);
 		setGenerating(true);
 		try {
-			await downloadWorkoutFit(buildDefinition());
+			await downloadWorkoutFit(buildDefinition(), activeSchema);
 			setDownloadSuccess(true);
 			setTimeout(() => setDownloadSuccess(false), 2000);
 		} catch (err) {
@@ -342,7 +350,7 @@ export function WorkoutBuilderPage() {
 		} finally {
 			setGenerating(false);
 		}
-	}, [buildDefinition, hasErrors]);
+	}, [buildDefinition, hasErrors, activeSchema]);
 
 	// ─── Render ───────────────────────────────────────────────────────────────
 
@@ -532,7 +540,8 @@ export function WorkoutBuilderPage() {
 					<button
 						type="button"
 						onClick={handleSave}
-						disabled={hasErrors || saving}
+						disabled={hasErrors || saving || readOnly}
+						title={readOnly ? "Read-only while viewing another schema" : undefined}
 						className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
 							saveSuccess
 								? "bg-green-600 border border-green-600 text-white"
@@ -585,6 +594,11 @@ export function WorkoutBuilderPage() {
 							</>
 						)}
 					</button>
+
+					{/* Read-only hint — writes are primary-only; downloads still work */}
+					{readOnly && (
+						<p className="text-xs text-gray-500 text-center -mt-1">Read-only while viewing another schema</p>
+					)}
 
 					{/* Generate / Download button */}
 					<button

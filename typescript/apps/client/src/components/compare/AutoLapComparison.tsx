@@ -10,10 +10,20 @@ interface ColumnProps {
 	sport: string;
 	laps: AutoLap[];
 	/**
-	 * Secondary schema this activity lives in, or `undefined` for primary. When
-	 * set, the header renders as plain text (the detail route is primary-only).
+	 * The RESOLVED schema this activity was read from (explicit `schema:id` token
+	 * if qualified, otherwise the global active schema). `undefined` = primary.
+	 * Used for the `(schema)` label and, together with {@link activeSchema}, to
+	 * decide whether the header links to the detail page.
 	 */
 	schema?: string;
+	/**
+	 * The globally active schema (`undefined` = primary). The header links to the
+	 * detail page only when `schema === activeSchema` — i.e. this column shows
+	 * your own linkable data. Otherwise it renders plain text, since the detail
+	 * route resolves against the active schema and wouldn't match a differently
+	 * pinned column.
+	 */
+	activeSchema?: string;
 	/**
 	 * When provided, this column renders per-row split deltas relative to the
 	 * auto-lap at the SAME visible index in this array. Passed to non-baseline
@@ -69,7 +79,7 @@ function formatPaceSpeedDelta(sport: string, a: AutoLap, b: AutoLap) {
 }
 
 /** A single read-only auto-lap table for one activity (no intensity column). */
-function AutoLapColumn({ id, name, color, sport, laps, schema, deltaAgainst }: ColumnProps) {
+function AutoLapColumn({ id, name, color, sport, laps, schema, activeSchema, deltaAgainst }: ColumnProps) {
 	const isCycling = sport === Sport.Cycling;
 
 	return (
@@ -77,11 +87,13 @@ function AutoLapColumn({ id, name, color, sport, laps, schema, deltaAgainst }: C
 			<div className="mb-2 flex items-center gap-2">
 				<span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
 				{/*
-				 * Primary-schema columns link to the detail page; secondary-schema
-				 * columns render plain text (the detail route is primary-only, so a
-				 * cross-schema deep link would not resolve).
+				 * Link to the detail page only when this column's resolved schema
+				 * equals the active schema — i.e. your own linkable data (the detail
+				 * route resolves against the active schema too). A column pinned to a
+				 * different schema renders plain text, since its deep link wouldn't
+				 * resolve to the right activity.
 				 */}
-				{schema == null ? (
+				{schema === activeSchema ? (
 					<Link
 						to={`/activity/${id}?sport=${sport}`}
 						className="truncate text-sm font-medium text-gray-200 transition-colors hover:text-orange-300"
@@ -166,12 +178,14 @@ export interface AutoLapColumnData {
 	color: string;
 	sport: string;
 	laps: AutoLap[];
-	/** Secondary schema, or `undefined` for the primary schema. */
+	/** Resolved schema (explicit token ?? active schema), or `undefined` for primary. */
 	schema?: string;
 }
 
 interface Props {
 	columns: AutoLapColumnData[];
+	/** The globally active schema; a column links out only when `schema === activeSchema`. */
+	activeSchema?: string;
 }
 
 /**
@@ -189,7 +203,7 @@ interface Props {
  * reads red; distance deltas stay neutral. Where a column has more laps than the
  * baseline, the delta shows "—". This mirrors LapComparison's visual language.
  */
-export function AutoLapComparison({ columns }: Props) {
+export function AutoLapComparison({ columns, activeSchema }: Props) {
 	const baseline = columns[0];
 	const baselineLaps = baseline?.laps ?? [];
 	const baselineName = baseline?.name ?? "baseline";
@@ -215,6 +229,7 @@ export function AutoLapComparison({ columns }: Props) {
 						sport={col.sport}
 						laps={col.laps}
 						schema={col.schema}
+						activeSchema={activeSchema}
 						deltaAgainst={index === 0 ? undefined : baselineLaps}
 					/>
 				))}

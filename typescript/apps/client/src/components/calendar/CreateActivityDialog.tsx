@@ -10,6 +10,7 @@ import {
 import type { CreateActivityPayload, CreateLapInput } from "@activity-calendar/shared";
 import { useState } from "react";
 import { useCreateActivity } from "../../api/mutations.js";
+import { useActiveSchema } from "../../context/ActiveSchemaContext.js";
 import { Dialog } from "../ui/Dialog.js";
 
 interface Props {
@@ -67,6 +68,10 @@ function lapDistanceToMeters(distance: number, unit: "mi" | "km" | "m"): number 
  */
 export function CreateActivityDialog({ open, onClose, initialDate }: Props) {
 	const createMutation = useCreateActivity();
+	// Creating always writes to the primary schema; block it while viewing a
+	// secondary schema so a new activity can't be silently mis-targeted.
+	const { activeSchema } = useActiveSchema();
+	const isReadOnly = activeSchema !== undefined;
 
 	// Default start time to "now" (rounded to minute for datetime-local input)
 	function getDefaultStartTime(): string {
@@ -164,6 +169,7 @@ export function CreateActivityDialog({ open, onClose, initialDate }: Props) {
 	}
 
 	function handleSubmit() {
+		if (isReadOnly) return; // read-only schema: never create
 		const validationErrors = validate();
 		if (validationErrors.length > 0) {
 			setErrors(validationErrors);
@@ -216,6 +222,13 @@ export function CreateActivityDialog({ open, onClose, initialDate }: Props) {
 	return (
 		<Dialog open={open} onClose={onClose} title="Create Activity" subtitle="Add a manual activity without GPS data">
 			<div className="space-y-4">
+				{/* Read-only notice — creating targets the primary schema, so it is
+				    disabled while viewing a secondary schema. */}
+				{isReadOnly && (
+					<div className="rounded-lg bg-red-600/20 border border-red-500/50 px-3 py-2 text-sm text-red-300">
+						Viewing schema “{activeSchema}” (read-only). Switch back to your own data to create activities.
+					</div>
+				)}
 				{/* Errors */}
 				{errors.length > 0 && (
 					<div className="rounded-lg bg-red-900/30 border border-red-700/50 px-3 py-2 text-sm text-red-300">
@@ -541,7 +554,8 @@ export function CreateActivityDialog({ open, onClose, initialDate }: Props) {
 					<button
 						type="button"
 						onClick={handleSubmit}
-						disabled={createMutation.isPending}
+						disabled={createMutation.isPending || isReadOnly}
+						title={isReadOnly ? "Read-only: viewing another schema" : undefined}
 						className="rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed px-5 py-2 text-sm font-medium text-white transition-colors"
 					>
 						{createMutation.isPending ? "Creating…" : "Create Activity"}

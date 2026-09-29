@@ -69,9 +69,15 @@ async function triggerBlobDownload(res: Response, fallbackName: string): Promise
 /**
  * Export a single completed activity as a .fit file and trigger a download.
  * Uses GET /api/activities/:id/export.
+ *
+ * @param activityId - The activity to export.
+ * @param fallbackName - Filename to use if the server omits Content-Disposition.
+ * @param schema - Optional secondary schema to read from (cross-schema export).
+ *   When omitted/empty, the primary schema is used.
  */
-export async function downloadActivityFit(activityId: number, fallbackName?: string): Promise<void> {
-	const res = await fetch(`${BASE}/api/activities/${activityId}/export`);
+export async function downloadActivityFit(activityId: number, fallbackName?: string, schema?: string): Promise<void> {
+	const qs = schema ? `?schema=${encodeURIComponent(schema)}` : "";
+	const res = await fetch(`${BASE}/api/activities/${activityId}/export${qs}`);
 	await triggerBlobDownload(res, fallbackName ?? `activity_${activityId}.fit`);
 }
 
@@ -79,11 +85,17 @@ export async function downloadActivityFit(activityId: number, fallbackName?: str
  * Export a set of completed activities as a ZIP of .fit files and trigger a
  * download. Uses POST /api/export with an ActivityExportRequest body
  * (activityIds, text filters, or { all: true }).
+ *
+ * @param request - The export request body.
+ * @param schema - Optional secondary schema to read from (cross-schema export).
+ *   When omitted/empty, the primary schema is used.
  */
 export async function downloadActivitiesZip(
 	request: import("@activity-calendar/shared").ActivityExportRequest,
+	schema?: string,
 ): Promise<void> {
-	const res = await fetch(`${BASE}/api/export`, {
+	const qs = schema ? `?schema=${encodeURIComponent(schema)}` : "";
+	const res = await fetch(`${BASE}/api/export${qs}`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(request),
@@ -97,11 +109,18 @@ export async function downloadActivitiesZip(
  *
  * This bypasses the standard `api()` helper since it needs to handle
  * a binary Blob response instead of JSON.
+ *
+ * @param workout - The workout definition to encode.
+ * @param schema - Optional active schema. `/api/workouts/generate` is a
+ *   stateless encode (no DB read), but the param is forwarded so a server-side
+ *   write/schema guard can fire and callers can pass `activeSchema` uniformly.
  */
 export async function downloadWorkoutFit(
 	workout: import("@activity-calendar/shared").WorkoutDefinition,
+	schema?: string,
 ): Promise<void> {
-	const res = await fetch(`${BASE}/api/workouts/generate`, {
+	const qs = schema ? `?schema=${encodeURIComponent(schema)}` : "";
+	const res = await fetch(`${BASE}/api/workouts/generate${qs}`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(workout),
@@ -128,9 +147,15 @@ export async function downloadWorkoutFit(
  *
  * Uses POST /api/workouts/:id/generate which looks up the workout definition
  * from the database and encodes it using the workout_id as the serial number.
+ *
+ * @param workoutId - The saved workout to generate.
+ * @param name - Fallback filename base if the server omits Content-Disposition.
+ * @param schema - Optional secondary schema to read the workout from. When
+ *   omitted/empty, the primary schema is used.
  */
-export async function downloadSavedWorkoutFit(workoutId: number, name: string): Promise<void> {
-	const res = await fetch(`${BASE}/api/workouts/${workoutId}/generate`, {
+export async function downloadSavedWorkoutFit(workoutId: number, name: string, schema?: string): Promise<void> {
+	const qs = schema ? `?schema=${encodeURIComponent(schema)}` : "";
+	const res = await fetch(`${BASE}/api/workouts/${workoutId}/generate${qs}`, {
 		method: "POST",
 	});
 	if (!res.ok) {
@@ -154,9 +179,19 @@ export async function downloadSavedWorkoutFit(workoutId: number, name: string): 
  *
  * Overrides whatever the server sends in Content-Disposition — uses the
  * scheduledDate directly for a cleaner filename when downloading from the calendar.
+ *
+ * @param workoutId - The scheduled workout to generate.
+ * @param scheduledDate - The scheduled date, used verbatim as the filename base.
+ * @param schema - Optional secondary schema to read the workout from. When
+ *   omitted/empty, the primary schema is used.
  */
-export async function downloadScheduledWorkoutFit(workoutId: number, scheduledDate: string): Promise<void> {
-	const res = await fetch(`${BASE}/api/workouts/${workoutId}/generate`, {
+export async function downloadScheduledWorkoutFit(
+	workoutId: number,
+	scheduledDate: string,
+	schema?: string,
+): Promise<void> {
+	const qs = schema ? `?schema=${encodeURIComponent(schema)}` : "";
+	const res = await fetch(`${BASE}/api/workouts/${workoutId}/generate${qs}`, {
 		method: "POST",
 	});
 	if (!res.ok) {

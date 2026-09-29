@@ -11,6 +11,7 @@ import type {
 	TimerEvent,
 } from "@activity-calendar/shared";
 import { useQuery } from "@tanstack/react-query";
+import { useActiveSchema } from "../context/ActiveSchemaContext.js";
 import { api } from "./client.js";
 
 export const queryKeys = {
@@ -36,15 +37,16 @@ export const queryKeys = {
  *   fragment is joined with `&` instead of `?`).
  * @returns `""`, `"?schema=<enc>"`, or `"&schema=<enc>"`.
  */
-function schemaQuery(schema: string | undefined, hasQuery: boolean): string {
+export function schemaQuery(schema: string | undefined, hasQuery: boolean): string {
 	if (!schema) return "";
 	return `${hasQuery ? "&" : "?"}schema=${encodeURIComponent(schema)}`;
 }
 
 export function useCalendar() {
+	const { activeSchema } = useActiveSchema();
 	return useQuery({
-		queryKey: queryKeys.calendar,
-		queryFn: () => api<CalendarEvent[]>("/api/calendar"),
+		queryKey: [...queryKeys.calendar, activeSchema] as const,
+		queryFn: () => api<CalendarEvent[]>(`/api/calendar${schemaQuery(activeSchema, false)}`),
 	});
 }
 
@@ -82,36 +84,43 @@ export function useLaps(id: number, schema?: string) {
 }
 
 export function useLengths(id: number) {
+	const { activeSchema } = useActiveSchema();
 	return useQuery({
-		queryKey: queryKeys.lengths(id),
-		queryFn: () => api<SwimLength[]>(`/api/lengths/${id}`),
+		queryKey: [...queryKeys.lengths(id), activeSchema] as const,
+		queryFn: () => api<SwimLength[]>(`/api/lengths/${id}${schemaQuery(activeSchema, false)}`),
 		enabled: id > 0,
 	});
 }
 
 export function useEvents(id: number) {
+	const { activeSchema } = useActiveSchema();
 	return useQuery({
-		queryKey: queryKeys.events(id),
-		queryFn: () => api<TimerEvent[]>(`/api/events/${id}`),
+		queryKey: [...queryKeys.events(id), activeSchema] as const,
+		queryFn: () => api<TimerEvent[]>(`/api/events/${id}${schemaQuery(activeSchema, false)}`),
 		enabled: id > 0,
 	});
 }
 
 export function useSimilar(id: number, title: string, sport: string) {
+	const { activeSchema } = useActiveSchema();
 	return useQuery({
-		queryKey: queryKeys.similar(id),
+		// Key includes title + sport (the query depends on both) and activeSchema.
+		// Previously the key omitted title/sport, so a title/sport change reused
+		// stale cached results — this fixes that pre-existing mismatch.
+		queryKey: [...queryKeys.similar(id), title, sport, activeSchema] as const,
 		queryFn: () =>
 			api<SimilarActivity[]>(
-				`/api/similar/${id}?title=${encodeURIComponent(title)}&sport=${encodeURIComponent(sport)}`,
+				`/api/similar/${id}?title=${encodeURIComponent(title)}&sport=${encodeURIComponent(sport)}${schemaQuery(activeSchema, true)}`,
 			),
 		enabled: id > 0 && title.length > 0,
 	});
 }
 
 export function useReport() {
+	const { activeSchema } = useActiveSchema();
 	return useQuery({
-		queryKey: queryKeys.report,
-		queryFn: () => api<ReportRow[]>("/api/report"),
+		queryKey: [...queryKeys.report, activeSchema] as const,
+		queryFn: () => api<ReportRow[]>(`/api/report${schemaQuery(activeSchema, false)}`),
 	});
 }
 
@@ -126,17 +135,18 @@ export interface SearchParams {
 }
 
 export function useSearch(params?: SearchParams) {
+	const { activeSchema } = useActiveSchema();
 	const cacheKey = params ? `${params.q ?? ""}|${params.titleSearch ?? ""}|${params.descriptionSearch ?? ""}` : "";
 
 	return useQuery({
-		queryKey: [...queryKeys.search, cacheKey] as const,
+		queryKey: [...queryKeys.search, cacheKey, activeSchema] as const,
 		queryFn: () => {
 			const searchParams = new URLSearchParams();
 			if (params?.q) searchParams.set("q", params.q);
 			if (params?.titleSearch) searchParams.set("titleSearch", params.titleSearch);
 			if (params?.descriptionSearch) searchParams.set("descriptionSearch", params.descriptionSearch);
 			const qs = searchParams.toString();
-			return api<SearchRow[]>(qs ? `/api/search?${qs}` : "/api/search");
+			return api<SearchRow[]>(`/api/search${qs ? `?${qs}` : ""}${schemaQuery(activeSchema, qs.length > 0)}`);
 		},
 	});
 }

@@ -15,6 +15,7 @@ import { AutoLapTable } from "../components/laps/AutoLapTable.js";
 import { type LapEdit, LapTable } from "../components/laps/LapTable.js";
 import { SwimLengthTable } from "../components/laps/SwimLengthTable.js";
 import { DetailMap } from "../components/maps/DetailMap.js";
+import { useActiveSchema } from "../context/ActiveSchemaContext.js";
 import { useActivityNavigation } from "../hooks/useActivityNavigation.js";
 
 type Tab = "laps" | "details" | "auto-laps";
@@ -33,6 +34,11 @@ export function ActivityDetailsPage() {
 	const id = Number(activityId);
 	const sport = searchParams.get("sport") || Sport.Running;
 
+	// When a secondary schema is active, the whole app is read-only: edits and
+	// saves would target the primary schema with this schema's ids (a data bug).
+	const { activeSchema } = useActiveSchema();
+	const isReadOnly = activeSchema !== undefined;
+
 	const { data: activity, isLoading } = useActivity(id);
 	const { data: points } = useRecords(id);
 	const { data: sessions } = useSessions(id);
@@ -47,10 +53,14 @@ export function ActivityDetailsPage() {
 	const [activityEdits, setActivityEdits] = useState<Partial<ActivityUpdatePayload>>({});
 	const [lapEdits, setLapEditsState] = useState<LapEdit[]>([]);
 	const lapEditsRef = useRef<LapEdit[]>([]);
-	const setLapEdits = useCallback((edits: LapEdit[]) => {
-		lapEditsRef.current = edits;
-		setLapEditsState(edits);
-	}, []);
+	const setLapEdits = useCallback(
+		(edits: LapEdit[]) => {
+			if (isReadOnly) return; // read-only schema: ignore lap edits
+			lapEditsRef.current = edits;
+			setLapEditsState(edits);
+		},
+		[isReadOnly],
+	);
 	const [sessionIdx, setSessionIdx] = useState(0);
 	const [sessionEdits, setSessionEdits] = useState<Map<number, { totalDistance?: number; totalTimerTime?: number }>>(
 		new Map(),
@@ -61,20 +71,25 @@ export function ActivityDetailsPage() {
 	const [distanceInput, setDistanceInput] = useState("");
 	const [durationInput, setDurationInput] = useState("");
 
-	const handleChange = useCallback((updates: Partial<ActivityUpdatePayload>) => {
-		setActivityEdits((prev) => ({ ...prev, ...updates }));
-	}, []);
+	const handleChange = useCallback(
+		(updates: Partial<ActivityUpdatePayload>) => {
+			if (isReadOnly) return; // read-only schema: ignore edits
+			setActivityEdits((prev) => ({ ...prev, ...updates }));
+		},
+		[isReadOnly],
+	);
 
 	/** Merge pending edits for a single multisport session leg, keyed by sessionId. */
 	const handleSessionChange = useCallback(
 		(sessionId: number, updates: { totalDistance?: number; totalTimerTime?: number }) => {
+			if (isReadOnly) return; // read-only schema: ignore edits
 			setSessionEdits((prev) => {
 				const next = new Map(prev);
 				next.set(sessionId, { ...next.get(sessionId), ...updates });
 				return next;
 			});
 		},
-		[],
+		[isReadOnly],
 	);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: local edits must reset when the route activity changes.
@@ -109,7 +124,7 @@ export function ActivityDetailsPage() {
 		try {
 			const rawName = activity?.name ?? `activity_${id}`;
 			const safeName = rawName.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
-			await downloadActivityFit(id, `${safeName}_${id}.fit`);
+			await downloadActivityFit(id, `${safeName}_${id}.fit`, activeSchema);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "Export failed.";
 			setExportError(message);
@@ -123,6 +138,7 @@ export function ActivityDetailsPage() {
 	const [autoLapDist, setAutoLapDist] = useState<number | null>(null);
 
 	async function handleSave() {
+		if (isReadOnly) return; // read-only schema: never mutate
 		setSaveError(null);
 		try {
 			const sqls: string[] = [];
@@ -238,7 +254,8 @@ export function ActivityDetailsPage() {
 						value={title}
 						onChange={(e) => handleChange({ activityName: e.target.value || null })}
 						placeholder="Activity title"
-						className="flex-1 min-w-0 bg-transparent border-none text-4xl font-bold text-gray-50 placeholder-gray-600 focus:outline-none"
+						disabled={isReadOnly}
+						className="flex-1 min-w-0 bg-transparent border-none text-4xl font-bold text-gray-50 placeholder-gray-600 focus:outline-none disabled:cursor-not-allowed"
 					/>
 					<span className="text-lg text-gray-500 shrink-0">- {id}</span>
 				</div>
@@ -247,7 +264,8 @@ export function ActivityDetailsPage() {
 					<select
 						value={category}
 						onChange={(e) => handleChange({ category: e.target.value || null })}
-						className="rounded border border-gray-700 bg-gray-800 px-2 py-1 text-sm text-gray-300 hover:border-gray-600 hover:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500/50 cursor-pointer capitalize transition-colors [color-scheme:dark]"
+						disabled={isReadOnly}
+						className="rounded border border-gray-700 bg-gray-800 px-2 py-1 text-sm text-gray-300 hover:border-gray-600 hover:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500/50 cursor-pointer capitalize transition-colors [color-scheme:dark] disabled:cursor-not-allowed disabled:opacity-60"
 					>
 						{CATEGORIES.map((c) => (
 							<option key={c} value={c} className="bg-gray-800 text-gray-200">
@@ -371,8 +389,9 @@ export function ActivityDetailsPage() {
 										);
 									}}
 									style={{ width: `${(distanceInput.length || 1) + 1}ch` }}
-									className="min-w-0 bg-transparent border-none p-0 text-2xl font-bold text-gray-50 tabular-nums focus:outline-none focus:text-orange-200"
+									className="min-w-0 bg-transparent border-none p-0 text-2xl font-bold text-gray-50 tabular-nums focus:outline-none focus:text-orange-200 disabled:cursor-not-allowed"
 									aria-label="Distance in miles"
+									disabled={isReadOnly}
 								/>
 								<span className="text-2xl font-bold text-gray-500 ml-1">mi</span>
 							</div>
@@ -391,8 +410,9 @@ export function ActivityDetailsPage() {
 									const seconds = parseHmsToSeconds(e.target.value);
 									setDurationInput(convertSecondsToHms(seconds ?? editedDuration) ?? "");
 								}}
-								className="mt-1 w-full bg-transparent border-none p-0 text-2xl font-bold text-gray-50 tabular-nums focus:outline-none focus:text-orange-200"
+								className="mt-1 w-full bg-transparent border-none p-0 text-2xl font-bold text-gray-50 tabular-nums focus:outline-none focus:text-orange-200 disabled:cursor-not-allowed"
 								aria-label="Duration"
+								disabled={isReadOnly}
 							/>
 						</MetricBlock>
 					</>
@@ -440,7 +460,8 @@ export function ActivityDetailsPage() {
 						onChange={(e) => handleChange({ description: e.target.value || null })}
 						placeholder="Description"
 						rows={8}
-						className="w-full h-full min-h-[500px] rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:border-orange-500"
+						disabled={isReadOnly}
+						className="w-full h-full min-h-[500px] rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:border-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
 					/>
 				</div>
 			</div>
@@ -558,11 +579,12 @@ export function ActivityDetailsPage() {
 				type="button"
 				data-testid="save-button"
 				onClick={handleSave}
-				disabled={!isDirty || saveActivity.isPending}
+				disabled={!isDirty || saveActivity.isPending || isReadOnly}
 				aria-label="Save changes"
-				className={`w-full rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${isDirty ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-emerald-600/30 text-emerald-200/50 cursor-not-allowed"}`}
+				title={isReadOnly ? "Read-only: viewing another schema" : undefined}
+				className={`w-full rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${isDirty && !isReadOnly ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-emerald-600/30 text-emerald-200/50 cursor-not-allowed"}`}
 			>
-				{saveActivity.isPending ? "Saving…" : "Save Changes"}
+				{isReadOnly ? "Read-only (viewing another schema)" : saveActivity.isPending ? "Saving…" : "Save Changes"}
 			</button>
 
 			{exportError && (

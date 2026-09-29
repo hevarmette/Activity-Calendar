@@ -4,6 +4,8 @@
  * Returns activities matching optional filter criteria.
  *
  * Query parameters:
+ *   - schema (optional): Read-only cross-schema override (validated against the
+ *     allowlist; invalid values return 400).
  *   - q (optional): Free-text search query matched against activity_name and description.
  *     When provided, results are filtered using ILIKE pattern matching and pg_trgm
  *     word_similarity (threshold > 0.3) for fuzzy matching. Results are ordered by
@@ -27,7 +29,7 @@
  */
 import { Hono } from "hono";
 import { TIMEZONE } from "../config.js";
-import sql, { SCHEMA } from "../db.js";
+import sql, { resolveReadSchema, UnknownSchemaError } from "../db.js";
 
 export const searchRoutes = new Hono();
 
@@ -57,6 +59,14 @@ searchRoutes.get("/", async (c) => {
 	const titleSearch = c.req.query("titleSearch")?.trim() || "";
 	const descriptionSearch = c.req.query("descriptionSearch")?.trim() || "";
 
+	let schema: string;
+	try {
+		schema = resolveReadSchema(c.req.query("schema"));
+	} catch (err) {
+		if (err instanceof UnknownSchemaError) return c.json({ error: err.message }, 400);
+		throw err;
+	}
+
 	const hasSearch = q || titleSearch || descriptionSearch;
 
 	if (hasSearch) {
@@ -76,8 +86,8 @@ searchRoutes.get("/", async (c) => {
 						word_similarity(${normalized}, LOWER(TRIM(regexp_replace(COALESCE(a.activity_name, ''), '\s+', ' ', 'g')))),
 						word_similarity(${normalized}, LOWER(TRIM(regexp_replace(COALESCE(a.description, ''), '\s+', ' ', 'g'))))
 					) AS relevance
-				FROM ${sql(SCHEMA)}.activity a
-				JOIN ${sql(SCHEMA)}.session s ON a.activity_id = s.activity_id
+				FROM ${sql(schema)}.activity a
+				JOIN ${sql(schema)}.session s ON a.activity_id = s.activity_id
 				WHERE
 					a.activity_name ILIKE ${`%${normalized}%`}
 					OR a.description ILIKE ${`%${normalized}%`}
@@ -103,8 +113,8 @@ searchRoutes.get("/", async (c) => {
 				s.sport, s.sub_sport, s.total_distance, s.total_timer_time,
 				s.total_calories, s.total_ascent, s.total_descent,
 				s.avg_heart_rate, s.max_heart_rate, s.enhanced_avg_speed
-			FROM ${sql(SCHEMA)}.activity a
-			JOIN ${sql(SCHEMA)}.session s ON a.activity_id = s.activity_id
+			FROM ${sql(schema)}.activity a
+			JOIN ${sql(schema)}.session s ON a.activity_id = s.activity_id
 			WHERE
 				(${titlePattern}::text IS NULL OR a.activity_name ~* ${titlePattern ?? ""})
 				AND (${descPattern}::text IS NULL OR a.description ~* ${descPattern ?? ""})
@@ -131,8 +141,8 @@ searchRoutes.get("/", async (c) => {
 			s.sport, s.sub_sport, s.total_distance, s.total_timer_time,
 			s.total_calories, s.total_ascent, s.total_descent,
 			s.avg_heart_rate, s.max_heart_rate, s.enhanced_avg_speed
-		FROM ${sql(SCHEMA)}.activity a
-		JOIN ${sql(SCHEMA)}.session s ON a.activity_id = s.activity_id
+		FROM ${sql(schema)}.activity a
+		JOIN ${sql(schema)}.session s ON a.activity_id = s.activity_id
 		ORDER BY local_timestamp DESC
 	`;
 	return c.json(rows);

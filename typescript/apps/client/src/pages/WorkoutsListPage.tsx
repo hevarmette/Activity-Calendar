@@ -13,12 +13,17 @@
  * - Download button → triggers .fit generation from saved workout
  * - Delete button → confirmation dialog then mutation
  * - "+ New Workout" → /workouts/builder (no id)
+ *
+ * Read-only mode: when a non-primary schema is active, Schedule/Delete/New are
+ * disabled (writes are primary-only). The list still reads and downloads .fit
+ * from the active schema.
  */
 import type { WorkoutSport } from "@activity-calendar/shared";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { downloadSavedWorkoutFit } from "../api/client.js";
 import { useDeleteWorkout, useScheduleWorkout, useWorkouts } from "../api/workout-queries.js";
+import { useActiveSchema } from "../context/ActiveSchemaContext.js";
 
 /** Available sort options for the workout list. */
 type SortOption = "newest" | "oldest" | "name-asc" | "name-desc" | "sport";
@@ -44,6 +49,12 @@ export function WorkoutsListPage() {
 	const [deletingId, setDeletingId] = useState<number | null>(null);
 	const [schedulingId, setSchedulingId] = useState<number | null>(null);
 	const [error, setError] = useState<string | null>(null);
+
+	// Read-only mode when a non-primary schema is active: workout writes (delete,
+	// schedule/unschedule) are primary-only and rejected server-side with a 400.
+	// Reads and .fit downloads still target the active schema.
+	const { activeSchema } = useActiveSchema();
+	const readOnly = activeSchema !== undefined;
 
 	const { data: workouts, isLoading } = useWorkouts(sportFilter || undefined);
 	const deleteWorkoutMutation = useDeleteWorkout();
@@ -78,7 +89,7 @@ export function WorkoutsListPage() {
 		setError(null);
 		setDownloadingId(workoutId);
 		try {
-			await downloadSavedWorkoutFit(workoutId, name);
+			await downloadSavedWorkoutFit(workoutId, name, activeSchema);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Download failed");
 		} finally {
@@ -88,6 +99,7 @@ export function WorkoutsListPage() {
 
 	/** Delete a workout after user confirmation. */
 	async function handleDelete(workoutId: number, name: string) {
+		if (readOnly) return;
 		if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
 		setError(null);
 		setDeletingId(workoutId);
@@ -102,6 +114,7 @@ export function WorkoutsListPage() {
 
 	/** Toggle scheduling: if already scheduled, unschedule; otherwise show the date picker. */
 	async function handleScheduleToggle(workoutId: number, currentDate: string | null | undefined) {
+		if (readOnly) return;
 		if (currentDate) {
 			// Unschedule
 			setError(null);
@@ -121,6 +134,7 @@ export function WorkoutsListPage() {
 
 	/** Schedule on a specific date picked from the inline date input. */
 	async function handleScheduleDate(workoutId: number, date: string) {
+		if (readOnly) return;
 		if (!date) return;
 		setError(null);
 		setSchedulingId(workoutId);
@@ -139,28 +153,55 @@ export function WorkoutsListPage() {
 			<div className="flex items-center justify-between">
 				<div>
 					<h1 className="text-2xl font-bold text-gray-100">Workouts</h1>
-					<p className="text-sm text-gray-500 mt-1">Saved workout templates</p>
+					<p className="text-sm text-gray-500 mt-1">
+						Saved workout templates
+						{readOnly && <span className="ml-2 text-gray-500">· Read-only while viewing another schema</span>}
+					</p>
 				</div>
-				<Link
-					to="/workouts/builder"
-					className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-orange-600 hover:bg-orange-700 text-white transition-colors"
-				>
-					<svg
-						aria-hidden="true"
-						width="16"
-						height="16"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="2"
-						strokeLinecap="round"
-						strokeLinejoin="round"
+				{readOnly ? (
+					<span
+						aria-disabled="true"
+						title="Read-only while viewing another schema"
+						className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-gray-800 text-gray-500 border border-gray-700 cursor-not-allowed opacity-60 select-none"
 					>
-						<line x1="12" y1="5" x2="12" y2="19" />
-						<line x1="5" y1="12" x2="19" y2="12" />
-					</svg>
-					New Workout
-				</Link>
+						<svg
+							aria-hidden="true"
+							width="16"
+							height="16"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							strokeWidth="2"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+						>
+							<line x1="12" y1="5" x2="12" y2="19" />
+							<line x1="5" y1="12" x2="19" y2="12" />
+						</svg>
+						New Workout
+					</span>
+				) : (
+					<Link
+						to="/workouts/builder"
+						className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-orange-600 hover:bg-orange-700 text-white transition-colors"
+					>
+						<svg
+							aria-hidden="true"
+							width="16"
+							height="16"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							strokeWidth="2"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+						>
+							<line x1="12" y1="5" x2="12" y2="19" />
+							<line x1="5" y1="12" x2="19" y2="12" />
+						</svg>
+						New Workout
+					</Link>
+				)}
 			</div>
 
 			{/* Sport filter pills and sort control */}
@@ -300,10 +341,16 @@ export function WorkoutsListPage() {
 										e.preventDefault();
 										handleScheduleToggle(w.workoutId, w.scheduledDate);
 									}}
-									disabled={scheduleWorkoutMutation.isPending && schedulingId === w.workoutId}
+									disabled={readOnly || (scheduleWorkoutMutation.isPending && schedulingId === w.workoutId)}
 									aria-label={w.scheduledDate ? `Unschedule ${w.name}` : `Schedule ${w.name}`}
-									title={w.scheduledDate ? "Remove from calendar" : "Schedule on calendar"}
-									className={`p-1.5 rounded transition-colors disabled:opacity-50 ${
+									title={
+										readOnly
+											? "Read-only while viewing another schema"
+											: w.scheduledDate
+												? "Remove from calendar"
+												: "Schedule on calendar"
+									}
+									className={`p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
 										w.scheduledDate
 											? "text-violet-400 hover:text-violet-300 hover:bg-gray-700"
 											: "text-gray-400 hover:text-violet-400 hover:bg-gray-700"
@@ -369,9 +416,10 @@ export function WorkoutsListPage() {
 										e.preventDefault();
 										handleDelete(w.workoutId, w.name);
 									}}
-									disabled={deletingId === w.workoutId}
+									disabled={readOnly || deletingId === w.workoutId}
 									aria-label={`Delete ${w.name}`}
-									className="p-1.5 rounded text-gray-400 hover:text-red-400 hover:bg-gray-700 transition-colors disabled:opacity-50"
+									title={readOnly ? "Read-only while viewing another schema" : `Delete ${w.name}`}
+									className="p-1.5 rounded text-gray-400 hover:text-red-400 hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 								>
 									{deletingId === w.workoutId ? (
 										<svg aria-hidden="true" className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">

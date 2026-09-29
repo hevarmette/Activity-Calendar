@@ -7,32 +7,40 @@
  *   Encodes an ad-hoc workout definition into a Garmin-compatible FIT file.
  *
  * GET /api/workouts
- *   Query: ?sport=running (optional filter)
+ *   Query: ?sport=running (optional filter), ?schema=<name> (optional read-only cross-schema override)
  *   Response: WorkoutListItem[] ordered by updated_at DESC
  *
  * POST /api/workouts
  *   Body: WorkoutDefinition JSON (with optional scheduledDate)
+ *   Query: ?schema= is rejected with 400 unless it equals the primary SCHEMA (writes are primary-only)
  *   Response: { workoutId: number } with status 201
  *   Saves a new workout to the database.
  *
  * GET /api/workouts/:id
+ *   Query: ?schema=<name> (optional read-only cross-schema override)
  *   Response: SavedWorkout (includes full step definition and scheduledDate)
  *   Returns 404 if not found.
  *
  * PUT /api/workouts/:id
  *   Body: WorkoutDefinition JSON (with optional scheduledDate)
+ *   Query: ?schema= is rejected with 400 unless it equals the primary SCHEMA (writes are primary-only)
  *   Response: { success: true }
  *   Updates all fields + updated_at. Returns 404 if not found.
  *
  * PATCH /api/workouts/:id/schedule
  *   Body: { scheduledDate: string | null } (ISO date YYYY-MM-DD or null to unschedule)
+ *   Query: ?schema= is rejected with 400 unless it equals the primary SCHEMA (writes are primary-only)
  *   Response: { success: true }
  *   Updates only the scheduled_date column. Returns 404 if not found.
  *
  * DELETE /api/workouts/:id
+ *   Query: ?schema= is rejected with 400 unless it equals the primary SCHEMA (writes are primary-only)
  *   Response: { success: true }
  *
  * POST /api/workouts/:id/generate
+ *   Query: ?schema=<name> (optional read-only cross-schema override — the saved
+ *     workout row is read from that schema so exporting while viewing another
+ *     schema encodes that schema's workout)
  *   Response: Binary .fit file (application/octet-stream)
  *   Generates a FIT file from a saved workout. Uses workout_id as serialNumber.
  *   When scheduled_date is set, filename is the date (e.g., "2026-08-18.fit").
@@ -42,7 +50,7 @@ import { type WorkoutDefinition, type WorkoutStepOrRepeat, isRepeatStep } from "
 import { Encoder, Profile } from "@garmin/fitsdk";
 import { Hono } from "hono";
 import { z } from "zod";
-import sql, { SCHEMA } from "../db.js";
+import sql, { resolveReadSchema, SCHEMA, UnknownSchemaError } from "../db.js";
 
 export const workoutsRoutes = new Hono();
 
@@ -326,18 +334,25 @@ workoutsRoutes.post("/generate", async (c) => {
 
 // 2. GET / — List saved workouts
 workoutsRoutes.get("/", async (c) => {
+	let schema: string;
+	try {
+		schema = resolveReadSchema(c.req.query("schema"));
+	} catch (err) {
+		if (err instanceof UnknownSchemaError) return c.json({ error: err.message }, 400);
+		throw err;
+	}
 	const sport = c.req.query("sport");
 
 	const rows = sport
 		? await sql`
 			SELECT workout_id, name, sport, description, TO_CHAR(scheduled_date, 'YYYY-MM-DD') AS scheduled_date, created_at, updated_at
-			FROM ${sql(SCHEMA)}.workout
+			FROM ${sql(schema)}.workout
 			WHERE sport = ${sport}
 			ORDER BY updated_at DESC
 		`
 		: await sql`
 			SELECT workout_id, name, sport, description, TO_CHAR(scheduled_date, 'YYYY-MM-DD') AS scheduled_date, created_at, updated_at
-			FROM ${sql(SCHEMA)}.workout
+			FROM ${sql(schema)}.workout
 			ORDER BY updated_at DESC
 		`;
 
@@ -346,6 +361,9 @@ workoutsRoutes.get("/", async (c) => {
 
 // 3. POST / — Save a new workout
 workoutsRoutes.post("/", async (c) => {
+	const reqSchema = c.req.query("schema");
+	if (reqSchema !== undefined && reqSchema !== "" && reqSchema !== SCHEMA)
+		return c.json({ error: `Writes are only allowed on the primary schema (got '${reqSchema}')` }, 400);
 	const body = await c.req.json();
 
 	const result = workoutDefinitionSchema.safeParse(body);
@@ -366,11 +384,18 @@ workoutsRoutes.post("/", async (c) => {
 
 // 4. GET /:id — Get a single workout with full definition
 workoutsRoutes.get("/:id", async (c) => {
+	let schema: string;
+	try {
+		schema = resolveReadSchema(c.req.query("schema"));
+	} catch (err) {
+		if (err instanceof UnknownSchemaError) return c.json({ error: err.message }, 400);
+		throw err;
+	}
 	const id = Number(c.req.param("id"));
 
 	const rows = await sql`
 		SELECT workout_id, name, sport, description, definition, TO_CHAR(scheduled_date, 'YYYY-MM-DD') AS scheduled_date, created_at, updated_at
-		FROM ${sql(SCHEMA)}.workout
+		FROM ${sql(schema)}.workout
 		WHERE workout_id = ${id}
 		LIMIT 1
 	`;
@@ -395,6 +420,9 @@ workoutsRoutes.get("/:id", async (c) => {
 
 // 5. PUT /:id — Update a workout
 workoutsRoutes.put("/:id", async (c) => {
+	const reqSchema = c.req.query("schema");
+	if (reqSchema !== undefined && reqSchema !== "" && reqSchema !== SCHEMA)
+		return c.json({ error: `Writes are only allowed on the primary schema (got '${reqSchema}')` }, 400);
 	const id = Number(c.req.param("id"));
 	const body = await c.req.json();
 
@@ -430,6 +458,9 @@ const scheduleSchema = z.object({
 });
 
 workoutsRoutes.patch("/:id/schedule", async (c) => {
+	const reqSchema = c.req.query("schema");
+	if (reqSchema !== undefined && reqSchema !== "" && reqSchema !== SCHEMA)
+		return c.json({ error: `Writes are only allowed on the primary schema (got '${reqSchema}')` }, 400);
 	const id = Number(c.req.param("id"));
 	const body = await c.req.json();
 
@@ -457,6 +488,9 @@ workoutsRoutes.patch("/:id/schedule", async (c) => {
 
 // 7. DELETE /:id — Delete a workout
 workoutsRoutes.delete("/:id", async (c) => {
+	const reqSchema = c.req.query("schema");
+	if (reqSchema !== undefined && reqSchema !== "" && reqSchema !== SCHEMA)
+		return c.json({ error: `Writes are only allowed on the primary schema (got '${reqSchema}')` }, 400);
 	const id = Number(c.req.param("id"));
 
 	await sql`
@@ -469,11 +503,18 @@ workoutsRoutes.delete("/:id", async (c) => {
 
 // 8. POST /:id/generate — Generate FIT from a saved workout
 workoutsRoutes.post("/:id/generate", async (c) => {
+	let schema: string;
+	try {
+		schema = resolveReadSchema(c.req.query("schema"));
+	} catch (err) {
+		if (err instanceof UnknownSchemaError) return c.json({ error: err.message }, 400);
+		throw err;
+	}
 	const id = Number(c.req.param("id"));
 
 	const rows = await sql`
 		SELECT workout_id, name, sport, description, definition, scheduled_date
-		FROM ${sql(SCHEMA)}.workout
+		FROM ${sql(schema)}.workout
 		WHERE workout_id = ${id}
 		LIMIT 1
 	`;

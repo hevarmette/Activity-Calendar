@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useSearchParams } from "react-router";
 import { queryKeys } from "../../api/queries.js";
+import { SchemaSwitcher } from "./SchemaSwitcher.js";
 
 const links = [
 	{
@@ -188,6 +189,7 @@ export function PageLayout() {
 					>
 						Refresh
 					</button>
+					<SchemaSwitcher />
 				</div>
 				<nav className="flex flex-row items-center gap-2">
 					{links.map(({ to, label, icon }) => (

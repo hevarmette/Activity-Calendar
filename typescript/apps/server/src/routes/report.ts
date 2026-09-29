@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { TIMEZONE } from "../config.js";
-import sql, { SCHEMA } from "../db.js";
+import sql, { resolveReadSchema, UnknownSchemaError } from "../db.js";
 
 export const reportRoutes = new Hono();
 
@@ -8,6 +8,8 @@ export const reportRoutes = new Hono();
  * GET /api/report
  *
  * Returns per-session rows for the activity report page.
+ *
+ * Query: ?schema=<name> (optional, read-only cross-schema override).
  *
  * Distance/duration reflect the activity-level *adjusted* values
  * (`activity.adjusted_distance` / `activity.adjusted_duration`) — the same
@@ -23,6 +25,13 @@ export const reportRoutes = new Hono();
  * adjusted value on their one row.
  */
 reportRoutes.get("/", async (c) => {
+	let schema: string;
+	try {
+		schema = resolveReadSchema(c.req.query("schema"));
+	} catch (err) {
+		if (err instanceof UnknownSchemaError) return c.json({ error: err.message }, 400);
+		throw err;
+	}
 	const rows = await sql`
 		WITH session_totals AS (
 			SELECT
@@ -30,7 +39,7 @@ reportRoutes.get("/", async (c) => {
 				SUM(total_distance) AS sum_distance,
 				SUM(total_timer_time) AS sum_timer,
 				COUNT(*) AS leg_count
-			FROM ${sql(SCHEMA)}.session
+			FROM ${sql(schema)}.session
 			GROUP BY activity_id
 		)
 		SELECT
@@ -54,8 +63,8 @@ reportRoutes.get("/", async (c) => {
 			s.total_calories,
 			s.total_ascent, s.total_descent, s.avg_heart_rate, s.max_heart_rate,
 			s.avg_power
-		FROM ${sql(SCHEMA)}.activity a
-		JOIN ${sql(SCHEMA)}.session s ON a.activity_id = s.activity_id
+		FROM ${sql(schema)}.activity a
+		JOIN ${sql(schema)}.session s ON a.activity_id = s.activity_id
 		JOIN session_totals t ON t.activity_id = a.activity_id
 		ORDER BY local_timestamp DESC
 	`;

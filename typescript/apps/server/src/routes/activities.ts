@@ -20,12 +20,16 @@
  *   Response: CreateActivityResponse ({ activityId: number }) with status 201
  *   Creates a manual activity with session and lap rows in a single transaction.
  *   No GPS record data is generated for manual activities.
+ *
+ * Write handlers (PATCH /:id, POST /) are pinned to the primary schema. A
+ * request carrying a `?schema=` that is neither empty nor the primary schema is
+ * rejected with a 400 rather than silently writing to the primary target.
  */
 import { SUB_SPORT_OPTIONS } from "@activity-calendar/shared";
 import { Hono } from "hono";
 import { z } from "zod";
 import { TIMEZONE } from "../config.js";
-import sql, { resolveReadSchema, SCHEMA, UnknownSchemaError } from "../db.js";
+import sql, { assertPrimaryWriteSchema, resolveReadSchema, SCHEMA, UnknownSchemaError } from "../db.js";
 
 export const activitiesRoutes = new Hono();
 
@@ -70,6 +74,13 @@ const activityUpdateSchema = z.object({
 });
 
 activitiesRoutes.patch("/:id", async (c) => {
+	try {
+		assertPrimaryWriteSchema(c.req.query("schema"));
+	} catch (err) {
+		if (err instanceof UnknownSchemaError)
+			return c.json({ error: `Writes are only allowed on the primary schema (got '${err.schemaName}')` }, 400);
+		throw err;
+	}
 	const id = Number(c.req.param("id"));
 	const body = activityUpdateSchema.parse(await c.req.json());
 
@@ -216,6 +227,13 @@ const createActivitySchema = z.object({
  * Response: { activityId: number } with status 201
  */
 activitiesRoutes.post("/", async (c) => {
+	try {
+		assertPrimaryWriteSchema(c.req.query("schema"));
+	} catch (err) {
+		if (err instanceof UnknownSchemaError)
+			return c.json({ error: `Writes are only allowed on the primary schema (got '${err.schemaName}')` }, 400);
+		throw err;
+	}
 	const body = await c.req.json();
 
 	const result = createActivitySchema.safeParse(body);

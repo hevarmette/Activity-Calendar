@@ -12,10 +12,18 @@ interface ColumnProps {
 	sport: string;
 	laps: Lap[];
 	/**
-	 * Secondary schema this activity lives in, or `undefined` for primary. When
-	 * set, the header renders as plain text (the detail route is primary-only).
+	 * The RESOLVED schema this activity was read from (explicit `schema:id` token
+	 * if qualified, otherwise the global active schema). `undefined` = primary.
+	 * Used for the `(schema)` label and, with {@link activeSchema}, to decide
+	 * whether the header links to the detail page.
 	 */
 	schema?: string;
+	/**
+	 * The globally active schema (`undefined` = primary). The header links to the
+	 * detail page only when `schema === activeSchema` — i.e. your own linkable
+	 * data. Otherwise it renders plain text.
+	 */
+	activeSchema?: string;
 	/** Shared intensity filter (empty = show all). */
 	filter: Set<string>;
 	/**
@@ -88,7 +96,7 @@ function formatPaceSpeedDelta(sport: string, distA: number, timeA: number, distB
 }
 
 /** A single read-only lap table for one activity, styled like the details LapTable. */
-function LapColumn({ id, name, color, sport, laps, schema, filter, deltaAgainst }: ColumnProps) {
+function LapColumn({ id, name, color, sport, laps, schema, activeSchema, filter, deltaAgainst }: ColumnProps) {
 	const isCycling = sport === Sport.Cycling;
 	const shown = visibleLaps(laps, filter);
 
@@ -97,12 +105,14 @@ function LapColumn({ id, name, color, sport, laps, schema, filter, deltaAgainst 
 			<div className="mb-2 flex items-center gap-2">
 				<span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
 				{/*
-				 * Primary-schema columns link to the activity's detail page (mirrors
-				 * ActivityDialog / SimilarActivities). Secondary-schema columns render
-				 * plain text — the detail route resolves against the primary schema only,
-				 * so a cross-schema deep link would not load the right activity.
+				 * Link to the detail page only when this column's resolved schema
+				 * equals the active schema — i.e. your own linkable data (the detail
+				 * route resolves against the active schema too, so a bare id that
+				 * resolved to the active schema loads correctly). A column pinned to a
+				 * different schema renders plain text since its deep link wouldn't
+				 * resolve to the right activity.
 				 */}
-				{schema == null ? (
+				{schema === activeSchema ? (
 					<Link
 						to={`/activity/${id}?sport=${sport}`}
 						className="truncate text-sm font-medium text-gray-200 transition-colors hover:text-orange-300"
@@ -202,12 +212,14 @@ export interface LapColumnData {
 	color: string;
 	sport: string;
 	laps: Lap[];
-	/** Secondary schema, or `undefined` for the primary schema. */
+	/** Resolved schema (explicit token ?? active schema), or `undefined` for primary. */
 	schema?: string;
 }
 
 interface Props {
 	columns: LapColumnData[];
+	/** The globally active schema; a column links out only when `schema === activeSchema`. */
+	activeSchema?: string;
 	filter: Set<string>;
 	onToggleFilter: (intensity: string) => void;
 	onClearFilter: () => void;
@@ -227,7 +239,7 @@ interface Props {
  * (no pair at that index), the delta shows "—". Columns are laid out in a
  * responsive grid that widens with the activity count.
  */
-export function LapComparison({ columns, filter, onToggleFilter, onClearFilter }: Props) {
+export function LapComparison({ columns, activeSchema, filter, onToggleFilter, onClearFilter }: Props) {
 	// Pre-filter the baseline (column 0) so other columns can pair against the
 	// same VISIBLE index.
 	const baseline = columns[0];
@@ -290,6 +302,7 @@ export function LapComparison({ columns, filter, onToggleFilter, onClearFilter }
 						sport={col.sport}
 						laps={col.laps}
 						schema={col.schema}
+						activeSchema={activeSchema}
 						filter={filter}
 						deltaAgainst={index === 0 ? undefined : shownBaseline}
 					/>

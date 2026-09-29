@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import sql, { resolveReadSchema, SCHEMA, UnknownSchemaError } from "../db.js";
+import sql, { assertPrimaryWriteSchema, resolveReadSchema, SCHEMA, UnknownSchemaError } from "../db.js";
 
 export const lapsRoutes = new Hono();
 
@@ -54,8 +54,15 @@ const lapUpdateSchema = z.object({
 	intensity: z.string().optional(),
 });
 
-/** PATCH /api/laps/:lapId - update a single lap */
+/** PATCH /api/laps/:lapId - update a single lap (writes pinned to primary SCHEMA; a non-primary `?schema=` is rejected with 400) */
 lapsRoutes.patch("/update/:lapId", async (c) => {
+	try {
+		assertPrimaryWriteSchema(c.req.query("schema"));
+	} catch (err) {
+		if (err instanceof UnknownSchemaError)
+			return c.json({ error: `Writes are only allowed on the primary schema (got '${err.schemaName}')` }, 400);
+		throw err;
+	}
 	const lapId = Number(c.req.param("lapId"));
 	const body = lapUpdateSchema.parse(await c.req.json());
 

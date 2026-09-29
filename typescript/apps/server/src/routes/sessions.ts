@@ -12,12 +12,14 @@
  *     - 404 { error: 'Not found' } when the session id does not exist
  *   Updates a single session leg and re-derives the parent activity's
  *   adjusted_distance/adjusted_duration as the SUM of its sessions, all inside
- *   a single transaction. Writes always target the primary SCHEMA.
+ *   a single transaction. Writes always target the primary SCHEMA; a request
+ *   carrying a `?schema=` that is neither empty nor the primary schema is
+ *   rejected with a 400 rather than writing to the primary target.
  */
 import type { SessionUpdatePayload } from "@activity-calendar/shared";
 import { Hono } from "hono";
 import { z } from "zod";
-import sql, { resolveReadSchema, SCHEMA, UnknownSchemaError } from "../db.js";
+import sql, { assertPrimaryWriteSchema, resolveReadSchema, SCHEMA, UnknownSchemaError } from "../db.js";
 
 export const sessionsRoutes = new Hono();
 
@@ -60,6 +62,13 @@ const sessionUpdateSchema = z.object({
  * activity total never drifts from its legs.
  */
 sessionsRoutes.patch("/update/:sessionId", async (c) => {
+	try {
+		assertPrimaryWriteSchema(c.req.query("schema"));
+	} catch (err) {
+		if (err instanceof UnknownSchemaError)
+			return c.json({ error: `Writes are only allowed on the primary schema (got '${err.schemaName}')` }, 400);
+		throw err;
+	}
 	const sessionId = Number(c.req.param("sessionId"));
 	const body = sessionUpdateSchema.parse(await c.req.json());
 

@@ -3,6 +3,9 @@
  *
  * Fetches full workout details and displays a read-only summary of steps.
  * Provides actions: Download .fit, Edit Workout, Remove from Calendar.
+ *
+ * When a non-primary schema is active, Edit and Remove from Calendar are disabled
+ * (writes are primary-only). Download .fit still targets the active schema.
  */
 import { METERS_PER_MILE, isRepeatStep } from "@activity-calendar/shared";
 import type { WorkoutSport, WorkoutStep, WorkoutStepOrRepeat } from "@activity-calendar/shared";
@@ -10,6 +13,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { downloadScheduledWorkoutFit } from "../../api/client.js";
 import { useScheduleWorkout, useWorkout } from "../../api/workout-queries.js";
+import { useActiveSchema } from "../../context/ActiveSchemaContext.js";
 import { Dialog } from "../ui/Dialog.js";
 import { INTENSITY_COLORS, getIntensityLabel } from "../workouts/constants.js";
 
@@ -63,6 +67,10 @@ function StepRow({ step, sport }: { step: WorkoutStep; sport: WorkoutSport }) {
 export function WorkoutDialog({ workoutId, scheduledDate, open, onClose }: Props) {
 	const { data: workout, isLoading } = useWorkout(workoutId);
 	const scheduleWorkout = useScheduleWorkout();
+	// Read-only when a non-primary schema is active: unschedule and edit are
+	// primary-only writes. Viewing and .fit download still target the active schema.
+	const { activeSchema } = useActiveSchema();
+	const readOnly = activeSchema !== undefined;
 	const [downloading, setDownloading] = useState(false);
 	const [removing, setRemoving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -83,7 +91,7 @@ export function WorkoutDialog({ workoutId, scheduledDate, open, onClose }: Props
 		setError(null);
 		setDownloading(true);
 		try {
-			await downloadScheduledWorkoutFit(workoutId, scheduledDate);
+			await downloadScheduledWorkoutFit(workoutId, scheduledDate, activeSchema);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Download failed");
 		} finally {
@@ -92,6 +100,7 @@ export function WorkoutDialog({ workoutId, scheduledDate, open, onClose }: Props
 	}
 
 	async function handleRemove() {
+		if (readOnly) return;
 		setError(null);
 		setRemoving(true);
 		try {
@@ -191,7 +200,11 @@ export function WorkoutDialog({ workoutId, scheduledDate, open, onClose }: Props
 						<Link
 							to={`/workouts/builder?id=${workoutId}`}
 							onClick={onClose}
-							className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 transition-colors no-underline"
+							aria-disabled={readOnly}
+							title={readOnly ? "Read-only while viewing another schema" : "Edit workout"}
+							className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-gray-800 text-gray-200 border border-gray-700 transition-colors no-underline ${
+								readOnly ? "opacity-50 cursor-not-allowed pointer-events-none" : "hover:bg-gray-700"
+							}`}
 						>
 							<svg
 								aria-hidden="true"
@@ -213,12 +226,16 @@ export function WorkoutDialog({ workoutId, scheduledDate, open, onClose }: Props
 						<button
 							type="button"
 							onClick={handleRemove}
-							disabled={removing}
-							className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-gray-400 hover:text-red-400 hover:bg-gray-800 border border-transparent hover:border-gray-700 transition-colors disabled:opacity-50"
+							disabled={removing || readOnly}
+							title={readOnly ? "Read-only while viewing another schema" : "Remove from calendar"}
+							className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-gray-400 hover:text-red-400 hover:bg-gray-800 border border-transparent hover:border-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							{removing ? "Removing…" : "Remove from Calendar"}
 						</button>
 					</div>
+
+					{/* Read-only hint — editing/unscheduling disabled in another schema */}
+					{readOnly && <p className="text-xs text-gray-500 mt-2 text-right">Read-only while viewing another schema</p>}
 				</>
 			) : (
 				<p className="text-sm text-gray-500 py-6 text-center">Workout not found</p>
