@@ -51,34 +51,42 @@ export function useCalendar() {
 }
 
 export function useActivity(id: number, schema?: string) {
+	const { activeSchema } = useActiveSchema();
+	const effectiveSchema = schema ?? activeSchema;
 	return useQuery({
-		queryKey: [...queryKeys.activity(id), schema] as const,
-		queryFn: () => api<ActivityDetails>(`/api/activities/${id}${schemaQuery(schema, false)}`),
+		queryKey: [...queryKeys.activity(id), effectiveSchema] as const,
+		queryFn: () => api<ActivityDetails>(`/api/activities/${id}${schemaQuery(effectiveSchema, false)}`),
 		enabled: id > 0,
 	});
 }
 
 export function useRecords(id: number, schema?: string) {
+	const { activeSchema } = useActiveSchema();
+	const effectiveSchema = schema ?? activeSchema;
 	return useQuery({
-		queryKey: [...queryKeys.records(id), schema] as const,
-		queryFn: () => api<RecordPoint[]>(`/api/records/${id}${schemaQuery(schema, false)}`),
+		queryKey: [...queryKeys.records(id), effectiveSchema] as const,
+		queryFn: () => api<RecordPoint[]>(`/api/records/${id}${schemaQuery(effectiveSchema, false)}`),
 		enabled: id > 0,
 		staleTime: Number.POSITIVE_INFINITY,
 	});
 }
 
 export function useSessions(id: number, schema?: string) {
+	const { activeSchema } = useActiveSchema();
+	const effectiveSchema = schema ?? activeSchema;
 	return useQuery({
-		queryKey: [...queryKeys.sessions(id), schema] as const,
-		queryFn: () => api<Session[]>(`/api/sessions/${id}${schemaQuery(schema, false)}`),
+		queryKey: [...queryKeys.sessions(id), effectiveSchema] as const,
+		queryFn: () => api<Session[]>(`/api/sessions/${id}${schemaQuery(effectiveSchema, false)}`),
 		enabled: id > 0,
 	});
 }
 
 export function useLaps(id: number, schema?: string) {
+	const { activeSchema } = useActiveSchema();
+	const effectiveSchema = schema ?? activeSchema;
 	return useQuery({
-		queryKey: [...queryKeys.laps(id), schema] as const,
-		queryFn: () => api<Lap[]>(`/api/laps/${id}${schemaQuery(schema, false)}`),
+		queryKey: [...queryKeys.laps(id), effectiveSchema] as const,
+		queryFn: () => api<Lap[]>(`/api/laps/${id}${schemaQuery(effectiveSchema, false)}`),
 		enabled: id > 0,
 	});
 }
@@ -168,11 +176,13 @@ export interface AutoLap {
 }
 
 export function useAutoLaps(id: number, sport: string, dist: number, schema?: string) {
+	const { activeSchema } = useActiveSchema();
+	const effectiveSchema = schema ?? activeSchema;
 	return useQuery({
-		queryKey: ["activity", id, "auto-laps", sport, dist, schema] as const,
+		queryKey: ["activity", id, "auto-laps", sport, dist, effectiveSchema] as const,
 		queryFn: () =>
 			api<AutoLap[]>(
-				`/api/activities/${id}/auto-laps?sport=${encodeURIComponent(sport)}&dist=${dist}${schemaQuery(schema, true)}`,
+				`/api/activities/${id}/auto-laps?sport=${encodeURIComponent(sport)}&dist=${dist}${schemaQuery(effectiveSchema, true)}`,
 			),
 		enabled: id > 0,
 	});
