@@ -6,6 +6,7 @@ import {
   CircleMarker,
   LayersControl,
   FeatureGroup,
+  useMap,
 } from "react-leaflet";
 import L from "leaflet";
 import type { RecordPoint, Session } from "@activity-calendar/shared";
@@ -46,6 +47,27 @@ function downsample(
   }
   result.push(coords[coords.length - 1]!);
   return result;
+}
+
+/**
+ * Redraw the leaflat map when toggling fullscreen. Leaflet is created at one size
+ * and does not know when full screen is entered or exited, unlike the parent div
+ * which is dynamic. Since leaflet does not know the container size grew, black
+ * space is displayed past the original size.
+ */
+function ResizeMap({ isFullscreen }: { isFullscreen: boolean }) {
+  const map = useMap();
+
+  useEffect(() => {
+    // Wait a brief frame for the CSS transition/render to finish, then fix layout
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [isFullscreen, map]);
+
+  return null;
 }
 
 interface Props {
@@ -124,21 +146,27 @@ export function DetailMap({
   }, [points, selectedRange]);
 
   return (
-    <div ref={containerRef} className="relative h-full w-full">
+    <div
+      ref={containerRef}
+      className={`relative w-full ${isFullscreen ? "fixed inset-0 z-[999] h-screen" : "h-[500px]"} bg-white`}
+    >
       <button
         type="button"
         onClick={toggleFullscreen}
         aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
         className="absolute bottom-8 right-2 z-[1000] rounded-md bg-white border border-gray-300 shadow-md px-2 py-1.5 text-gray-700 hover:bg-gray-100 transition-colors text-sm leading-none"
       >
-        {isFullscreen ? "⤓" : "⤢"}
+        ⛶
       </button>
       <MapContainer
         bounds={bounds}
         scrollWheelZoom
         preferCanvas
-        className={`${isFullscreen ? "h-full" : "h-[500px]"} w-full rounded-lg`}
+        /* 2. Map is now safely set to always be 100% height of the parent */
+        className="h-full w-full rounded-lg"
       >
+        {/* 3. Mount the resize trigger inside the Leaflet context */}
+        <ResizeMap isFullscreen={isFullscreen} />
         <LayersControl position="topright">
           {/* ─── Base Layers ─── */}
           <LayersControl.BaseLayer checked name="OpenStreetMap">
