@@ -55,17 +55,24 @@ function downsample(
  * which is dynamic. Since leaflet does not know the container size grew, black
  * space is displayed past the original size.
  */
-function ResizeMap({ isFullscreen }: { isFullscreen: boolean }) {
+function ResizeMap() {
   const map = useMap();
 
   useEffect(() => {
-    // Wait a brief frame for the CSS transition/render to finish, then fix layout
-    const timer = setTimeout(() => {
-      map.invalidateSize();
-    }, 100);
+    // get the actual DOM element of the Leaflet map
+    const container = map.getContainer();
 
-    return () => clearTimeout(timer);
-  }, [isFullscreen, map]);
+    // create an observer that forces a redraw whenever the element's size changes
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+
+    // start watching the container
+    observer.observe(container);
+
+    // clean up when the component unmounts
+    return () => observer.disconnect();
+  }, [map]);
 
   return null;
 }
@@ -166,7 +173,7 @@ export function DetailMap({
         className="h-full w-full rounded-lg"
       >
         {/* 3. Mount the resize trigger inside the Leaflet context */}
-        <ResizeMap isFullscreen={isFullscreen} />
+        <ResizeMap />
         <LayersControl position="topright">
           {/* ─── Base Layers ─── */}
           <LayersControl.BaseLayer checked name="OpenStreetMap">
