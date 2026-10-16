@@ -67,7 +67,14 @@ lengthsRoutes.patch("/:lengthId", async (c) => {
 const combineSchema = z.object({ lengthIds: z.array(z.number()).min(2) });
 
 /**
- * POST /api/lengths/combine — merge two or more lengths into the first one.
+ * POST /api/lengths/combine — merge two or more lengths into one.
+ *
+ * The surviving row is the one with the LOWEST message_index among the
+ * selected lengths, so the merged length keeps its chronological position in
+ * the swim regardless of the order ids are sent in. Its total_timer_time and
+ * total_strokes become the SUM across all selected lengths; the others are
+ * deleted. (Distance is derived from the session pool length × remaining
+ * length count on read, so there is no distance column to update here.)
  *
  * Writes are pinned to the primary SCHEMA; a request carrying a `?schema=` that
  * is neither empty nor the primary schema is rejected with a 400.
@@ -81,25 +88,39 @@ lengthsRoutes.post("/combine", async (c) => {
 		throw err;
 	}
 	const { lengthIds } = combineSchema.parse(await c.req.json());
-	const keepId = lengthIds[0]!;
-	const deleteIds = lengthIds.slice(1);
 
-	await sql.begin(async (tx) => {
+	const result = await sql.begin(async (tx) => {
+		// Fetch the selected lengths so we can pick the earliest (lowest
+		// message_index) as the survivor and sum the mergeable fields. Doing this
+		// server-side keeps the "which row survives" rule independent of request
+		// order and resilient to a client that sends ids in selection order.
 		const rows = await tx`
-			SELECT COALESCE(SUM(total_timer_time), 0) AS total_time,
-				COALESCE(SUM(total_strokes), 0) AS total_strokes
-			FROM ${sql(SCHEMA)}.length WHERE length_id = ANY(${lengthIds})
+			SELECT length_id, message_index,
+				COALESCE(total_timer_time, 0) AS total_timer_time,
+				COALESCE(total_strokes, 0) AS total_strokes
+			FROM ${sql(SCHEMA)}.length
+			WHERE length_id = ANY(${lengthIds})
+			ORDER BY message_index ASC
 		`;
-		const totals = rows[0]!;
+		if (rows.length < 2) return null; // nothing (or not enough) to merge
+
+		const [keep, ...rest] = rows;
+		if (!keep) return null; // unreachable given the length check, satisfies the type
+		const deleteIds = rest.map((r) => r.length_id);
+		const totalTime = rows.reduce((acc, r) => acc + Number(r.total_timer_time), 0);
+		const totalStrokes = rows.reduce((acc, r) => acc + Number(r.total_strokes), 0);
+
 		await tx`
 			UPDATE ${sql(SCHEMA)}.length
-			SET total_timer_time = ${totals.total_time}, total_strokes = ${totals.total_strokes}
-			WHERE length_id = ${keepId}
+			SET total_timer_time = ${totalTime}, total_strokes = ${totalStrokes}
+			WHERE length_id = ${keep.length_id}
 		`;
 		await tx`
 			DELETE FROM ${sql(SCHEMA)}.length WHERE length_id = ANY(${deleteIds})
 		`;
+		return { keepId: keep.length_id, totalTimerTime: totalTime, totalStrokes };
 	});
 
-	return c.json({ success: true });
+	if (result === null) return c.json({ error: "Fewer than two matching lengths to combine" }, 400);
+	return c.json({ success: true, ...result });
 });

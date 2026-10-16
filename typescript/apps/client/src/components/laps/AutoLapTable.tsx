@@ -1,5 +1,11 @@
-import { useState, useEffect, useRef } from "react";
-import { AUTO_LAP_DISTANCES, METERS_PER_MILE, Sport, convertSecondsToHms, formatPacePrecise } from "@activity-calendar/shared";
+import {
+	AUTO_LAP_DISTANCES,
+	METERS_PER_MILE,
+	Sport,
+	convertSecondsToHms,
+	formatPacePrecise,
+} from "@activity-calendar/shared";
+import { useEffect, useRef, useState } from "react";
 import { useAutoLaps } from "../../api/queries.js";
 
 type Unit = "mi" | "m";
@@ -8,12 +14,18 @@ interface Props {
 	activityId: number;
 	sport: string;
 	onDistanceChange?: (distInMiles: number) => void;
+	/**
+	 * Optional session window (ISO start/end timestamps) for multisport legs.
+	 * When provided, auto-laps are computed over just that leg's records, so each
+	 * leg is split independently and distances are measured from the leg start.
+	 */
+	window?: { start: string; end: string };
 }
 
 /**
  * Displays auto-lap splits for an activity with a configurable distance input and unit toggle.
  */
-export function AutoLapTable({ activityId, sport, onDistanceChange }: Props) {
+export function AutoLapTable({ activityId, sport, onDistanceChange, window }: Props) {
 	// Raw string so the field can be cleared mid-edit without collapsing to 0.
 	const [inputValue, setInputValue] = useState("1");
 	const [unit, setUnit] = useState<Unit>("mi");
@@ -38,7 +50,7 @@ export function AutoLapTable({ activityId, sport, onDistanceChange }: Props) {
 		onDistanceChange?.(distInMiles);
 	}, [distInMiles, onDistanceChange]);
 
-	const { data: laps } = useAutoLaps(activityId, sport, distInMiles);
+	const { data: laps } = useAutoLaps(activityId, sport, distInMiles, window);
 	const isCycling = sport === Sport.Cycling;
 
 	return (

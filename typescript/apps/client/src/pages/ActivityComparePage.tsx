@@ -138,7 +138,7 @@ export function ActivityComparePage() {
 	// Auto-laps for every slot at the SHARED debounced distance. Sport is required
 	// by the endpoint; each query is id-scoped, schema-scoped, and cached. Same
 	// fixed-slot hook pattern as the loops above.
-	const autoLaps = slots.map((s, i) => useAutoLaps(s.id, sports[i] ?? "", autoLapDist, resolvedSchemas[i]));
+	const autoLaps = slots.map((s, i) => useAutoLaps(s.id, sports[i] ?? "", autoLapDist, undefined, resolvedSchemas[i]));
 
 	// Assemble the N view models (only the active slots). Colors are index-based
 	// from the compare palette so any count stays distinguishable.

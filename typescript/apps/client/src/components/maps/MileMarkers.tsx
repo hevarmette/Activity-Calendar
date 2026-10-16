@@ -1,8 +1,8 @@
-import React from "react";
-import { FeatureGroup, Marker, Tooltip } from "react-leaflet";
-import L from "leaflet";
 import { METERS_PER_MILE } from "@activity-calendar/shared";
 import type { RecordPoint } from "@activity-calendar/shared";
+import L from "leaflet";
+import type React from "react";
+import { FeatureGroup, Marker, Tooltip } from "react-leaflet";
 
 function mileIcon(num: number) {
 	return L.divIcon({
@@ -25,11 +25,18 @@ interface Props {
 export function MileMarkers({ points, interval }: Props) {
 	const valid = points.filter((p) => p.latitude != null && p.longitude != null && p.distance != null);
 
+	// Rebase cumulative distance to the first point of this segment. For multisport
+	// legs the points carry whole-activity cumulative distance, so without this the
+	// markers would be labeled by activity-wide distance (e.g. starting at mile 5 on
+	// the run leg). Subtracting the base makes markers count from the leg start.
+	const baseDist = valid.length > 0 ? valid[0]!.distance! : 0;
+
 	const markers: React.ReactElement[] = [];
 	if (valid.length > 0) {
-		const maxUnits = Math.floor((valid[valid.length - 1]!.distance! / METERS_PER_MILE) / interval);
+		const relMax = valid[valid.length - 1]!.distance! - baseDist;
+		const maxUnits = Math.floor(relMax / METERS_PER_MILE / interval);
 		for (let unit = 1; unit <= maxUnits; unit++) {
-			const targetDist = unit * interval * METERS_PER_MILE;
+			const targetDist = baseDist + unit * interval * METERS_PER_MILE;
 			const point = valid.find((p) => p.distance! >= targetDist);
 			if (!point) continue;
 			markers.push(

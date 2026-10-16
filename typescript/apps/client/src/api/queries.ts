@@ -175,15 +175,34 @@ export interface AutoLap {
 	cumulativeTimeSeconds: number;
 }
 
-export function useAutoLaps(id: number, sport: string, dist: number, schema?: string) {
+export function useAutoLaps(
+	id: number,
+	sport: string,
+	dist: number,
+	window?: { start: string; end: string },
+	schema?: string,
+) {
 	const { activeSchema } = useActiveSchema();
 	const effectiveSchema = schema ?? activeSchema;
 	return useQuery({
-		queryKey: ["activity", id, "auto-laps", sport, dist, effectiveSchema] as const,
-		queryFn: () =>
-			api<AutoLap[]>(
-				`/api/activities/${id}/auto-laps?sport=${encodeURIComponent(sport)}&dist=${dist}${schemaQuery(effectiveSchema, true)}`,
-			),
+		queryKey: [
+			"activity",
+			id,
+			"auto-laps",
+			sport,
+			dist,
+			window?.start ?? null,
+			window?.end ?? null,
+			effectiveSchema,
+		] as const,
+		queryFn: () => {
+			const windowQuery = window
+				? `&start=${encodeURIComponent(window.start)}&end=${encodeURIComponent(window.end)}`
+				: "";
+			return api<AutoLap[]>(
+				`/api/activities/${id}/auto-laps?sport=${encodeURIComponent(sport)}&dist=${dist}${windowQuery}${schemaQuery(effectiveSchema, true)}`,
+			);
+		},
 		enabled: id > 0,
 	});
 }

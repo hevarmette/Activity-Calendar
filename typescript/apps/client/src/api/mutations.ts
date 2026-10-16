@@ -26,11 +26,32 @@ export function useCreateActivity() {
 	});
 }
 
-export function useCombineLengths(activityId: number) {
+/**
+ * Flush staged swim-length edits to the server.
+ *
+ * Runs the combine merges first (each group collapses into its lowest
+ * message_index row, summing time + strokes), then applies per-length
+ * stroke-count / stroke-type field edits. Combines run before field edits so a
+ * field edit keyed on a surviving length id still targets an existing row.
+ * On success, invalidates the activity's lengths so the table refetches the
+ * persisted state.
+ */
+export function useSaveLengthEdits(activityId: number) {
 	const qc = useQueryClient();
 	return useMutation({
-		mutationFn: (lengthIds: number[]) =>
-			api("/api/lengths/combine", { method: "POST", body: JSON.stringify({ lengthIds }) }),
+		mutationFn: async (edits: {
+			combines: number[][];
+			fieldEdits: Map<number, { totalStrokes?: number; swimStroke?: string }>;
+		}) => {
+			for (const group of edits.combines) {
+				if (group.length < 2) continue;
+				await api("/api/lengths/combine", { method: "POST", body: JSON.stringify({ lengthIds: group }) });
+			}
+			for (const [lengthId, payload] of edits.fieldEdits) {
+				if (Object.keys(payload).length === 0) continue;
+				await api(`/api/lengths/${lengthId}`, { method: "PATCH", body: JSON.stringify(payload) });
+			}
+		},
 		onSuccess: () => {
 			qc.invalidateQueries({ queryKey: queryKeys.lengths(activityId) });
 		},
