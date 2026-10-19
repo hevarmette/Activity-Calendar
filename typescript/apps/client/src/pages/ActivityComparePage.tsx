@@ -1,7 +1,15 @@
 import type { Lap, RecordPoint } from "@activity-calendar/shared";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { type AutoLap, useActivity, useAutoLaps, useLaps, useRecords, useSessions } from "../api/queries.js";
+import {
+	type AutoLap,
+	type AutoLapDirection,
+	useActivity,
+	useAutoLaps,
+	useLaps,
+	useRecords,
+	useSessions,
+} from "../api/queries.js";
 import { AutoLapComparison } from "../components/compare/AutoLapComparison.js";
 import { CompareAnimationMap } from "../components/compare/CompareAnimationMap.js";
 import { CompareControls } from "../components/compare/CompareControls.js";
@@ -124,6 +132,10 @@ export function ActivityComparePage() {
 	// to 0 (which would divide-by-zero in the split calculation).
 	const [autoLapInput, setAutoLapInput] = useState("1");
 	const [autoLapDist, setAutoLapDist] = useState(1);
+	// Direction the shared auto-lap split runs in for ALL columns. "forward"
+	// splits start→finish (partial lap at the end); "backward" splits
+	// finish→start (partial lap at the start).
+	const [autoLapDir, setAutoLapDir] = useState<AutoLapDirection>("forward");
 	useEffect(() => {
 		// Only propagate a valid, positive distance; ignore empty/0/NaN.
 		const parsed = Number(autoLapInput);
@@ -138,7 +150,9 @@ export function ActivityComparePage() {
 	// Auto-laps for every slot at the SHARED debounced distance. Sport is required
 	// by the endpoint; each query is id-scoped, schema-scoped, and cached. Same
 	// fixed-slot hook pattern as the loops above.
-	const autoLaps = slots.map((s, i) => useAutoLaps(s.id, sports[i] ?? "", autoLapDist, undefined, resolvedSchemas[i]));
+	const autoLaps = slots.map((s, i) =>
+		useAutoLaps(s.id, sports[i] ?? "", autoLapDist, undefined, resolvedSchemas[i], autoLapDir),
+	);
 
 	// Assemble the N view models (only the active slots). Colors are index-based
 	// from the compare palette so any count stays distinguishable.
@@ -205,6 +219,7 @@ export function ActivityComparePage() {
 		setLapMode("laps");
 		setAutoLapInput("1");
 		setAutoLapDist(1);
+		setAutoLapDir("forward");
 	}, [idsParam]);
 
 	// Re-clamp the clock when offsets shrink the playable range.
@@ -448,6 +463,38 @@ export function ActivityComparePage() {
 								className="w-20 rounded border border-gray-700 bg-gray-800 px-2 py-1 text-sm text-white focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
 							/>
 							<span className="text-xs text-gray-500">mi splits (all activities)</span>
+							<div
+								className="ml-1 inline-flex rounded-lg border border-gray-700 bg-gray-800 p-0.5"
+								role="group"
+								aria-label="Auto-lap calculation direction"
+							>
+								<button
+									type="button"
+									onClick={() => setAutoLapDir("forward")}
+									aria-pressed={autoLapDir === "forward"}
+									title="Split laps from the start to the finish (partial lap at the end)"
+									className={
+										autoLapDir === "forward"
+											? "rounded-md bg-orange-600 px-3 py-1.5 text-xs font-medium text-white"
+											: "rounded-md px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:text-gray-200"
+									}
+								>
+									Start → Finish
+								</button>
+								<button
+									type="button"
+									onClick={() => setAutoLapDir("backward")}
+									aria-pressed={autoLapDir === "backward"}
+									title="Split laps from the finish back to the start (partial lap at the start)"
+									className={
+										autoLapDir === "backward"
+											? "rounded-md bg-orange-600 px-3 py-1.5 text-xs font-medium text-white"
+											: "rounded-md px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:text-gray-200"
+									}
+								>
+									Finish → Start
+								</button>
+							</div>
 						</div>
 					)}
 				</div>

@@ -6,7 +6,7 @@ import {
 	formatPacePrecise,
 } from "@activity-calendar/shared";
 import { useEffect, useRef, useState } from "react";
-import { useAutoLaps } from "../../api/queries.js";
+import { type AutoLapDirection, useAutoLaps } from "../../api/queries.js";
 
 type Unit = "mi" | "m";
 
@@ -29,6 +29,7 @@ export function AutoLapTable({ activityId, sport, onDistanceChange, window }: Pr
 	// Raw string so the field can be cleared mid-edit without collapsing to 0.
 	const [inputValue, setInputValue] = useState("1");
 	const [unit, setUnit] = useState<Unit>("mi");
+	const [direction, setDirection] = useState<AutoLapDirection>("forward");
 	const [debouncedValue, setDebouncedValue] = useState(1);
 	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -50,7 +51,7 @@ export function AutoLapTable({ activityId, sport, onDistanceChange, window }: Pr
 		onDistanceChange?.(distInMiles);
 	}, [distInMiles, onDistanceChange]);
 
-	const { data: laps } = useAutoLaps(activityId, sport, distInMiles, window);
+	const { data: laps } = useAutoLaps(activityId, sport, distInMiles, window, undefined, direction);
 	const isCycling = sport === Sport.Cycling;
 
 	return (
@@ -81,6 +82,26 @@ export function AutoLapTable({ activityId, sport, onDistanceChange, window }: Pr
 						aria-pressed={unit === "m"}
 					>
 						m
+					</button>
+				</div>
+				<div className="flex rounded overflow-hidden text-xs" role="group" aria-label="Lap calculation direction">
+					<button
+						type="button"
+						onClick={() => setDirection("forward")}
+						className={`px-2 py-1 ${direction === "forward" ? "bg-orange-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}
+						aria-pressed={direction === "forward"}
+						title="Split laps from the start to the finish (partial lap at the end)"
+					>
+						Start → Finish
+					</button>
+					<button
+						type="button"
+						onClick={() => setDirection("backward")}
+						className={`px-2 py-1 ${direction === "backward" ? "bg-orange-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}
+						aria-pressed={direction === "backward"}
+						title="Split laps from the finish back to the start (partial lap at the start)"
+					>
+						Finish → Start
 					</button>
 				</div>
 			</div>

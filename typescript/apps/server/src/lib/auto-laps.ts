@@ -11,7 +11,17 @@
  *   must be strictly increasing, so duplicate distance values (standing still) are dropped.
  * - HR/Cadence binning: Each GPS point is assigned to an auto-lap using pd.cut, then
  *   aggregated per lap. Values are forced to numeric to handle empty bins gracefully.
- * - The last "partial" lap is always included (distance to the end of the activity).
+ * - The "partial" lap (the remainder shorter than a full lap distance) is always included.
+ *   Its position depends on the direction:
+ *     - "forward": boundaries are built from 0 upward, so the partial lap lands at the
+ *       END of the activity (distance from the last full boundary to maxDist).
+ *     - "backward": boundaries are built from maxDist downward, so the partial lap lands
+ *       at the START of the activity (distance from 0 to the first full boundary). This
+ *       mirrors splitting from the finish back to the start, which is useful when the
+ *       meaningful full laps should be measured relative to the end of the effort.
+ *   In both cases boundaries remain sorted ascending and laps are numbered 1..N in
+ *   distance order, so all downstream interpolation, binning, and cumulative metrics
+ *   are unchanged.
  */
 const METERS_PER_MILE = 1609.344;
 const METERS_TO_FEET = 3.28084;
@@ -42,7 +52,15 @@ function interp(x: number, xp: number[], fp: number[]): number {
 	return fp[i]! + t * (fp[i + 1]! - fp[i]!);
 }
 
-export function computeAutoLaps(records: RecordPoint[], events: TimerEvent[], sport: string, lapDistMiles: number) {
+export type AutoLapDirection = "forward" | "backward";
+
+export function computeAutoLaps(
+	records: RecordPoint[],
+	events: TimerEvent[],
+	sport: string,
+	lapDistMiles: number,
+	direction: AutoLapDirection = "forward",
+) {
 	if (records.length < 2) return [];
 
 	const autoLapDist = lapDistMiles * METERS_PER_MILE;
@@ -122,9 +140,28 @@ export function computeAutoLaps(records: RecordPoint[], events: TimerEvent[], sp
 	const maxDist = dists[dists.length - 1]!;
 	if (maxDist < autoLapDist) return [];
 
-	// Build lap boundaries
+	// Build lap boundaries. Both directions produce an ascending list of split
+	// distances in [0, maxDist] so all downstream math is identical; only WHERE
+	// the sub-full-lap remainder sits differs.
 	const boundaries: number[] = [0];
-	for (let d = autoLapDist; d < maxDist; d += autoLapDist) boundaries.push(d);
+	if (direction === "backward") {
+		// Walk DOWN from the finish: full laps are measured back from maxDist, so
+		// the remainder (partial lap) ends up at the START. Collect the interior
+		// boundaries descending, then sort ascending for the shared pipeline.
+		const interior: number[] = [];
+		// Epsilon guards against a floating-point boundary landing a hair above 0
+		// or below maxDist (when maxDist is a near-exact multiple of autoLapDist),
+		// which would otherwise emit a degenerate zero-width lap.
+		const eps = autoLapDist * 1e-9;
+		for (let d = maxDist - autoLapDist; d > eps; d -= autoLapDist) {
+			if (d < maxDist - eps) interior.push(d);
+		}
+		interior.reverse();
+		boundaries.push(...interior);
+	} else {
+		// Walk UP from the start: the remainder (partial lap) ends up at the END.
+		for (let d = autoLapDist; d < maxDist; d += autoLapDist) boundaries.push(d);
+	}
 	boundaries.push(maxDist);
 
 	// Filter to monotonically increasing distances for interpolation

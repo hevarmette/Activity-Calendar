@@ -175,12 +175,15 @@ export interface AutoLap {
 	cumulativeTimeSeconds: number;
 }
 
+export type AutoLapDirection = "forward" | "backward";
+
 export function useAutoLaps(
 	id: number,
 	sport: string,
 	dist: number,
 	window?: { start: string; end: string },
 	schema?: string,
+	direction: AutoLapDirection = "forward",
 ) {
 	const { activeSchema } = useActiveSchema();
 	const effectiveSchema = schema ?? activeSchema;
@@ -194,13 +197,14 @@ export function useAutoLaps(
 			window?.start ?? null,
 			window?.end ?? null,
 			effectiveSchema,
+			direction,
 		] as const,
 		queryFn: () => {
 			const windowQuery = window
 				? `&start=${encodeURIComponent(window.start)}&end=${encodeURIComponent(window.end)}`
 				: "";
 			return api<AutoLap[]>(
-				`/api/activities/${id}/auto-laps?sport=${encodeURIComponent(sport)}&dist=${dist}${windowQuery}${schemaQuery(effectiveSchema, true)}`,
+				`/api/activities/${id}/auto-laps?sport=${encodeURIComponent(sport)}&dist=${dist}&dir=${direction}${windowQuery}${schemaQuery(effectiveSchema, true)}`,
 			);
 		},
 		enabled: id > 0,

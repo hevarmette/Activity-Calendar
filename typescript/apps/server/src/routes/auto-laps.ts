@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import sql, { resolveReadSchema, UnknownSchemaError } from "../db.js";
-import { computeAutoLaps } from "../lib/auto-laps.js";
+import { type AutoLapDirection, computeAutoLaps } from "../lib/auto-laps.js";
 
 export const autoLapsRoutes = new Hono();
 
@@ -8,6 +8,11 @@ autoLapsRoutes.get("/:id/auto-laps", async (c) => {
 	const activityId = Number(c.req.param("id"));
 	const sport = c.req.query("sport") || "running";
 	const dist = Number(c.req.query("dist")) || 1;
+
+	// Direction the auto-laps are split in. "backward" measures full laps from the
+	// finish back to the start, so the sub-full-lap remainder sits at the START
+	// rather than the end. Any value other than "backward" falls back to forward.
+	const direction: AutoLapDirection = c.req.query("dir") === "backward" ? "backward" : "forward";
 
 	// Optional session window for multisport legs: when `start`/`end` are provided
 	// (ISO timestamps), auto-laps are computed over just that leg's records so
@@ -61,6 +66,6 @@ autoLapsRoutes.get("/:id/auto-laps", async (c) => {
 		}));
 	}
 
-	const laps = computeAutoLaps(scopedRecords as any, scopedEvents as any, sport, dist);
+	const laps = computeAutoLaps(scopedRecords as any, scopedEvents as any, sport, dist, direction);
 	return c.json(laps);
 });
