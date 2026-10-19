@@ -166,6 +166,45 @@ export interface SessionUpdatePayload {
   totalTimerTime?: number;
 }
 
+/**
+ * Payload for POST /api/activities/:id/trim — trim records off an activity.
+ *
+ * Defines an absolute keep-window: only records whose timestamp falls within
+ * [trimStart, trimEnd] (inclusive) are retained; everything outside is deleted
+ * and the session/lap/activity summaries are recomputed from the survivors.
+ * Both bounds are optional — omitting one leaves that end untouched. Using
+ * absolute ISO timestamps (rather than a relative "drop N seconds") keeps the
+ * operation idempotent: re-sending the same request is a no-op.
+ *
+ * Phase 1 supports `trimEnd` on single-session activities (tail trim). The
+ * `trimStart` (head trim) and `sessionId` (per-leg multisport trim) fields are
+ * reserved for later phases.
+ */
+export interface TrimActivityPayload {
+  /** ISO timestamp — keep records at or after this instant. Optional. */
+  trimStart?: string;
+  /** ISO timestamp — keep records at or before this instant. Optional. */
+  trimEnd?: string;
+  /**
+   * Restrict the trim to a single multisport leg. Omit for single-session
+   * activities. Reserved for a later phase.
+   */
+  sessionId?: number;
+  /** When true, the response includes the equivalent SQL statements. */
+  debugSql?: boolean;
+}
+
+/** Response for POST /api/activities/:id/trim. */
+export interface TrimActivityResponse {
+  success: true;
+  /** Number of `record` rows deleted by the trim. */
+  removedRecords: number;
+  /** Number of `lap` rows deleted by the trim (laps left with no records). */
+  removedLaps: number;
+  /** Equivalent SQL (only present when the request set `debugSql: true`). */
+  sql?: string | null;
+}
+
 export interface LengthUpdatePayload {
   totalTimerTime?: number;
   totalStrokes?: number;

@@ -4,13 +4,14 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { downloadActivityFit } from "../api/client.js";
-import { useSaveActivity, useSaveLap, useSaveLengthEdits, useSaveSession } from "../api/mutations.js";
+import { useSaveActivity, useSaveLap, useSaveLengthEdits, useSaveSession, useTrimActivity } from "../api/mutations.js";
 import { useActivity, useLaps, useRecords, useSessions } from "../api/queries.js";
 import { PerformanceCharts } from "../components/charts/PerformanceCharts.js";
 import { ActivityStatsGrid } from "../components/details/ActivityStatsGrid.js";
 import { FeelEffortRow } from "../components/details/FeelEffortRow.js";
 import { SessionSummaryCards } from "../components/details/SessionSummaryCards.js";
 import { SimilarActivities } from "../components/details/SimilarActivities.js";
+import { TrimActivityDialog } from "../components/details/TrimActivityDialog.js";
 import { AutoLapTable } from "../components/laps/AutoLapTable.js";
 import { type LapEdit, LapTable } from "../components/laps/LapTable.js";
 import { type SwimLengthEdits, SwimLengthTable } from "../components/laps/SwimLengthTable.js";
@@ -48,6 +49,7 @@ export function ActivityDetailsPage() {
 	const saveLap = useSaveLap();
 	const saveSession = useSaveSession(id);
 	const saveLengthEdits = useSaveLengthEdits(id);
+	const trimActivity = useTrimActivity(id);
 	const { prev, next, goPrev, goNext } = useActivityNavigation(id, sport);
 
 	const [tab, setTab] = useState<Tab>("laps");
@@ -117,6 +119,9 @@ export function ActivityDetailsPage() {
 		setLastSql(null);
 		setDistanceInput("");
 		setDurationInput("");
+		setTrimSeconds(5);
+		setTrimDialogOpen(false);
+		setTrimError(null);
 	}, [id]);
 
 	useEffect(() => {
@@ -144,6 +149,13 @@ export function ActivityDetailsPage() {
 	const [isExporting, setIsExporting] = useState(false);
 	const [exportError, setExportError] = useState<string | null>(null);
 
+	// Trim-end ("drop last N seconds") state. The confirm dialog is the only
+	// place the destructive mutation can fire — the inline Trim button just
+	// opens it.
+	const [trimSeconds, setTrimSeconds] = useState(5);
+	const [trimDialogOpen, setTrimDialogOpen] = useState(false);
+	const [trimError, setTrimError] = useState<string | null>(null);
+
 	async function handleExport() {
 		if (isExporting) return;
 		setExportError(null);
@@ -163,6 +175,30 @@ export function ActivityDetailsPage() {
 
 	// Auto-lap distance state lifted for sharing between AutoLapTable and DetailMap
 	const [autoLapDist, setAutoLapDist] = useState<number | null>(null);
+
+	/**
+	 * Fire the destructive tail trim. Computes the absolute keep-window end as
+	 * (last record timestamp − N seconds) and sends it as an ISO string. The
+	 * records array is ordered by timestamp, so the last element is the activity
+	 * end. On success the dialog closes and React Query invalidation refetches
+	 * the trimmed state everywhere.
+	 */
+	async function handleConfirmTrim() {
+		if (isReadOnly || !points || points.length < 2) return;
+		setTrimError(null);
+		const lastRecord = points[points.length - 1];
+		if (!lastRecord) return;
+		const lastTs = new Date(lastRecord.timestamp).getTime();
+		const trimEnd = new Date(lastTs - trimSeconds * 1000).toISOString();
+		try {
+			await trimActivity.mutateAsync({ trimEnd, debugSql: false });
+			setTrimDialogOpen(false);
+		} catch (err) {
+			// Surface the server message (409 multisport / 422 swim / 400 window)
+			// inside the dialog rather than dismissing it.
+			setTrimError(err instanceof Error ? err.message : "Trim failed.");
+		}
+	}
 
 	async function handleSave() {
 		if (isReadOnly) return; // read-only schema: never mutate
@@ -271,6 +307,14 @@ export function ActivityDetailsPage() {
 	const multisportSumMiles = multisportSumMeters / METERS_PER_MILE;
 	const isCycling = sessionSport === Sport.Cycling;
 	const localDate = new Date(activity.localTimestamp);
+
+	// Trim-end guards: Phase 1 is single-session only; need ≥2 records, a
+	// positive N, and N strictly less than the activity duration (can't trim the
+	// whole thing away). Read-only (secondary) schemas never mutate.
+	const recordCount = points?.length ?? 0;
+	const canTrim =
+		!isReadOnly && !isMultisport && recordCount >= 2 && trimSeconds > 0 && (duration <= 0 || trimSeconds < duration);
+
 	const category =
 		activityEdits.category !== undefined
 			? normalizeCategory(activityEdits.category)
@@ -668,6 +712,62 @@ export function ActivityDetailsPage() {
 					</button>
 				</div>
 			)}
+
+			{/* 9b. Trim end — "drop last N seconds". Single-session only (Phase 1).
+			    The button only opens the confirm dialog; the dialog owns the
+			    destructive mutation. Hidden on read-only schemas and multisport. */}
+			{!isReadOnly && !isMultisport && (
+				<div
+					className="flex flex-wrap items-center gap-3 border-t border-gray-800 pt-4"
+					role="group"
+					aria-label="Trim end of activity"
+				>
+					<span className="text-xs font-medium uppercase tracking-wide text-gray-500">Trim end</span>
+					<label className="flex items-center gap-1.5 text-sm text-gray-300">
+						<span className="sr-only">Seconds to drop from the end</span>
+						<input
+							type="number"
+							min={1}
+							step={1}
+							value={trimSeconds}
+							onChange={(e) => setTrimSeconds(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+							aria-label="Seconds to drop from the end"
+							className="w-20 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-gray-100 tabular-nums focus:outline-none focus:ring-2 focus:ring-red-500/50"
+						/>
+						<span className="text-gray-500">s</span>
+					</label>
+					<button
+						type="button"
+						onClick={() => {
+							setTrimError(null);
+							setTrimDialogOpen(true);
+						}}
+						disabled={!canTrim}
+						aria-label={`Trim the last ${trimSeconds} seconds off the activity`}
+						className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-3 py-1.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/50 disabled:opacity-40 disabled:cursor-not-allowed"
+					>
+						Trim end…
+					</button>
+					<span className="text-xs text-gray-600">Permanently deletes trailing records.</span>
+				</div>
+			)}
+
+			<TrimActivityDialog
+				open={trimDialogOpen}
+				onClose={() => {
+					if (trimActivity.isPending) return;
+					setTrimDialogOpen(false);
+				}}
+				activityId={id}
+				activityName={activity.name}
+				schema={activeSchema}
+				seconds={trimSeconds}
+				distanceMeters={distance}
+				durationSeconds={duration}
+				isPending={trimActivity.isPending}
+				error={trimError}
+				onConfirm={handleConfirmTrim}
+			/>
 
 			{lastSql && (
 				<pre className="rounded-lg bg-gray-900 border border-gray-700 p-3 text-xs text-gray-300 font-mono overflow-x-auto whitespace-pre-wrap">

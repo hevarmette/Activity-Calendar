@@ -4,6 +4,8 @@ import type {
 	CreateActivityResponse,
 	LapUpdatePayload,
 	SessionUpdatePayload,
+	TrimActivityPayload,
+	TrimActivityResponse,
 } from "@activity-calendar/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client.js";
@@ -100,6 +102,42 @@ export function useSaveSession(activityId: number) {
 		mutationFn: ({ sessionId, ...payload }: SessionUpdatePayload & { sessionId: number }) =>
 			api(`/api/sessions/update/${sessionId}`, { method: "PATCH", body: JSON.stringify(payload) }),
 		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: queryKeys.activity(activityId) });
+			qc.invalidateQueries({ queryKey: queryKeys.calendar });
+			qc.invalidateQueries({ queryKey: queryKeys.report });
+		},
+	});
+}
+
+/**
+ * Mutation for trimming records off an activity via
+ * POST /api/activities/:id/trim.
+ *
+ * This is a DESTRUCTIVE operation: the server permanently deletes the
+ * out-of-window `record` rows (and any laps left empty), then recomputes the
+ * session/lap/activity summaries from the surviving records. Phase 1 supports a
+ * tail trim (`trimEnd`) on single-session activities.
+ *
+ * On success we invalidate:
+ * - `queryKeys.activity(id)` — this prefix (`["activity", id]`) also covers the
+ *   records, laps, sessions and auto-laps queries, so the map, charts, lap
+ *   tables and auto-laps all refetch the trimmed state.
+ * - `queryKeys.calendar` and `queryKeys.report` — aggregate views that show the
+ *   activity's distance/duration.
+ *
+ * @param activityId - The activity to trim.
+ */
+export function useTrimActivity(activityId: number) {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (payload: TrimActivityPayload) =>
+			api<TrimActivityResponse>(`/api/activities/${activityId}/trim`, {
+				method: "POST",
+				body: JSON.stringify(payload),
+			}),
+		onSuccess: () => {
+			// The `["activity", id]` prefix also matches records/laps/sessions/
+			// auto-laps query keys, so a single invalidation refetches them all.
 			qc.invalidateQueries({ queryKey: queryKeys.activity(activityId) });
 			qc.invalidateQueries({ queryKey: queryKeys.calendar });
 			qc.invalidateQueries({ queryKey: queryKeys.report });

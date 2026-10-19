@@ -13,6 +13,7 @@ import { reportRoutes } from "./routes/report.js";
 import { searchRoutes } from "./routes/search.js";
 import { sessionsRoutes } from "./routes/sessions.js";
 import { similarRoutes } from "./routes/similar.js";
+import { trimRoutes } from "./routes/trim.js";
 import { workoutsRoutes } from "./routes/workouts.js";
 
 const app = new Hono();
@@ -36,6 +37,7 @@ app.route("/api/search", searchRoutes);
 app.route("/api/similar", similarRoutes);
 app.route("/api/activities", autoLapsRoutes);
 app.route("/api/activities", exportRoutes);
+app.route("/api/activities", trimRoutes);
 app.route("/api/export", exportRoutes);
 app.route("/api/workouts", workoutsRoutes);
 
