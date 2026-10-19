@@ -5,6 +5,7 @@ import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
 
 const CalendarPage = lazy(() => import("./pages/CalendarPage.js"));
 const ActivityDetailsPage = lazy(() => import("./pages/ActivityDetailsPage.js"));
+const ActivityTrimPage = lazy(() => import("./pages/ActivityTrimPage.js"));
 const ActivityReportPage = lazy(() => import("./pages/ActivityReportPage.js"));
 const ActivitySearchPage = lazy(() => import("./pages/ActivitySearchPage.js"));
 const ActivityComparePage = lazy(() => import("./pages/ActivityComparePage.js"));
@@ -33,6 +34,14 @@ export function App() {
 						element={
 							<Suspense fallback={<Loading />}>
 								<ActivityDetailsPage />
+							</Suspense>
+						}
+					/>
+					<Route
+						path="/activity/:activityId/trim"
+						element={
+							<Suspense fallback={<Loading />}>
+								<ActivityTrimPage />
 							</Suspense>
 						}
 					/>
