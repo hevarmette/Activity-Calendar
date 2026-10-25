@@ -31,4 +31,5 @@ ENV NODE_ENV=production
 ENV PORT=3000
 EXPOSE 3000
 
-CMD ["bun", "run", "apps/server/src/index.ts"]
+WORKDIR /app/apps/server
+CMD ["bun", "run", "src/index.ts"]

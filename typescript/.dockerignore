@@ -1,8 +1,7 @@
-node_modules
-apps/client/dist
-apps/server/dist
+**/node_modules
+**/dist
+**/.env
 .git
 .kiro
 tests
 *.md
-.env
