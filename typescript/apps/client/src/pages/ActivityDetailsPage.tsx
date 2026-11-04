@@ -15,6 +15,7 @@ import { AutoLapTable } from "../components/laps/AutoLapTable.js";
 import { type LapEdit, LapTable } from "../components/laps/LapTable.js";
 import { type SwimLengthEdits, SwimLengthTable } from "../components/laps/SwimLengthTable.js";
 import { DetailMap } from "../components/maps/DetailMap.js";
+import { CreateWorkoutFromActivityDialog } from "../components/workouts/CreateWorkoutFromActivityDialog.js";
 import { useActiveSchema } from "../context/ActiveSchemaContext.js";
 import { useActivityNavigation } from "../hooks/useActivityNavigation.js";
 
@@ -51,6 +52,7 @@ export function ActivityDetailsPage() {
 	const { prev, next, goPrev, goNext } = useActivityNavigation(id, sport);
 
 	const [tab, setTab] = useState<Tab>("laps");
+	const [workoutDialogOpen, setWorkoutDialogOpen] = useState(false);
 	const [activityEdits, setActivityEdits] = useState<Partial<ActivityUpdatePayload>>({});
 	const [lapEdits, setLapEditsState] = useState<LapEdit[]>([]);
 	const lapEditsRef = useRef<LapEdit[]>([]);
@@ -700,6 +702,30 @@ export function ActivityDetailsPage() {
 					<span className="text-xs text-gray-600">Preview on a map before permanently deleting records.</span>
 				</div>
 			)}
+
+			{/* 9c. Create a structured workout from this activity's laps. Hidden on
+			    read-only schemas (the workout would be saved to the primary schema). */}
+			{!isReadOnly && laps && laps.length > 0 && (
+				<div className="flex flex-wrap items-center gap-3 border-t border-gray-800 pt-4">
+					<span className="text-xs font-medium uppercase tracking-wide text-gray-500">Workout</span>
+					<button
+						type="button"
+						onClick={() => setWorkoutDialogOpen(true)}
+						aria-label="Create a structured workout from this activity's laps"
+						className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-3 py-1.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/50"
+					>
+						Create workout…
+					</button>
+					<span className="text-xs text-gray-600">Turn these laps into a reusable workout.</span>
+				</div>
+			)}
+			<CreateWorkoutFromActivityDialog
+				open={workoutDialogOpen}
+				onClose={() => setWorkoutDialogOpen(false)}
+				defaultName={(title ?? "").slice(0, 50)}
+				sport={sessionSport}
+				laps={sessionLaps}
+			/>
 
 			{lastSql && (
 				<pre className="rounded-lg bg-gray-900 border border-gray-700 p-3 text-xs text-gray-300 font-mono overflow-x-auto whitespace-pre-wrap">
