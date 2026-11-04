@@ -3,3 +3,4 @@ export * from "./constants.js";
 export * from "./types.js";
 export * from "./formatting.js";
 export * from "./workout-types.js";
+export * from "./activity-to-workout.js";
