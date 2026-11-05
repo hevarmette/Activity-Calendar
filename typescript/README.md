@@ -128,7 +128,7 @@ Examples:
 - Load saved workouts from URL for editing
 - Read-only when viewing another schema (Active-Schema Switcher, Feature #7): Save/Update is disabled and a "Read-only while viewing another schema" hint is shown; the builder still loads and downloads .fit from the active schema
 
-- **Create workout from activity**: the Activity Details page has a "Create workout…" button that converts the activity's laps (rounded, repeats auto-collapsed, distance or time based) into a saved workout and opens it in the builder
+- **Create workout from activity**: the Activity Details page has a "Create workout…" button that converts the activity's laps (rounded, repeats auto-collapsed) into a saved workout and opens it in the builder, with toggles for units (metric/imperial) and whether active reps and rest/recovery are measured by distance or time
 
 ### Workout Library
 - Browse all saved workouts in a compact list view
