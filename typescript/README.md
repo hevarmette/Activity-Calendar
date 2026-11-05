@@ -110,7 +110,7 @@ Examples:
 ### Workout Builder
 - Create structured workouts with warmup, interval, rest, recovery, cooldown, and other step types
 - Repeat groups to define interval sets (e.g., 4×1mi with 2min recovery)
-- Drag-and-drop step reordering with grip handle
+- Drag-and-drop step reordering with a grip handle, including dragging steps into and out of repeat groups; up/down arrows provide a non-drag fallback
 - Per-step distance unit selector (mi, km, m) — each step independently chooses its display unit
 - Sport-specific step labels: "Run" for running, "Bike" for cycling, "Swim" for swimming
 - Sport-specific target units: pace (min/mi) for running, mph for cycling, pace (min/100m) for swimming
