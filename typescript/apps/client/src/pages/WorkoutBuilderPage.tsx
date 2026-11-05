@@ -14,7 +14,8 @@
  * - Active step defaults to 'distance' (1 mi) on initial load
  * - New steps insert before the last cooldown step
  * - All intensity types available as add-step buttons
- * - Drag-and-drop step reordering
+ * - Drag-and-drop step reordering, including dragging steps into and out of
+ *   repeat groups (powered by @dnd-kit); up/down arrows as a non-drag fallback
  * - Visual workout preview with estimated time/distance
  * - FIT file download
  * - Save/Update to server with URL persistence (?id=N)
@@ -31,7 +32,7 @@ import { downloadWorkoutFit } from "../api/client.js";
 import { useSaveWorkout, useUpdateWorkout, useWorkout } from "../api/workout-queries.js";
 import { StepList } from "../components/workouts/StepList.js";
 import { WorkoutPreview } from "../components/workouts/WorkoutPreview.js";
-import { type DistanceUnit, getSportVerb } from "../components/workouts/constants.js";
+import { type DistanceUnit, type Loc, getSportVerb } from "../components/workouts/constants.js";
 import { useActiveSchema } from "../context/ActiveSchemaContext.js";
 
 // ─── State & Reducer ──────────────────────────────────────────────────────────
@@ -54,6 +55,7 @@ type Action =
 	| { type: "UPDATE_STEP"; index: number; step: WorkoutStepOrRepeat }
 	| { type: "REMOVE_STEP"; index: number }
 	| { type: "MOVE_STEP"; from: number; to: number }
+	| { type: "MOVE_ITEM"; from: Loc; to: Loc }
 	| { type: "DUPLICATE_STEP"; index: number }
 	| { type: "LOAD"; state: WorkoutBuilderState }
 	| { type: "RESET" };
@@ -83,6 +85,98 @@ function findInsertIndex(steps: WorkoutStepOrRepeat[]): number {
 		}
 	}
 	return steps.length;
+}
+
+/**
+ * Perform a structural move of a single item between locations in the step tree.
+ *
+ * Handles every combination of root/group source and destination:
+ * - root → root: reorder top-level items
+ * - root → group: nest a top-level WorkoutStep into a repeat group. Rejected if
+ *   the moved item is itself a RepeatStep (no nesting repeats inside groups).
+ * - group → root: extract an inner step to the top level. If the source group
+ *   becomes empty it is removed from root.
+ * - group → group (same or different) and within-group reordering.
+ *
+ * Destination indices are clamped to valid ranges. Returns the original state
+ * unchanged if the move is impossible (e.g. invalid source or disallowed nesting).
+ */
+function applyMoveItem(state: WorkoutBuilderState, from: Loc, to: Loc): WorkoutBuilderState {
+	// Work on a shallow clone of the top-level array. Groups that are mutated are
+	// cloned on write so we never mutate the previous state.
+	const steps: WorkoutStepOrRepeat[] = [...state.steps];
+
+	// ─── Extract the moved item from its source ──────────────────────────────
+	let moved: WorkoutStepOrRepeat | undefined;
+
+	if (from.kind === "root") {
+		if (from.index < 0 || from.index >= steps.length) return state;
+		moved = steps[from.index];
+		if (!moved) return state;
+	} else {
+		const grp = steps[from.group];
+		if (!grp || !isRepeatStep(grp)) return state;
+		if (from.index < 0 || from.index >= grp.steps.length) return state;
+		moved = grp.steps[from.index];
+		if (!moved) return state;
+	}
+
+	// Disallow nesting a repeat group inside another group.
+	if (to.kind === "group" && isRepeatStep(moved)) return state;
+
+	// No-op: dropping onto itself.
+	if (
+		from.kind === to.kind &&
+		((from.kind === "root" && to.kind === "root" && from.index === to.index) ||
+			(from.kind === "group" && to.kind === "group" && from.group === to.group && from.index === to.index))
+	) {
+		return state;
+	}
+
+	// ─── Remove from source ──────────────────────────────────────────────────
+	if (from.kind === "root") {
+		steps.splice(from.index, 1);
+	} else {
+		const grp = steps[from.group] as RepeatStep;
+		const newInner = [...grp.steps];
+		newInner.splice(from.index, 1);
+		steps[from.group] = { ...grp, steps: newInner };
+	}
+
+	// ─── Resolve the destination, compensating for the removal above ─────────
+	// When both source and destination live in the same container and the source
+	// sits before the destination, the removal shifts the destination index down.
+	const to2: Loc = { ...to };
+	if (from.kind === "root" && to2.kind === "root" && from.index < to2.index) {
+		to2.index -= 1;
+	} else if (from.kind === "group" && to2.kind === "group" && from.group === to2.group && from.index < to2.index) {
+		to2.index -= 1;
+	}
+	// If a group sitting before the destination in root was removed (empty-group
+	// cleanup happens later), the destination root index may also shift; we handle
+	// empty-group removal after insertion to keep index math simple.
+
+	// ─── Insert into destination ─────────────────────────────────────────────
+	if (to2.kind === "root") {
+		const clamped = Math.max(0, Math.min(to2.index, steps.length));
+		steps.splice(clamped, 0, moved);
+	} else {
+		// Destination is a group. Its index in `steps` may have shifted if the
+		// source removal was a root item before it.
+		let destGroupIdx = to2.group;
+		if (from.kind === "root" && from.index < destGroupIdx) destGroupIdx -= 1;
+		const grp = steps[destGroupIdx];
+		if (!grp || !isRepeatStep(grp)) return state;
+		const newInner = [...grp.steps];
+		const clamped = Math.max(0, Math.min(to2.index, newInner.length));
+		newInner.splice(clamped, 0, moved as WorkoutStep);
+		steps[destGroupIdx] = { ...grp, steps: newInner };
+	}
+
+	// ─── Remove any group that became empty after an extraction ──────────────
+	const cleaned = steps.filter((s) => !(isRepeatStep(s) && s.steps.length === 0));
+
+	return { ...state, steps: cleaned };
 }
 
 function reducer(state: WorkoutBuilderState, action: Action): WorkoutBuilderState {
@@ -122,6 +216,8 @@ function reducer(state: WorkoutBuilderState, action: Action): WorkoutBuilderStat
 			steps.splice(action.to, 0, moved);
 			return { ...state, steps };
 		}
+		case "MOVE_ITEM":
+			return applyMoveItem(state, action.from, action.to);
 		case "DUPLICATE_STEP": {
 			const steps = [...state.steps];
 			const original = steps[action.index];
@@ -273,6 +369,10 @@ export function WorkoutBuilderPage() {
 
 	const handleMove = useCallback((from: number, to: number) => {
 		dispatch({ type: "MOVE_STEP", from, to });
+	}, []);
+
+	const handleMoveItem = useCallback((from: Loc, to: Loc) => {
+		dispatch({ type: "MOVE_ITEM", from, to });
 	}, []);
 
 	const handleDuplicate = useCallback((index: number) => {
@@ -470,6 +570,7 @@ export function WorkoutBuilderPage() {
 								onUpdate={handleUpdate}
 								onRemove={handleRemove}
 								onMove={handleMove}
+								onMoveItem={handleMoveItem}
 								onDuplicate={handleDuplicate}
 							/>
 						</div>

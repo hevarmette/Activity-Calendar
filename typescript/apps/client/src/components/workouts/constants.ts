@@ -145,3 +145,65 @@ export const METERS_PER_DISTANCE_UNIT: Record<DistanceUnit, number> = {
 
 /** All distance unit options for the per-step selector. */
 export const DISTANCE_UNIT_OPTIONS: DistanceUnit[] = ["mi", "km", "m"];
+
+// ─── Drag-and-drop location model ────────────────────────────────────────────
+
+/**
+ * A location within the step tree, used by the MOVE_ITEM reducer action and the
+ * @dnd-kit sortable wiring.
+ *
+ * - `root`  → a top-level item at `index` in state.steps
+ * - `group` → an inner WorkoutStep at `index` inside the repeat group located at
+ *   top-level index `group`
+ */
+export type Loc = { kind: "root"; index: number } | { kind: "group"; group: number; index: number };
+
+/** Build the transient sortable id for a top-level item at index `i`. */
+export function topId(i: number): string {
+	return `top:${i}`;
+}
+
+/** Build the transient sortable id for inner step `j` of the group at top-level index `i`. */
+export function innerId(i: number, j: number): string {
+	return `inner:${i}:${j}`;
+}
+
+/** Build the droppable container id for the repeat group at top-level index `i`. */
+export function groupId(i: number): string {
+	return `group:${i}`;
+}
+
+/** The droppable container id for the top-level (root) list. */
+export const ROOT_ID = "root";
+
+/**
+ * Parse a transient sortable/droppable id back into a {@link Loc} (or a container
+ * marker). Returns `null` if the id is unrecognized.
+ *
+ * - `top:i`        → { kind: 'root', index: i }
+ * - `inner:i:j`    → { kind: 'group', group: i, index: j }
+ * - `group:i`      → container for the repeat group at root index i (kind 'group', index at end)
+ * - `root`         → the root container
+ */
+export function parseDndId(id: string): { loc?: Loc; container: "root" | number } | null {
+	if (id === ROOT_ID) return { container: "root" };
+	const [prefix, a, b] = id.split(":");
+	if (prefix === "top" && a !== undefined) {
+		const index = Number.parseInt(a, 10);
+		if (Number.isNaN(index)) return null;
+		return { loc: { kind: "root", index }, container: "root" };
+	}
+	if (prefix === "inner" && a !== undefined && b !== undefined) {
+		const group = Number.parseInt(a, 10);
+		const index = Number.parseInt(b, 10);
+		if (Number.isNaN(group) || Number.isNaN(index)) return null;
+		return { loc: { kind: "group", group, index }, container: group };
+	}
+	if (prefix === "group" && a !== undefined) {
+		const group = Number.parseInt(a, 10);
+		if (Number.isNaN(group)) return null;
+		// Dropping onto the group container itself (append to end handled by caller)
+		return { container: group };
+	}
+	return null;
+}
