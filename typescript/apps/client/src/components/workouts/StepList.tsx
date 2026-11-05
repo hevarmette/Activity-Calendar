@@ -5,24 +5,51 @@
  * RepeatStep groups render as indented containers with editable repeat count,
  * inner step editors, and controls to add/remove steps within the group.
  *
+ * Drag-and-drop is powered by @dnd-kit with a single DndContext spanning the whole
+ * list. Two kinds of droppable containers exist: the root list and each repeat
+ * group. Because of this, steps can be dragged BETWEEN the root list and repeat
+ * groups (into, out of, and across groups) — not just reordered within one list.
+ *
+ * Each sortable item carries a transient id derived from its current position
+ * (`top:i`, `inner:i:j`, `group:i`); on drop the ids are parsed back into a
+ * {@link Loc} and a single `onMoveItem(from, to)` performs the structural move.
+ *
  * Features:
- * - HTML5 drag-and-drop reordering for top-level steps
+ * - Cross-container drag-and-drop (reorder + move into/out of repeat groups)
+ * - Up/Down arrow buttons as an always-available, non-drag reordering fallback
  * - Sport-aware display labels (Run/Bike/Swim)
  * - Per-step distance unit passthrough (mi/km/m)
  * - Always-visible delete buttons on all steps
  */
 import type { RepeatStep, WorkoutSport, WorkoutStep, WorkoutStepOrRepeat } from "@activity-calendar/shared";
 import { isRepeatStep } from "@activity-calendar/shared";
-import { useCallback, useState } from "react";
+import {
+	DndContext,
+	type DragEndEvent,
+	KeyboardSensor,
+	PointerSensor,
+	closestCenter,
+	useDroppable,
+	useSensor,
+	useSensors,
+} from "@dnd-kit/core";
+import {
+	SortableContext,
+	sortableKeyboardCoordinates,
+	useSortable,
+	verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { useCallback } from "react";
 import { StepEditor } from "./StepEditor.js";
-import type { DistanceUnit } from "./constants.js";
+import { type DistanceUnit, type Loc, groupId, innerId, parseDndId, topId } from "./constants.js";
 
 interface StepListProps {
 	/** The ordered list of steps and repeat groups. */
 	steps: WorkoutStepOrRepeat[];
 	/** Current sport for unit display. */
 	sport: WorkoutSport;
-	/** Per-step distance units keyed by a stable identifier (top-level index, or "group-inner" for repeat groups). */
+	/** Per-step distance units keyed by a stable identifier (top-level index, or "idx-innerIdx" for repeat groups). */
 	distanceUnits: Record<string, DistanceUnit>;
 	/** Called when a step's distance unit changes. Key format: "idx" for top-level, "idx-innerIdx" for repeat inner steps. */
 	onDistanceUnitChange: (key: string, unit: DistanceUnit) => void;
@@ -30,8 +57,10 @@ interface StepListProps {
 	onUpdate: (index: number, step: WorkoutStepOrRepeat) => void;
 	/** Remove a step at the given top-level index. */
 	onRemove: (index: number) => void;
-	/** Move a step from one index to another. */
+	/** Move a top-level item from one index to another (used by group up/down arrows). */
 	onMove: (from: number, to: number) => void;
+	/** Structural move between any two locations (root ↔ group). */
+	onMoveItem: (from: Loc, to: Loc) => void;
 	/** Duplicate a step at the given index. */
 	onDuplicate: (index: number) => void;
 }
@@ -42,8 +71,66 @@ function defaultInnerStep(): WorkoutStep {
 }
 
 /**
- * RepeatGroupEditor — renders a repeat group with its inner steps, repeat count,
- * and controls for managing the group. Supports drag-and-drop for inner steps.
+ * SortableStep — wraps StepEditor with dnd-kit's useSortable so the row can be
+ * dragged by its handle while its inputs stay interactive. `id` is the transient
+ * sortable id (`top:i` or `inner:i:j`).
+ */
+function SortableStep({
+	id,
+	step,
+	index,
+	sport,
+	distanceUnit,
+	onDistanceUnitChange,
+	onChange,
+	onRemove,
+	onMoveUp,
+	onMoveDown,
+	onDuplicate,
+}: {
+	id: string;
+	step: WorkoutStep;
+	index: number;
+	sport: WorkoutSport;
+	distanceUnit: DistanceUnit;
+	onDistanceUnitChange: (unit: DistanceUnit) => void;
+	onChange: (updated: WorkoutStep) => void;
+	onRemove: () => void;
+	onMoveUp?: () => void;
+	onMoveDown?: () => void;
+	onDuplicate: () => void;
+}) {
+	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+	const dragStyle = {
+		transform: CSS.Translate.toString(transform),
+		transition,
+		zIndex: isDragging ? 10 : undefined,
+	};
+	return (
+		<StepEditor
+			step={step}
+			index={index}
+			sport={sport}
+			distanceUnit={distanceUnit}
+			onDistanceUnitChange={onDistanceUnitChange}
+			onChange={onChange}
+			onRemove={onRemove}
+			onMoveUp={onMoveUp}
+			onMoveDown={onMoveDown}
+			onDuplicate={onDuplicate}
+			isDragging={isDragging}
+			dragStyle={dragStyle}
+			dragHandleProps={{ ...attributes, ...listeners }}
+			setNodeRef={setNodeRef}
+		/>
+	);
+}
+
+/**
+ * RepeatGroupEditor — renders a repeat group as its own droppable/sortable
+ * container. The group itself is sortable at the root level; its inner steps form
+ * a nested SortableContext so items can be reordered within, and dropped into/out
+ * of, the group.
  */
 function RepeatGroupEditor({
 	group,
@@ -55,11 +142,7 @@ function RepeatGroupEditor({
 	onRemove,
 	onMoveUp,
 	onMoveDown,
-	isDragOver,
-	onDragStart,
-	onDragOver,
-	onDrop,
-	onDragEnd,
+	onMoveItem,
 }: {
 	group: RepeatStep;
 	index: number;
@@ -70,14 +153,18 @@ function RepeatGroupEditor({
 	onRemove: () => void;
 	onMoveUp?: () => void;
 	onMoveDown?: () => void;
-	isDragOver?: boolean;
-	onDragStart?: (e: React.DragEvent) => void;
-	onDragOver?: (e: React.DragEvent) => void;
-	onDrop?: (e: React.DragEvent) => void;
-	onDragEnd?: (e: React.DragEvent) => void;
+	onMoveItem: (from: Loc, to: Loc) => void;
 }) {
-	const [innerDragIdx, setInnerDragIdx] = useState<number | null>(null);
-	const [innerDragOverIdx, setInnerDragOverIdx] = useState<number | null>(null);
+	// The group row is itself sortable within the root list.
+	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: topId(index) });
+	// And a droppable so items can be dropped onto the group (append to the end).
+	const { setNodeRef: setDroppableRef, isOver } = useDroppable({ id: groupId(index) });
+
+	const dragStyle = {
+		transform: CSS.Translate.toString(transform),
+		transition,
+		zIndex: isDragging ? 10 : undefined,
+	};
 
 	const handleRepeatCountChange = useCallback(
 		(e: React.ChangeEvent<HTMLInputElement>) => {
@@ -110,17 +197,6 @@ function RepeatGroupEditor({
 		[group, onUpdate, onRemove],
 	);
 
-	const handleInnerStepMove = useCallback(
-		(from: number, to: number) => {
-			if (to < 0 || to >= group.steps.length) return;
-			const newSteps = [...group.steps];
-			const moved = newSteps.splice(from, 1)[0];
-			if (moved) newSteps.splice(to, 0, moved);
-			onUpdate({ ...group, steps: newSteps });
-		},
-		[group, onUpdate],
-	);
-
 	const handleInnerDuplicate = useCallback(
 		(innerIndex: number) => {
 			const newSteps = [...group.steps];
@@ -135,63 +211,27 @@ function RepeatGroupEditor({
 		onUpdate({ ...group, steps: [...group.steps, defaultInnerStep()] });
 	}, [group, onUpdate]);
 
-	// Inner drag-and-drop handlers
-	const handleInnerDragStart = useCallback((innerIdx: number) => {
-		return (e: React.DragEvent) => {
-			e.stopPropagation();
-			setInnerDragIdx(innerIdx);
-			e.dataTransfer.effectAllowed = "move";
-			e.dataTransfer.setData("text/plain", `inner-${innerIdx}`);
-		};
-	}, []);
-
-	const handleInnerDragOver = useCallback((innerIdx: number) => {
-		return (e: React.DragEvent) => {
-			e.preventDefault();
-			e.stopPropagation();
-			setInnerDragOverIdx(innerIdx);
-		};
-	}, []);
-
-	const handleInnerDrop = useCallback(
-		(toIdx: number) => {
-			return (e: React.DragEvent) => {
-				e.preventDefault();
-				e.stopPropagation();
-				if (innerDragIdx !== null && innerDragIdx !== toIdx) {
-					handleInnerStepMove(innerDragIdx, toIdx);
-				}
-				setInnerDragIdx(null);
-				setInnerDragOverIdx(null);
-			};
-		},
-		[innerDragIdx, handleInnerStepMove],
-	);
-
-	const handleInnerDragEnd = useCallback(() => {
-		setInnerDragIdx(null);
-		setInnerDragOverIdx(null);
-	}, []);
+	const innerIds = group.steps.map((_, j) => innerId(index, j));
 
 	return (
 		<div
-			className={`border-l-2 border-dashed border-gray-700 ml-4 pl-3 py-1 ${isDragOver ? "bg-gray-800/70 border-t border-t-orange-500/50" : ""}`}
-			draggable
-			onDragStart={onDragStart}
-			onDragOver={onDragOver}
-			onDrop={onDrop}
-			onDragEnd={onDragEnd}
+			ref={setNodeRef}
+			style={dragStyle}
+			className={`border-l-2 border-dashed border-gray-700 ml-4 pl-3 py-1 ${isDragging ? "opacity-50" : ""} ${isOver ? "bg-gray-800/70 ring-1 ring-orange-500/50 rounded" : ""}`}
 		>
 			{/* Repeat group header */}
 			<div className="flex items-center gap-2 py-1.5">
-				{/* Drag handle */}
-				<span
-					className="cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-300 shrink-0 select-none"
+				{/* Drag handle — only this starts a group drag. */}
+				<button
+					type="button"
+					{...attributes}
+					{...listeners}
+					className="cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-300 shrink-0 select-none bg-transparent border-none p-0 leading-none touch-none"
 					aria-label="Drag to reorder group"
 					title="Drag to reorder"
 				>
 					⠿
-				</span>
+				</button>
 
 				<svg
 					aria-hidden="true"
@@ -220,6 +260,52 @@ function RepeatGroupEditor({
 					aria-label="Repeat count"
 					className="w-12 rounded bg-gray-800 border border-gray-700 px-1.5 py-1 text-xs text-gray-200 text-center focus:outline-none focus:ring-2 focus:ring-orange-500/50"
 				/>
+
+				{/* Up / Down move the whole group within the root list. */}
+				<button
+					type="button"
+					onClick={onMoveUp}
+					disabled={!onMoveUp}
+					aria-label="Move group up"
+					title="Move group up"
+					className="p-1 text-gray-500 hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+				>
+					<svg
+						aria-hidden="true"
+						width="14"
+						height="14"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					>
+						<polyline points="18 15 12 9 6 15" />
+					</svg>
+				</button>
+				<button
+					type="button"
+					onClick={onMoveDown}
+					disabled={!onMoveDown}
+					aria-label="Move group down"
+					title="Move group down"
+					className="p-1 text-gray-500 hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+				>
+					<svg
+						aria-hidden="true"
+						width="14"
+						height="14"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					>
+						<polyline points="6 9 12 15 18 9" />
+					</svg>
+				</button>
 				<button
 					type="button"
 					onClick={onRemove}
@@ -244,30 +330,43 @@ function RepeatGroupEditor({
 				</button>
 			</div>
 
-			{/* Inner steps */}
-			<div className="space-y-0.5">
-				{group.steps.map((innerStep, innerIdx) => (
-					<StepEditor
-						key={`${index}-${innerIdx}`}
-						step={innerStep}
-						index={innerIdx + 1}
-						sport={sport}
-						distanceUnit={distanceUnits[`${index}-${innerIdx}`] ?? "mi"}
-						onDistanceUnitChange={(unit) => onDistanceUnitChange(`${index}-${innerIdx}`, unit)}
-						onChange={(updated) => handleInnerStepChange(innerIdx, updated)}
-						onRemove={() => handleInnerStepRemove(innerIdx)}
-						onMoveUp={innerIdx > 0 ? () => handleInnerStepMove(innerIdx, innerIdx - 1) : undefined}
-						onMoveDown={
-							innerIdx < group.steps.length - 1 ? () => handleInnerStepMove(innerIdx, innerIdx + 1) : undefined
-						}
-						onDuplicate={() => handleInnerDuplicate(innerIdx)}
-						isDragOver={innerDragOverIdx === innerIdx && innerDragIdx !== innerIdx}
-						onDragStart={handleInnerDragStart(innerIdx)}
-						onDragOver={handleInnerDragOver(innerIdx)}
-						onDrop={handleInnerDrop(innerIdx)}
-						onDragEnd={handleInnerDragEnd}
-					/>
-				))}
+			{/* Inner steps — nested sortable container. The droppable ref lets items
+			    drop onto the group even when it is empty-ish. */}
+			<div ref={setDroppableRef} className="space-y-0.5 min-h-[8px]">
+				<SortableContext items={innerIds} strategy={verticalListSortingStrategy}>
+					{group.steps.map((innerStep, innerIdx) => (
+						<SortableStep
+							key={innerId(index, innerIdx)}
+							id={innerId(index, innerIdx)}
+							step={innerStep}
+							index={innerIdx + 1}
+							sport={sport}
+							distanceUnit={distanceUnits[`${index}-${innerIdx}`] ?? "mi"}
+							onDistanceUnitChange={(unit) => onDistanceUnitChange(`${index}-${innerIdx}`, unit)}
+							onChange={(updated) => handleInnerStepChange(innerIdx, updated)}
+							onRemove={() => handleInnerStepRemove(innerIdx)}
+							onMoveUp={
+								innerIdx > 0
+									? () =>
+											onMoveItem(
+												{ kind: "group", group: index, index: innerIdx },
+												{ kind: "group", group: index, index: innerIdx - 1 },
+											)
+									: undefined
+							}
+							onMoveDown={
+								innerIdx < group.steps.length - 1
+									? () =>
+											onMoveItem(
+												{ kind: "group", group: index, index: innerIdx },
+												{ kind: "group", group: index, index: innerIdx + 1 },
+											)
+									: undefined
+							}
+							onDuplicate={() => handleInnerDuplicate(innerIdx)}
+						/>
+					))}
+				</SortableContext>
 			</div>
 
 			{/* Add step to group */}
@@ -283,8 +382,9 @@ function RepeatGroupEditor({
 }
 
 /**
- * StepList component — renders the full ordered step list with HTML5 drag-and-drop.
- * Handles both single steps and repeat groups with uniform move/remove/update controls.
+ * StepList component — renders the full ordered step list inside one DndContext.
+ * Handles both single steps and repeat groups with uniform move/remove/update
+ * controls, and resolves drag drops into structural `onMoveItem` calls.
  */
 export function StepList({
 	steps,
@@ -294,101 +394,106 @@ export function StepList({
 	onUpdate,
 	onRemove,
 	onMove,
+	onMoveItem,
 	onDuplicate,
 }: StepListProps) {
-	const [dragIdx, setDragIdx] = useState<number | null>(null);
-	const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
-
-	// Top-level drag-and-drop handlers
-	const handleDragStart = useCallback((idx: number) => {
-		return (e: React.DragEvent) => {
-			setDragIdx(idx);
-			e.dataTransfer.effectAllowed = "move";
-			e.dataTransfer.setData("text/plain", `top-${idx}`);
-		};
-	}, []);
-
-	const handleDragOver = useCallback((idx: number) => {
-		return (e: React.DragEvent) => {
-			e.preventDefault();
-			setDragOverIdx(idx);
-		};
-	}, []);
-
-	const handleDrop = useCallback(
-		(toIdx: number) => {
-			return (e: React.DragEvent) => {
-				e.preventDefault();
-				if (dragIdx !== null && dragIdx !== toIdx) {
-					onMove(dragIdx, toIdx);
-				}
-				setDragIdx(null);
-				setDragOverIdx(null);
-			};
-		},
-		[dragIdx, onMove],
+	// PointerSensor with a small activation distance so clicks on inputs/selects/
+	// buttons inside a row are not swallowed; a drag only begins after a 6px move.
+	const sensors = useSensors(
+		useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+		useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
 	);
 
-	const handleDragEnd = useCallback(() => {
-		setDragIdx(null);
-		setDragOverIdx(null);
-	}, []);
+	const handleDragEnd = useCallback(
+		(event: DragEndEvent) => {
+			const { active, over } = event;
+			if (!over) return;
+			const activeId = String(active.id);
+			const overId = String(over.id);
+			if (activeId === overId) return;
 
-	// Track global step numbering (flattened across repeat groups for display)
+			const from = parseDndId(activeId);
+			const over2 = parseDndId(overId);
+			if (!from?.loc || !over2) return;
+
+			// Destination is either an item (over2.loc) or a bare container.
+			let to: Loc;
+			if (over2.loc) {
+				to = over2.loc;
+			} else if (over2.container === "root") {
+				to = { kind: "root", index: steps.length };
+			} else {
+				// Dropped onto a group container → append to that group's end.
+				const g = steps[over2.container];
+				const len = g && isRepeatStep(g) ? g.steps.length : 0;
+				to = { kind: "group", group: over2.container, index: len };
+			}
+
+			onMoveItem(from.loc, to);
+		},
+		[steps, onMoveItem],
+	);
+
+	// Root-level sortable ids, in order.
+	const rootIds = steps.map((_, idx) => topId(idx));
+
+	// Track global step numbering (flattened across repeat groups for display).
 	let stepCounter = 0;
 
 	return (
-		<div className="space-y-0.5">
-			{steps.map((item, idx) => {
-				if (isRepeatStep(item)) {
-					return (
-						<RepeatGroupEditor
-							key={`repeat-${idx}`}
-							group={item}
-							index={idx}
-							sport={sport}
-							distanceUnits={distanceUnits}
-							onDistanceUnitChange={onDistanceUnitChange}
-							onUpdate={(updated) => onUpdate(idx, updated)}
-							onRemove={() => onRemove(idx)}
-							onMoveUp={idx > 0 ? () => onMove(idx, idx - 1) : undefined}
-							onMoveDown={idx < steps.length - 1 ? () => onMove(idx, idx + 1) : undefined}
-							isDragOver={dragOverIdx === idx && dragIdx !== idx}
-							onDragStart={handleDragStart(idx)}
-							onDragOver={handleDragOver(idx)}
-							onDrop={handleDrop(idx)}
-							onDragEnd={handleDragEnd}
-						/>
-					);
-				}
+		<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+			<div className="space-y-0.5">
+				<SortableContext items={rootIds} strategy={verticalListSortingStrategy}>
+					{steps.map((item, idx) => {
+						if (isRepeatStep(item)) {
+							return (
+								<RepeatGroupEditor
+									key={`repeat-${idx}`}
+									group={item}
+									index={idx}
+									sport={sport}
+									distanceUnits={distanceUnits}
+									onDistanceUnitChange={onDistanceUnitChange}
+									onUpdate={(updated) => onUpdate(idx, updated)}
+									onRemove={() => onRemove(idx)}
+									onMoveUp={idx > 0 ? () => onMove(idx, idx - 1) : undefined}
+									onMoveDown={idx < steps.length - 1 ? () => onMove(idx, idx + 1) : undefined}
+									onMoveItem={onMoveItem}
+								/>
+							);
+						}
 
-				stepCounter++;
-				const currentCounter = stepCounter;
-				return (
-					<StepEditor
-						key={`step-${idx}`}
-						step={item}
-						index={currentCounter}
-						sport={sport}
-						distanceUnit={distanceUnits[String(idx)] ?? "mi"}
-						onDistanceUnitChange={(unit) => onDistanceUnitChange(String(idx), unit)}
-						onChange={(updated) => onUpdate(idx, updated)}
-						onRemove={() => onRemove(idx)}
-						onMoveUp={idx > 0 ? () => onMove(idx, idx - 1) : undefined}
-						onMoveDown={idx < steps.length - 1 ? () => onMove(idx, idx + 1) : undefined}
-						onDuplicate={() => onDuplicate(idx)}
-						isDragOver={dragOverIdx === idx && dragIdx !== idx}
-						onDragStart={handleDragStart(idx)}
-						onDragOver={handleDragOver(idx)}
-						onDrop={handleDrop(idx)}
-						onDragEnd={handleDragEnd}
-					/>
-				);
-			})}
+						stepCounter++;
+						const currentCounter = stepCounter;
+						return (
+							<SortableStep
+								key={`step-${idx}`}
+								id={topId(idx)}
+								step={item}
+								index={currentCounter}
+								sport={sport}
+								distanceUnit={distanceUnits[String(idx)] ?? "mi"}
+								onDistanceUnitChange={(unit) => onDistanceUnitChange(String(idx), unit)}
+								onChange={(updated) => onUpdate(idx, updated)}
+								onRemove={() => onRemove(idx)}
+								onMoveUp={
+									idx > 0 ? () => onMoveItem({ kind: "root", index: idx }, { kind: "root", index: idx - 1 }) : undefined
+								}
+								onMoveDown={
+									idx < steps.length - 1
+										? () => onMoveItem({ kind: "root", index: idx }, { kind: "root", index: idx + 1 })
+										: undefined
+								}
+								onDuplicate={() => onDuplicate(idx)}
+							/>
+						);
+					})}
+				</SortableContext>
 
-			{steps.length === 0 && (
-				<p className="py-8 text-center text-sm text-gray-500">No steps yet. Add a step below to get started.</p>
-			)}
-		</div>
+				{steps.length === 0 && (
+					<p className="py-8 text-center text-sm text-gray-500">No steps yet. Add a step below to get started.</p>
+				)}
+			</div>
+		</DndContext>
 	);
 }
