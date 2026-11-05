@@ -6,13 +6,17 @@
  * top-level steps and steps within repeat groups.
  *
  * Features:
- * - Drag handle for HTML5 drag-and-drop reordering
+ * - @dnd-kit drag handle (only the ⠿ glyph starts a drag; the rest of the row
+ *   stays interactive) supporting moves into/out of repeat groups
  * - Sport-aware labels (Run/Bike/Swim for active/interval)
  * - 'Lap Button' display for open duration type
  * - Per-step distance unit selector (mi/km/m) shown inline when durationType='distance'
+ * - Local text buffers for time AND distance/number duration inputs so the field
+ *   can be cleared and retyped without the value fighting the cursor
  * - Always-visible delete button
  */
 import type { StepDurationType, StepIntensity, WorkoutSport, WorkoutStep } from "@activity-calendar/shared";
+import type { CSSProperties } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { TargetConfig } from "./TargetConfig.js";
 import {
@@ -45,16 +49,14 @@ interface StepEditorProps {
 	onMoveDown?: () => void;
 	/** Duplicate this step. */
 	onDuplicate: () => void;
-	/** Whether this step is currently being dragged over. */
-	isDragOver?: boolean;
-	/** HTML5 drag event handlers for reordering. */
-	onDragStart?: (e: React.DragEvent) => void;
-	/** Drag over handler. */
-	onDragOver?: (e: React.DragEvent) => void;
-	/** Drop handler. */
-	onDrop?: (e: React.DragEvent) => void;
-	/** Drag end handler. */
-	onDragEnd?: (e: React.DragEvent) => void;
+	/** Whether this row is the one actively being dragged (dnd-kit). */
+	isDragging?: boolean;
+	/** dnd-kit transform/transition style applied to the row wrapper. */
+	dragStyle?: CSSProperties;
+	/** Props spread onto the drag handle (dnd-kit attributes + listeners). */
+	dragHandleProps?: Record<string, unknown>;
+	/** Ref callback from useSortable, attached to the row wrapper. */
+	setNodeRef?: (node: HTMLElement | null) => void;
 }
 
 /** All available intensity options in the dropdown. */
@@ -138,11 +140,10 @@ export function StepEditor({
 	onMoveUp,
 	onMoveDown,
 	onDuplicate,
-	isDragOver,
-	onDragStart,
-	onDragOver,
-	onDrop,
-	onDragEnd,
+	isDragging,
+	dragStyle,
+	dragHandleProps,
+	setNodeRef,
 }: StepEditorProps) {
 	const borderClass = INTENSITY_BORDER_CLASSES[step.intensity] ?? "border-l-gray-500";
 
@@ -150,12 +151,28 @@ export function StepEditor({
 	const [timeText, setTimeText] = useState(() => apiToDisplayDuration(step.durationValue, "time", distanceUnit));
 	const [isEditingTime, setIsEditingTime] = useState(false);
 
+	// Local editing state for the distance/number input — allows clearing the box
+	// and typing partial values like "1." without the meters round-trip reformatting
+	// under the cursor. Only authoritative while focused (isEditingValue).
+	const [valueText, setValueText] = useState(() =>
+		apiToDisplayDuration(step.durationValue, step.durationType, distanceUnit),
+	);
+	const [isEditingValue, setIsEditingValue] = useState(false);
+
 	// Sync external changes to local state when not actively editing
 	useEffect(() => {
 		if (!isEditingTime) {
 			setTimeText(apiToDisplayDuration(step.durationValue, "time", distanceUnit));
 		}
 	}, [step.durationValue, distanceUnit, isEditingTime]);
+
+	// Keep the distance/number buffer in sync with external changes (value, unit, or
+	// duration-type switches) while the field is not being actively edited.
+	useEffect(() => {
+		if (!isEditingValue) {
+			setValueText(apiToDisplayDuration(step.durationValue, step.durationType, distanceUnit));
+		}
+	}, [step.durationValue, step.durationType, distanceUnit, isEditingValue]);
 
 	const handleIntensityChange = useCallback(
 		(e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -187,15 +204,35 @@ export function StepEditor({
 				}
 				return;
 			}
+			// Distance / number path — keep a free-form local buffer so the user can
+			// clear the box and type partial values ("", "1.", "0.") without the
+			// meters round-trip reformatting under the cursor.
+			setValueText(rawText);
+			if (rawText.trim() === "") {
+				// Empty → undefined, but DO NOT force the display back to "0".
+				onChange({ ...step, durationValue: undefined });
+				return;
+			}
 			const raw = Number.parseFloat(rawText);
 			if (Number.isNaN(raw) || raw < 0) {
-				onChange({ ...step, durationValue: undefined });
-			} else {
-				onChange({ ...step, durationValue: displayToApiDuration(raw, step.durationType, distanceUnit) });
+				// Partial/invalid intermediate value (e.g. "1." or "-") — leave the
+				// buffer as-is and don't propagate until it parses.
+				return;
 			}
+			onChange({ ...step, durationValue: displayToApiDuration(raw, step.durationType, distanceUnit) });
 		},
 		[step, distanceUnit, onChange],
 	);
+
+	const handleValueFocus = useCallback(() => {
+		setIsEditingValue(true);
+	}, []);
+
+	const handleValueBlur = useCallback(() => {
+		setIsEditingValue(false);
+		// Reformat to canonical display on blur.
+		setValueText(apiToDisplayDuration(step.durationValue, step.durationType, distanceUnit));
+	}, [step.durationValue, step.durationType, distanceUnit]);
 
 	const handleTimeBlur = useCallback(() => {
 		setIsEditingTime(false);
@@ -230,21 +267,20 @@ export function StepEditor({
 
 	return (
 		<div
-			className={`group flex items-center gap-2 py-2 pl-3 pr-2 border-l-3 ${borderClass} hover:bg-gray-900/50 transition-colors ${isDragOver ? "bg-gray-800/70 border-t border-t-orange-500/50" : ""}`}
-			draggable
-			onDragStart={onDragStart}
-			onDragOver={onDragOver}
-			onDrop={onDrop}
-			onDragEnd={onDragEnd}
+			ref={setNodeRef}
+			style={dragStyle}
+			className={`group flex items-center gap-2 py-2 pl-3 pr-2 border-l-3 ${borderClass} hover:bg-gray-900/50 transition-colors ${isDragging ? "opacity-50 bg-gray-800/70 ring-1 ring-orange-500/50" : ""}`}
 		>
-			{/* Drag handle */}
-			<span
-				className="cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-300 shrink-0 select-none"
+			{/* Drag handle — only this element starts a drag (dnd-kit listeners). */}
+			<button
+				type="button"
+				{...(dragHandleProps ?? {})}
+				className="cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-300 shrink-0 select-none bg-transparent border-none p-0 leading-none touch-none"
 				aria-label="Drag to reorder"
 				title="Drag to reorder"
 			>
 				⠿
-			</span>
+			</button>
 
 			{/* Index */}
 			<span className="text-xs text-gray-500 w-5 text-center shrink-0">{index}</span>
@@ -281,14 +317,10 @@ export function StepEditor({
 					<>
 						<input
 							type={step.durationType === "time" ? "text" : "number"}
-							value={
-								step.durationType === "time"
-									? timeText
-									: apiToDisplayDuration(step.durationValue, step.durationType, distanceUnit)
-							}
+							value={step.durationType === "time" ? timeText : valueText}
 							onChange={handleDurationValueChange}
-							onBlur={step.durationType === "time" ? handleTimeBlur : undefined}
-							onFocus={step.durationType === "time" ? handleTimeFocus : undefined}
+							onBlur={step.durationType === "time" ? handleTimeBlur : handleValueBlur}
+							onFocus={step.durationType === "time" ? handleTimeFocus : handleValueFocus}
 							placeholder={step.durationType === "time" ? "0:00" : "0"}
 							step={step.durationType === "distance" ? "any" : undefined}
 							min={step.durationType === "distance" ? "0" : undefined}
@@ -340,6 +372,51 @@ export function StepEditor({
 
 			{/* Actions — always visible */}
 			<div className="flex items-center gap-1 ml-auto shrink-0">
+				{/* Up / Down arrows — non-drag reordering within the current container */}
+				<button
+					type="button"
+					onClick={onMoveUp}
+					disabled={!onMoveUp}
+					aria-label="Move step up"
+					className="p-1 text-gray-500 hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+					title="Move up"
+				>
+					<svg
+						aria-hidden="true"
+						width="14"
+						height="14"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					>
+						<polyline points="18 15 12 9 6 15" />
+					</svg>
+				</button>
+				<button
+					type="button"
+					onClick={onMoveDown}
+					disabled={!onMoveDown}
+					aria-label="Move step down"
+					className="p-1 text-gray-500 hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+					title="Move down"
+				>
+					<svg
+						aria-hidden="true"
+						width="14"
+						height="14"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					>
+						<polyline points="6 9 12 15 18 9" />
+					</svg>
+				</button>
 				<button
 					type="button"
 					onClick={onDuplicate}
