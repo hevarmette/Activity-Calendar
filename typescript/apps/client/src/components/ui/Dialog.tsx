@@ -3,7 +3,8 @@ import { type ReactNode, useEffect, useRef } from "react";
 interface Props {
 	open: boolean;
 	onClose: () => void;
-	title: string;
+	/** Plain string or custom node (e.g. an inline-editable title). */
+	title: ReactNode;
 	subtitle?: string;
 	children: ReactNode;
 }
@@ -43,7 +44,7 @@ export function Dialog({ open, onClose, title, subtitle, children }: Props) {
 			className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 m-0 w-[min(720px,95vw)] max-h-[90vh] overflow-y-auto rounded-xl bg-[#1a1a1a] text-gray-100 border border-gray-700 p-6 shadow-[0_25px_60px_rgba(0,0,0,0.6)] backdrop:bg-black/65 backdrop:backdrop-blur-sm"
 		>
 			<div className="flex flex-row items-center justify-between mb-5">
-				<div>
+				<div className="min-w-0 flex-1 pr-3">
 					<h2 className="text-xl font-semibold text-gray-100">{title}</h2>
 					{subtitle && <p className="text-[0.8rem] italic text-gray-400 mt-1">{subtitle}</p>}
 				</div>

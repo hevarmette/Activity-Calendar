@@ -17,6 +17,7 @@ A modern rewrite of the Activity Calendar using React, Hono, and Bun. This is a 
 - Scheduled workouts displayed on the calendar alongside activities (dashed violet border, distinct from activity events)
 - Click any scheduled workout to open a dialog with workout details, step summary, .fit download, edit link, and unschedule option (Edit and unschedule are disabled while viewing another schema; download still works)
 - Click any event to open a summary dialog with distance, duration, pace/speed, and an embedded GPS map with start/end markers and lap markers
+- Edit an activity's title and description inline in that dialog (click the text; Enter saves, Escape cancels, blur saves; only changed values are sent). Disabled while viewing another schema
 - Click any empty date cell to create a manual activity (no GPS data) with that date pre-filled
 - Manual activity creation dialog with title, sport, sub-sport, category, duration, lap splits (distance + time + intensity per lap), workout feel, and perceived effort
 - Year/month navigation

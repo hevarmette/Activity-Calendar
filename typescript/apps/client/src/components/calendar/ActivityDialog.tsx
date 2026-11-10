@@ -8,9 +8,12 @@ import {
 	formatPaceSpeed,
 } from "@activity-calendar/shared";
 import { Link } from "react-router";
+import { useSaveActivity } from "../../api/mutations.js";
 import { useActivity, useRecords, useSessions } from "../../api/queries.js";
+import { useActiveSchema } from "../../context/ActiveSchemaContext.js";
 import { ActivityMap } from "../maps/ActivityMap.js";
 import { Dialog } from "../ui/Dialog.js";
+import { EditableText } from "../ui/EditableText.js";
 import { MetricCard } from "../ui/MetricCard.js";
 
 interface Props {
@@ -25,6 +28,9 @@ interface Props {
 /**
  * Modal dialog showing a quick activity summary when clicking a calendar event.
  * Displays key metrics, a GPS map preview, multisport legs, and a link to full details.
+ * Title and description are click-to-edit inline (PATCH only when changed); editing is
+ * disabled while viewing another (read-only) schema. The `title` prop is only a fallback
+ * until the fetched activity name is available.
  */
 export function ActivityDialog({ activityId, title, sport, numSessions, open, onClose }: Props) {
 	const { data: activity, isLoading: activityLoading } = useActivity(activityId);
@@ -71,8 +77,42 @@ export function ActivityDialog({ activityId, title, sport, numSessions, open, on
 
 	const timestamp = activity?.localTimestamp ? new Date(activity.localTimestamp).toLocaleString() : undefined;
 
+	// Inline editing of title/description. Separate mutations so each field has its own status.
+	const { activeSchema } = useActiveSchema();
+	const readOnly = activeSchema !== undefined;
+	const saveName = useSaveActivity(activityId);
+	const saveDescription = useSaveActivity(activityId);
+
+	// Keep showing the just-saved value until the refetch lands (avoids a flash of the old text).
+	const nameOverride = saveName.isPending || saveName.isSuccess ? saveName.variables?.activityName : undefined;
+	const descOverride =
+		saveDescription.isPending || saveDescription.isSuccess ? saveDescription.variables?.description : undefined;
+
+	// Prefer the fetched name (the `title` prop is a stale calendar-event snapshot).
+	const displayName = nameOverride !== undefined ? (nameOverride ?? "") : activity ? (activity.name ?? "") : title;
+	const rawDescription = descOverride !== undefined ? (descOverride ?? "") : (activity?.description ?? "");
+	const displayDescription = rawDescription === "0" ? "" : rawDescription; // legacy "0" means empty
+
+	const status = (m: typeof saveName) => (m.isPending ? "saving" : m.isError ? "error" : "idle");
+
+	const titleNode = (
+		<EditableText
+			value={displayName}
+			label="Title"
+			placeholder="Untitled"
+			disabled={readOnly || !activity}
+			status={status(saveName)}
+			onSave={(next) => saveName.mutate({ activityName: next || null })}
+		/>
+	);
+
 	return (
-		<Dialog open={open} onClose={onClose} title={title} subtitle={timestamp}>
+		<Dialog
+			open={open}
+			onClose={onClose}
+			title={(readOnly || !activity) && !displayName ? "Untitled" : titleNode}
+			subtitle={timestamp}
+		>
 			{activityLoading ? (
 				<div className="flex items-center justify-center py-10">
 					<div className="text-gray-400 text-sm animate-pulse">Loading activity…</div>
@@ -126,8 +166,19 @@ export function ActivityDialog({ activityId, title, sport, numSessions, open, on
 					</div>
 
 					{/* Description */}
-					{activity?.description && activity.description !== "0" && (
-						<p className="text-sm text-gray-400 italic mb-5">{activity.description}</p>
+					{(displayDescription || !readOnly) && (
+						<div className="mb-5">
+							<EditableText
+								value={displayDescription}
+								label="Description"
+								placeholder="Add description"
+								multiline
+								disabled={readOnly}
+								status={status(saveDescription)}
+								textClassName="text-sm text-gray-400 italic"
+								onSave={(next) => saveDescription.mutate({ description: next || null })}
+							/>
+						</div>
 					)}
 
 					{/* Footer */}
