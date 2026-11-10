@@ -45,8 +45,13 @@ app.get("/health", (c) => c.json({ status: "ok" }));
 
 // Serve static client build in production
 if (process.env.NODE_ENV === "production") {
-	app.use("/*", serveStatic({ root: "../client/dist" }));
-	app.get("*", serveStatic({ path: "../client/dist/index.html" }));
+	// Absolute root: Hono's serveStatic rejects any path containing "..", which
+	// broke the SPA fallback for deep links (e.g. /activity/123).
+	const clientRoot = new URL("../../client/dist", import.meta.url).pathname;
+	app.use("/*", serveStatic({ root: clientRoot }));
+	// Don't return index.html for unknown API routes.
+	app.all("/api/*", (c) => c.notFound());
+	app.get("*", serveStatic({ root: clientRoot, path: "index.html" }));
 }
 
 const port = Number(process.env.PORT) || 3000;
