@@ -23,6 +23,10 @@ type Tab = "laps" | "details" | "auto-laps";
 
 const CATEGORIES = ["uncategorized", "training", "race", "transportation", "recreational", "touring", "fitness"];
 
+/** Shared style for the header icon-only action buttons (adds a visible keyboard focus ring). */
+const ICON_BTN =
+	"rounded p-1 text-gray-500 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50";
+
 function normalizeCategory(category: string | null | undefined) {
 	const trimmed = category?.trim();
 	return trimmed && CATEGORIES.includes(trimmed) ? trimmed : "uncategorized";
@@ -282,6 +286,7 @@ export function ActivityDetailsPage() {
 	// destructive confirmation.
 	const recordCount = points?.length ?? 0;
 	const canTrim = !isReadOnly && !isMultisport && recordCount >= 2;
+	const showCreateWorkout = !isReadOnly && !!laps && laps.length > 0;
 
 	const category =
 		activityEdits.category !== undefined
@@ -294,8 +299,8 @@ export function ActivityDetailsPage() {
 	return (
 		<div key={id} className="w-full space-y-5">
 			{/* 1. Title row: title left, category + nav right */}
-			<div className="flex items-center justify-between gap-6">
-				<div className="flex items-center gap-2 flex-1 min-w-0">
+			<div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+				<div className="flex items-center gap-2 flex-1 min-w-[16rem]">
 					<input
 						type="text"
 						value={title}
@@ -364,6 +369,57 @@ export function ActivityDetailsPage() {
 							<path d="M8 3a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6.414L5.707 7.707a1 1 0 0 1-1.414-1.414l3-3A1 1 0 0 1 8 3Zm4 14a1 1 0 0 1-1-1V4a1 1 0 1 1 2 0v9.586l1.293-1.293a1 1 0 0 1 1.414 1.414l-3 3A1 1 0 0 1 12 17Z" />
 						</svg>
 					</button>
+					{/* Activity actions: create workout (hidden on read-only schemas — the
+					    workout would be saved to the primary schema) and trim end (single
+					    session only; hidden on read-only/multisport). Trim only opens the
+					    preview page, which owns the destructive confirmation. */}
+					{showCreateWorkout || canTrim ? (
+						<>
+							<span className="w-px h-5 bg-gray-700" />
+							<div className="flex items-center">
+								{showCreateWorkout && (
+									<button
+										type="button"
+										onClick={() => setWorkoutDialogOpen(true)}
+										aria-label="Create a structured workout from this activity's laps"
+										title="Create workout from laps…"
+										className={`${ICON_BTN} hover:text-gray-200`}
+									>
+										{/* Workout icon (clipboard with plus) */}
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											viewBox="0 0 20 20"
+											fill="currentColor"
+											className="h-4 w-4"
+											aria-hidden="true"
+										>
+											<path d="M7 2a1 1 0 0 0-1 1H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-1a1 1 0 0 0-1-1H7Zm0 1.5h6V4a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-.5ZM10 8a.9.9 0 0 1 .9.9v1.2h1.2a.9.9 0 1 1 0 1.8h-1.2v1.2a.9.9 0 1 1-1.8 0v-1.2H7.9a.9.9 0 1 1 0-1.8h1.2V8.9A.9.9 0 0 1 10 8Z" />
+										</svg>
+									</button>
+								)}
+								{canTrim && (
+									<button
+										type="button"
+										onClick={() => navigate(`/activity/${id}/trim?sport=${encodeURIComponent(sport)}`)}
+										aria-label="Open the trim preview to remove records from the end of the activity"
+										title="Trim end of activity…"
+										className={`${ICON_BTN} hover:text-red-400`}
+									>
+										{/* Trim icon (scissors) */}
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											viewBox="0 0 20 20"
+											fill="currentColor"
+											className="h-4 w-4"
+											aria-hidden="true"
+										>
+											<path d="M5 2.5a2.5 2.5 0 1 0 1.2 4.7L8.4 10l-2.2 2.8A2.5 2.5 0 1 0 7.8 14L10 11.2l5.6 7a1 1 0 0 0 1.6-1.2L11.3 9.6l5.9-7.4A1 1 0 0 0 15.6 1L10 8 7.8 5.2A2.5 2.5 0 0 0 5 2.5Zm0 1.6a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8Zm0 10a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8Z" />
+										</svg>
+									</button>
+								)}
+							</div>
+						</>
+					) : null}
 					<span className="w-px h-5 bg-gray-700" />
 					<div className="flex items-center">
 						<button
@@ -681,44 +737,7 @@ export function ActivityDetailsPage() {
 				</div>
 			)}
 
-			{/* 9b. Trim end — opens the dedicated trim preview page (map + slider +
-			    before/after + confirmation). Single-session only (Phase 1); hidden
-			    on read-only schemas and multisport activities. */}
-			{canTrim && (
-				<div
-					className="flex flex-wrap items-center gap-3 border-t border-gray-800 pt-4"
-					role="group"
-					aria-label="Trim end of activity"
-				>
-					<span className="text-xs font-medium uppercase tracking-wide text-gray-500">Trim end</span>
-					<button
-						type="button"
-						onClick={() => navigate(`/activity/${id}/trim?sport=${encodeURIComponent(sport)}`)}
-						aria-label="Open the trim preview to remove records from the end of the activity"
-						className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-3 py-1.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/50"
-					>
-						Trim activity…
-					</button>
-					<span className="text-xs text-gray-600">Preview on a map before permanently deleting records.</span>
-				</div>
-			)}
-
-			{/* 9c. Create a structured workout from this activity's laps. Hidden on
-			    read-only schemas (the workout would be saved to the primary schema). */}
-			{!isReadOnly && laps && laps.length > 0 && (
-				<div className="flex flex-wrap items-center gap-3 border-t border-gray-800 pt-4">
-					<span className="text-xs font-medium uppercase tracking-wide text-gray-500">Workout</span>
-					<button
-						type="button"
-						onClick={() => setWorkoutDialogOpen(true)}
-						aria-label="Create a structured workout from this activity's laps"
-						className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg px-3 py-1.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/50"
-					>
-						Create workout…
-					</button>
-					<span className="text-xs text-gray-600">Turn these laps into a reusable workout.</span>
-				</div>
-			)}
+			{/* Mounted always; opened from the "Create workout" header action. */}
 			<CreateWorkoutFromActivityDialog
 				open={workoutDialogOpen}
 				onClose={() => setWorkoutDialogOpen(false)}
